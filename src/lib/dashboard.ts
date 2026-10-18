@@ -165,7 +165,7 @@ export async function ownerExtras(user: SessionUser) {
     };
   });
   return {
-    commissionGross: pnl.commissionPo.plus(pnl.commissionPartner),
+    commissionGross: pnl.commissionPartner,
     commissionTds: pnl.tdsCredit,
     commissionReceived: pnl.commissionReceived,
     commissionExpected: pnl.commissionExpected,
@@ -212,7 +212,6 @@ export async function ownerPies(user: SessionUser) {
     income: topSlices([
       { label: "Insurance commission", value: insurance },
       { label: "Mutual fund commission", value: mf },
-      { label: "Post office commission", value: Number(pnl.commissionPo) },
       { label: "E-Sevai service charges", value: Number(pnl.serviceCharges) },
       { label: "Other commission", value: otherCommission },
     ]),

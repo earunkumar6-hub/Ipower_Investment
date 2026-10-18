@@ -111,6 +111,9 @@ model Lead {
   name                String
   mobile              String
   email               String?
+  dob                 DateTime?  @db.Date
+  address             String?
+  onWhatsApp          Boolean    @default(false) // the mobile number uses WhatsApp
   source              LeadSource
   status              LeadStatus @default(New)
   interest            String?
@@ -375,7 +378,8 @@ model Receipt {
   tenantId      String
   receiptNo     String
   fy            String // e.g. "2026-27"
-  receiptDate   DateTime      @db.Date
+  receiptDate   DateTime      @db.Date // bill date: drives Day Book, FY, paid-on, commission date
+  txnDate       DateTime      @db.Date // when the customer actually paid (UPI/cheque date)
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id])
   policyId      String?

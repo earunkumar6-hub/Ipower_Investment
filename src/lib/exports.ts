@@ -102,10 +102,11 @@ export const REPORTS: Record<string, Report> = {
         title: `Leads${filter ? ` – ${filter}` : ""}`,
         sheets: [{
           name: "Leads",
-          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile" }, { header: "Source" }, { header: "Status" },
+          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile" }, { header: "WhatsApp" }, { header: "Email", width: 24 },
+            { header: "Date of birth", type: "date" }, { header: "Address", width: 30 }, { header: "Source" }, { header: "Status" },
             { header: "Next call", type: "datetime", width: 20 }, { header: "Owner" }, { header: "Created", type: "datetime", width: 20 }],
-          rows: leads.map((l) => [l.leadNo, l.name, maskMobile(l.mobile), LEAD_SOURCE_LABEL[l.source], LEAD_STATUS_LABEL[l.status],
-            l.calls[0]?.dueAt, owner(l.ownerId), l.createdAt]),
+          rows: leads.map((l) => [l.leadNo, l.name, maskMobile(l.mobile), l.onWhatsApp ? "Yes" : "No", l.email, l.dob, l.address,
+            LEAD_SOURCE_LABEL[l.source], LEAD_STATUS_LABEL[l.status], l.calls[0]?.dueAt, owner(l.ownerId), l.createdAt]),
         }],
       };
     },
@@ -311,13 +312,13 @@ export const REPORTS: Record<string, Report> = {
         sheets: [{
           name: "Customer receipts",
           totals: true,
-          columns: [{ header: "Receipt no." }, { header: "Date", type: "date" }, { header: "Time", type: "datetime", width: 20 }, { header: "Customer", width: 24 },
+          columns: [{ header: "Receipt no." }, { header: "Bill date", type: "date" }, { header: "Transaction date", type: "date" }, { header: "Entered", type: "datetime", width: 20 }, { header: "Customer", width: 24 },
             { header: "For", width: 32 }, { header: "Mode" }, { header: "Reference" }, { header: "Account" }, { header: "Amount", type: "money" },
             ...(showCommission ? [{ header: "Commission", type: "money" as const }] : []), { header: "Status" }, { header: "RD status" }, { header: "Cancel reason", width: 24 }],
           rows: receipts.map((r) => {
             const commission = "commissions" in r ? (r.commissions as { gross: Prisma.Decimal }[]) : [];
             const forText = (r.policy ? (r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`) : r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : "");
-            return [r.receiptNo, r.receiptDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
+            return [r.receiptNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
               ...(showCommission ? [commission.length ? sum(commission.map((c) => c.gross)) : null] : []),
               r.status, r.status !== "Cancelled" ? r.rdStatus : null, r.cancelReason];
           }),
@@ -470,7 +471,6 @@ export const REPORTS: Record<string, Report> = {
       const rows: Cell[][] = [
         ["INCOME", null, null],
         ...pnl.serviceLines.map((l): Cell[] => [`Service charges – ${l.label}`, l.amount, prevOf(prev.serviceLines, l.label)]),
-        ["Commission – post office (gross)", pnl.commissionPo, prev.commissionPo],
         ["Commission – insurers and mutual funds (gross)", pnl.commissionPartner, prev.commissionPartner],
         ["Total income", pnl.income, prev.income],
         ["LESS: EXPENSES BY CATEGORY", null, null],

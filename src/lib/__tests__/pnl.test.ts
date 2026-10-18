@@ -23,6 +23,8 @@ describe("Profit and Loss", () => {
     });
     expect(p.serviceCharges.toFixed(2)).toBe("1138.00");
     expect(p.commissionPartner.toFixed(2)).toBe("70000.00");
+    // Post office (RD) commission is recorded but is not income.
+    expect(p.income.toFixed(2)).toBe("71138.00");
     // Rent 25,000 + electricity 3,100 + internet 1,180 + tea 450 + auto fare 350 (employee-paid still counts)
     expect(p.expenseTotal.toFixed(2)).toBe("30080.00");
     expect(p.expenseLines.find((l) => l.label === "Equipment")).toBeUndefined(); // laptop is waiting

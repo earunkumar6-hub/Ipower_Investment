@@ -43,7 +43,6 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
             <TableBody>
               <Section title="Income" />
               {pnl.serviceLines.map((l) => <Line key={l.label} label={`Service charges – ${l.label}`} value={fmtINR(l.amount)} prev={fmtINR(prevService(l.label) ?? 0)} indent />)}
-              <Line label="Commission – post office (gross)" value={fmtINR(pnl.commissionPo)} prev={fmtINR(prev.commissionPo)} indent />
               <Line label="Commission – insurers and mutual funds (gross)" value={fmtINR(pnl.commissionPartner)} prev={fmtINR(prev.commissionPartner)} indent />
               <Line label="Total income" value={fmtINR(pnl.income)} prev={fmtINR(prev.income)} strong />
               <Section title="Less: expenses by category" />
@@ -63,7 +62,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           <h2 className="text-sm font-semibold text-foreground">How this is worked out</h2>
           <p>Service charges are what customers paid minus the provider cost (EB ₹10/₹20 slab, PAN ₹100, certificate ₹88).</p>
           <p>Expenses count on the date they were spent, whoever paid (company, employee or owner). Waiting, rejected and cancelled expenses are left out.</p>
-          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid RD.</p>
+          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid RD; post office commission.</p>
           <p className="font-medium text-foreground">Visible to the Super Admin only.</p>
         </div>
       </div>

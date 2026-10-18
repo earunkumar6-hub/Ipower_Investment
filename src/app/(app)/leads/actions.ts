@@ -3,7 +3,7 @@
 import { Prisma, type LeadStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { parseIstDateTime } from "@/lib/dates";
+import { istToday, parseIstDateTime } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
@@ -33,6 +33,12 @@ const leadSchema = z.object({
   name: z.string().trim().min(2, "Enter the name"),
   mobile: z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number"),
   email: z.union([z.literal(""), z.email("Enter a valid email")]),
+  dob: z.union([
+    z.literal(""),
+    z.iso.date("Enter a valid date").refine((d) => d >= "1900-01-01" && new Date(`${d}T00:00:00Z`) < istToday(), "Date of birth must be in the past"),
+  ]),
+  address: z.string().trim().max(300),
+  onWhatsApp: z.literal("on").optional(), // checkbox: present only when ticked
   source: z.enum(["Website", "WalkIn", "Partner", "Call", "Referral"]),
   interest: z.string().trim().max(200),
   ownerId: z.string(),
@@ -66,7 +72,8 @@ export async function createLead(_: ActionResult, form: FormData): Promise<Actio
       const lead = await tx.lead.create({
         data: {
           tenantId: user.tenantId, leadNo: await nextNumber(tx, user.tenantId, "lead"), name: v.name, mobile: v.mobile,
-          email: v.email || null, source: v.source, interest: v.interest || null, ownerId,
+          email: v.email || null, dob: v.dob ? new Date(`${v.dob}T00:00:00Z`) : null, address: v.address || null,
+          onWhatsApp: v.onWhatsApp === "on", source: v.source, interest: v.interest || null, ownerId,
           status: callAt ? "CallScheduled" : "New",
         },
       });

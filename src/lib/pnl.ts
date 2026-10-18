@@ -2,9 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { sum, ZERO } from "@/lib/money";
 
-// Profit and Loss is a read model: it owns no tables. Income = service charges + commission (gross);
-// expenses count on the date they were spent, whoever paid. Premiums and bills collected on behalf
-// of others, wallet recharges and transfers between own accounts are not income or expense.
+// Profit and Loss is a read model: it owns no tables. Income = service charges + insurer/mutual fund
+// commission (gross); expenses count on the date they were spent, whoever paid. Post office commission is
+// still recorded on RD receipts but is not business income (owner's choice, Oct 2026). Premiums and bills
+// collected on behalf of others, wallet recharges and transfers between own accounts are not income or expense.
 
 export type MonthRange = { from: Date; to: Date; label: string; key: string };
 
@@ -25,7 +26,7 @@ export async function profitAndLoss(tenantId: string, range: MonthRange) {
   const inMonth = { gte: range.from, lt: range.to };
   const [services, commissions, expenses] = await Promise.all([
     db.serviceTransaction.findMany({ where: { tenantId, status: "Saved", txnDate: inMonth }, include: { serviceType: true } }),
-    db.commission.findMany({ where: { tenantId, status: { not: "Cancelled" }, earnedOn: inMonth } }),
+    db.commission.findMany({ where: { tenantId, sourceType: "Partner", status: { not: "Cancelled" }, earnedOn: inMonth } }),
     // Saved (within limit) and Approved expenses; Waiting, Rejected and Cancelled are not spent.
     db.expense.findMany({ where: { tenantId, status: { in: ["Saved", "Approved"] }, expenseDate: inMonth } }),
   ]);
@@ -37,22 +38,18 @@ export async function profitAndLoss(tenantId: string, range: MonthRange) {
   };
 
   const serviceLines = group(services, (t) => t.serviceType.name, (t) => t.profit);
-  const poCommission = commissions.filter((c) => c.sourceType !== "Partner");
-  const partnerCommission = commissions.filter((c) => c.sourceType === "Partner");
   const expenseLines = group(expenses, (e) => e.category, (e) => e.amount);
   const total = (ls: Line[]) => (ls.length ? sum(ls.map((l) => l.amount)) : ZERO);
   const gross = (cs: typeof commissions) => (cs.length ? sum(cs.map((c) => c.gross)) : ZERO);
 
   const serviceCharges = total(serviceLines);
-  const commissionPo = gross(poCommission);
-  const commissionPartner = gross(partnerCommission);
-  const income = serviceCharges.plus(commissionPo).plus(commissionPartner);
+  const commissionPartner = gross(commissions);
+  const income = serviceCharges.plus(commissionPartner);
   const expenseTotal = total(expenseLines);
   return {
     range,
     serviceLines,
     serviceCharges,
-    commissionPo,
     commissionPartner,
     income,
     expenseLines,

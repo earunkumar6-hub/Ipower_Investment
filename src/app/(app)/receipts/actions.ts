@@ -7,7 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank, receivingAccountId } from "@/lib/accounts";
 import { poCommission } from "@/lib/commission";
 import { reverseSource } from "@/lib/daybook";
-import { financialYear, istToday } from "@/lib/dates";
+import { financialYear, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { D, fmtINR, sum } from "@/lib/money";
@@ -16,6 +16,12 @@ import { postOwnerReturn, postReceipt } from "@/lib/posting";
 import { authorize } from "@/lib/session";
 
 const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0");
+// "" or missing = today. Past dates are allowed; a closed Day Book day is refused when posting.
+const pastOrToday = z.union([
+  z.literal(""),
+  z.iso.date("Pick a date").refine((d) => new Date(`${d}T00:00:00Z`) <= istToday(), "Date can't be in the future"),
+]).optional();
+const dateOrToday = (d: string | undefined) => (d ? new Date(`${d}T00:00:00Z`) : istToday());
 
 const receiptSchema = z
   .object({
@@ -27,6 +33,8 @@ const receiptSchema = z
     reference: z.string().trim().max(40),
     notes: z.string().trim().max(200),
     slipIds: z.string(), // comma-separated owner-paid slips to close with this payment
+    receiptDate: pastOrToday, // bill date
+    txnDate: pastOrToday, // when the customer actually paid
   })
   .refine((v) => v.mode === "Cash" || v.reference, { message: "Enter the UTR or cheque number", path: ["reference"] });
 
@@ -40,18 +48,27 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
   const v = parsed.data;
   const amount = new D(v.amount);
   const slipIds = v.slipIds.split(",").filter(Boolean);
-  const today = istToday();
+  // The bill date drives everything dated by this receipt: Day Book, FY, paid-on, commission.
+  const billDate = dateOrToday(v.receiptDate);
 
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const customer = await tx.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId } });
     if (!customer) return { ok: false, error: "Customer not found" };
     if (!canActOn(user, customer.ownerId)) return { ok: false, error: "This customer belongs to another user" };
+    // Balances run from the first entry, so a bill dated before a closed day would change that day's verified
+    // figures. Only days after the last close can be back-dated (a closed bill date itself is refused on posting).
+    const lastClose = await tx.dayClose.findFirst({ where: { tenantId: user.tenantId, status: "Closed" }, orderBy: { date: "desc" }, select: { date: true } });
+    if (lastClose && billDate < lastClose.date) {
+      const msg = `Day Book is closed up to ${fmtDate(lastClose.date)}; pick a later bill date`;
+      return { ok: false, error: msg, fieldErrors: { receiptDate: msg } };
+    }
     const accounts = await cashAndBank(tx, user.tenantId);
     const base = {
       tenantId: user.tenantId,
       receiptNo: await nextNumber(tx, user.tenantId, "receipt"),
-      fy: financialYear(today),
-      receiptDate: today,
+      fy: financialYear(billDate),
+      receiptDate: billDate,
+      txnDate: dateOrToday(v.txnDate),
       customerId: customer.id,
       amount,
       mode: v.mode,
@@ -95,10 +112,10 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       receipt = await tx.receipt.create({
         data: { ...base, policyId: policy.id, renewalItemId: item?.id, rdStatus: isRd ? "Collected" : null },
       });
-      if (item) await tx.renewalItem.update({ where: { id: item.id }, data: { status: "Paid", paidOn: today, paidReceiptId: receipt.id } });
+      if (item) await tx.renewalItem.update({ where: { id: item.id }, data: { status: "Paid", paidOn: billDate, paidReceiptId: receipt.id } });
       if (isRd) {
         await tx.commission.create({
-          data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: receipt.receiptNo, policyId: policy.id, receiptId: receipt.id, earnedOn: today, ...poCommission("PoRd", amount) },
+          data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: receipt.receiptNo, policyId: policy.id, receiptId: receipt.id, earnedOn: billDate, ...poCommission("PoRd", amount) },
         });
       }
     }

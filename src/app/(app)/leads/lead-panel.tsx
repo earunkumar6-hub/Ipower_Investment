@@ -19,6 +19,9 @@ type PanelLead = {
   name: string;
   mobile: string;
   email: string | null;
+  dob: string | null; // "12 Mar 1985"
+  address: string | null;
+  onWhatsApp: boolean;
   source: LeadSource;
   status: LeadStatus;
   interest: string | null;
@@ -55,8 +58,11 @@ export function LeadPanel({ lead }: { lead: PanelLead }) {
       <div>
         <h2 className="font-semibold">{lead.leadNo} · {lead.name}</h2>
         <p className="text-xs text-muted-foreground">
-          {lead.mobile}{lead.email && ` · ${lead.email}`} · {LEAD_SOURCE_LABEL[lead.source]} · Owner: {lead.ownerName}
+          {lead.mobile}{lead.onWhatsApp && " (WhatsApp)"}{lead.email && ` · ${lead.email}`} · {LEAD_SOURCE_LABEL[lead.source]} · Owner: {lead.ownerName}
         </p>
+        {(lead.dob || lead.address) && (
+          <p className="mt-1 text-xs text-muted-foreground">{[lead.dob && `DOB ${lead.dob}`, lead.address].filter(Boolean).join(" · ")}</p>
+        )}
         {lead.interest && <p className="mt-1 text-xs">Interest: {lead.interest}</p>}
         {lead.notInterestedReason && <p className="mt-1 text-xs text-orange-700">Not interested: {lead.notInterestedReason}</p>}
       </div>

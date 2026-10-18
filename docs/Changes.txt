@@ -1,0 +1,23 @@
+
+
+Ifaplanet.com - Mutual fund dashboard -e2e application integration. working based on PAN number.
+
+
+1. each product accept/ reject
+
+2. quoto - pdf/image 
+
+3. Based on customer holding -new product addtion - holding oprion customizeable -grouping policy/Schemes
+
+4. Postal TD/NSE/ remainder - 1 month before
+
+ 5. customer paid - status -paid/not paid to bank
+ 6. Postoffice commison need to remove in P/L account. 
+ 
+ 7. Lead fields add more - DOB,Address, checkbox whatsApp, emailid.
+ 8. groupping payment -multiple schemes pay at once.
+ 9. Advance due payment and mulitiple due options once 
+ 10. bill date and transaction date(calendar option choose the date). in receipt.
+ 11. Schemewise fields addition.
+ 
+  

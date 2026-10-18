@@ -1,5 +1,6 @@
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
+import { fmtDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
 import { leadFilter } from "@/lib/lists";
@@ -66,6 +67,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               name: panelLead.name,
               mobile: panelLead.mobile,
               email: panelLead.email,
+              dob: panelLead.dob ? fmtDate(panelLead.dob) : null,
+              address: panelLead.address,
+              onWhatsApp: panelLead.onWhatsApp,
               source: panelLead.source,
               status: panelLead.status,
               interest: panelLead.interest,

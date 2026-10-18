@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isoDate, istToday } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { createReceipt } from "../actions";
 
@@ -30,6 +31,9 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
   const [mode, setMode] = useState<(typeof MODES)[number]>("Cash");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
+  const today = isoDate(istToday());
+  const [receiptDate, setReceiptDate] = useState(today);
+  const [txnDate, setTxnDate] = useState(today);
   const [popup, setPopup] = useState(false);
   const [ticked, setTicked] = useState<string[]>(openSlips.map((s) => s.id));
 
@@ -47,7 +51,7 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
 
   function submit(slipIds: string[]) {
     const form = new FormData();
-    Object.entries({ customerId: customer.id, policyId, renewalItemId: slipIds.length ? "" : itemId, amount, mode, reference, notes, slipIds: slipIds.join(",") })
+    Object.entries({ customerId: customer.id, policyId, renewalItemId: slipIds.length ? "" : itemId, amount, mode, reference, notes, slipIds: slipIds.join(","), receiptDate, txnDate })
       .forEach(([k, v]) => form.set(k, v));
     startTransition(() => dispatch(form));
   }
@@ -94,6 +98,14 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
           </NativeSelect>
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor="receiptDate">Bill date</Label>
+          <Input id="receiptDate" type="date" value={receiptDate} max={today} required onChange={(e) => setReceiptDate(e.target.value)} aria-invalid={!!err.receiptDate} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="txnDate">Transaction date</Label>
+          <Input id="txnDate" type="date" value={txnDate} max={today} required onChange={(e) => setTxnDate(e.target.value)} aria-invalid={!!err.txnDate} />
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="amount">Amount (₹)</Label>
           <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={!!item} inputMode="decimal" aria-invalid={!!err.amount} />
         </div>
@@ -120,7 +132,7 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        {mode === "Cash" ? "Goes into cash in hand." : "Goes into SBI current ••1234."} RD instalments are marked Collected until deposited at the post office.
+        {mode === "Cash" ? "Goes into cash in hand." : "Goes into SBI current ••1234."} The Day Book records it on the bill date. RD instalments are marked Collected until deposited at the post office.
       </p>
       {state.error && !popup && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save receipt"}</Button>

@@ -1,4 +1,4 @@
-import { fmtDate, fmtTime } from "@/lib/dates";
+import { fmtDate, fmtTime, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
@@ -28,7 +28,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       <tr><th>Towards</th><td>${esc(forText)}${r.ownerPaid ? " (instalment paid earlier at the post office)" : ""}</td></tr>
       <tr><th>Amount</th><td><b>${esc(fmtINR(r.amount))}</b></td></tr>
       <tr><th>Mode</th><td>${esc(r.mode)}${r.reference ? ` · ${esc(r.reference)}` : ""}</td></tr>
-      <tr><th>Date</th><td>${esc(fmtDate(r.receiptDate))}, ${esc(fmtTime(r.createdAt))}</td></tr>
+      <tr><th>Bill date</th><td>${esc(fmtDate(r.receiptDate))}${istDate(r.createdAt).getTime() === r.receiptDate.getTime() ? `, ${esc(fmtTime(r.createdAt))}` : ""}</td></tr>
+      <tr><th>Transaction date</th><td>${esc(fmtDate(r.txnDate))}</td></tr>
     </table>
     <p class="muted" style="margin-top:24px">Premiums and deposits are collected on behalf of the insurer or post office. This is a computer-generated receipt.</p>
   </body></html>`;

@@ -34,7 +34,8 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     ["For", r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : r.notes ?? "—"],
     ["Amount", fmtINR(r.amount)],
     ["Mode", `${r.mode}${r.reference ? ` · ${r.reference}` : ""} · into ${account?.name}`],
-    ["Date", `${fmtDate(r.receiptDate)} · entered by ${nameOf(r.createdById)} at ${fmtDateTime(r.createdAt)}`],
+    ["Bill date", `${fmtDate(r.receiptDate)} · entered by ${nameOf(r.createdById)} at ${fmtDateTime(r.createdAt)}`],
+    ["Transaction date", fmtDate(r.txnDate)],
   ];
   if (r.rdStatus && r.status !== "Cancelled") rows.push(["RD status", r.poDepositLine ? `${r.rdStatus} · PO receipt ${r.poDepositLine.poDeposit.poReceiptNo}` : r.rdStatus]);
   if (r.closedSlips.length) rows.push(["Owner-paid slips closed", r.closedSlips.map((s) => s.slipNo).join(", ")]);

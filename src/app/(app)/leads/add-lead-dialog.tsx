@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { addDays, isoDate, istToday } from "@/lib/dates";
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { createLead, type ActionResult } from "./actions";
@@ -39,7 +40,14 @@ export function AddLeadDialog({ owners }: { owners: { id: string; name: string }
               <Field label="Name" name="name" error={err.name} required />
               <Field label="Mobile" name="mobile" error={err.mobile} inputMode="numeric" maxLength={10} required />
             </div>
-            <Field label="Email (optional)" name="email" error={err.email} type="email" />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="onWhatsApp" className="size-4" /> Mobile is on WhatsApp
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Email (optional)" name="email" error={err.email} type="email" />
+              <Field label="Date of birth (optional)" name="dob" error={err.dob} type="date" max={isoDate(addDays(istToday(), -1))} />
+            </div>
+            <Field label="Address (optional)" name="address" error={err.address} maxLength={300} />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="source">Source</Label>

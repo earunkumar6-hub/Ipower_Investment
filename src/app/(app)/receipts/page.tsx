@@ -61,7 +61,7 @@ async function CustomerReceipts({ tenantId, createdById, showCommission }: { ten
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Receipt no.</TableHead><TableHead>Date</TableHead><TableHead>Customer</TableHead><TableHead>For</TableHead>
+            <TableHead>Receipt no.</TableHead><TableHead>Bill date</TableHead><TableHead>Txn date</TableHead><TableHead>Customer</TableHead><TableHead>For</TableHead>
             <TableHead>Mode</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead>
             {showCommission && <TableHead className="text-right">Commission</TableHead>}
             <TableHead>Status</TableHead>
@@ -74,6 +74,7 @@ async function CustomerReceipts({ tenantId, createdById, showCommission }: { ten
               <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
                 <TableCell><Link href={`/receipts/${r.id}`} className="text-blue-700 hover:underline">{r.receiptNo}</Link></TableCell>
                 <TableCell>{fmtDate(r.receiptDate)}</TableCell>
+                <TableCell>{fmtDate(r.txnDate)}</TableCell>
                 <TableCell>{r.customer.name}</TableCell>
                 <TableCell>{r.policy ? `${r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`}` : r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
                 <TableCell>{r.mode}</TableCell>
@@ -88,7 +89,7 @@ async function CustomerReceipts({ tenantId, createdById, showCommission }: { ten
             );
           })}
           {receipts.length === 0 && (
-            <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">No receipts yet.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">No receipts yet.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>

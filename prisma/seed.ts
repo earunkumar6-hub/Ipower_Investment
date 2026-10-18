@@ -224,7 +224,7 @@ async function main() {
     const isRd = p.productType === "PoRd";
     const r = await tx.receipt.create({
       data: {
-        tenantId, receiptNo: rcptNo(), fy: financialYear(date), receiptDate: date, customerId: p.customerId, policyId: p.id,
+        tenantId, receiptNo: rcptNo(), fy: financialYear(date), receiptDate: date, txnDate: date, customerId: p.customerId, policyId: p.id,
         renewalItemId: opts.renewalItemId, amount, mode, accountId: mode === "Cash" ? acc.cash : acc.sbi,
         reference: opts.reference, rdStatus: isRd ? "Collected" : null, createdById: by,
         createdAt: new Date(date.getTime() + (4 + Math.floor(rand() * 7)) * 3_600_000), // 9:30 am–4:30 pm IST

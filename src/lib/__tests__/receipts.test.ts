@@ -1,5 +1,6 @@
 // Server-action tests against the seeded database. Every row they create is removed afterwards.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { addDays, isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 
 const session = vi.hoisted(() => ({ user: null as null | { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string } }));
@@ -101,6 +102,49 @@ describe("Receipts", () => {
     // Cancelling the receipt reopens the slip
     await cancelReceipt({ ok: false }, form({ receiptId: r.id!, reason: "test" }));
     expect((await prisma.ownerPaidSlip.findUniqueOrThrow({ where: { id: slip.id } })).status).toBe("CustomerOwes");
+  });
+
+  it("bill date drives Day Book, paid-on and commission; transaction date is stored as entered", async () => {
+    const today = istToday();
+    const lastClose = await prisma.dayClose.findFirstOrThrow({ where: { status: "Closed" }, orderBy: { date: "desc" } });
+    const item = await prisma.renewalItem.findFirstOrThrow({
+      where: { status: { in: ["Due", "Overdue"] }, policy: { productType: "PoRd" } }, include: { policy: true }, orderBy: { dueDate: "asc" },
+    });
+    const pay = (receiptDate: string, txnDate = receiptDate) => createReceipt({ ok: false }, form({
+      ...base, customerId: item.policy.customerId, policyId: item.policyId, renewalItemId: item.id, amount: item.premiumAmount.toFixed(2), mode: "Cash", receiptDate, txnDate,
+    }));
+
+    // Refused: future bill or transaction date, a closed day, and any day before the last close.
+    expect((await pay(isoDate(addDays(today, 1)))).fieldErrors).toHaveProperty("receiptDate");
+    expect((await pay(isoDate(today), isoDate(addDays(today, 1)))).fieldErrors).toHaveProperty("txnDate");
+    expect((await pay(isoDate(lastClose.date))).error).toMatch(/is closed/);
+    expect((await pay(isoDate(addDays(lastClose.date, -1)))).error).toMatch(/closed up to/);
+
+    // Reopen the last closed day so it can take a back-dated bill.
+    const closes = await prisma.dayClose.findMany({ where: { date: lastClose.date, status: "Closed" } });
+    await prisma.dayClose.updateMany({ where: { id: { in: closes.map((c) => c.id) } }, data: { status: "Open" } });
+    try {
+      touchedItems.push(item.id);
+      const txnDate = addDays(lastClose.date, -3);
+      const r = await pay(isoDate(lastClose.date), isoDate(txnDate));
+      expect(r).toMatchObject({ ok: true });
+      created.push(r.id!);
+      const receipt = await prisma.receipt.findUniqueOrThrow({ where: { id: r.id } });
+      expect([receipt.receiptDate, receipt.txnDate]).toEqual([lastClose.date, txnDate]);
+      expect((await prisma.dayBookEntry.findFirstOrThrow({ where: { sourceId: r.id } })).entryDate).toEqual(lastClose.date);
+      expect((await prisma.renewalItem.findUniqueOrThrow({ where: { id: item.id } })).paidOn).toEqual(lastClose.date);
+      expect((await prisma.commission.findFirstOrThrow({ where: { receiptId: r.id } })).earnedOn).toEqual(lastClose.date);
+    } finally {
+      await prisma.dayClose.updateMany({ where: { id: { in: closes.map((c) => c.id) } }, data: { status: "Closed" } });
+    }
+
+    // Blank dates mean today.
+    const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-105" } });
+    const t = await createReceipt({ ok: false }, form({ ...base, customerId: policy.customerId, policyId: policy.id, amount: "500", mode: "Cash", receiptDate: "", txnDate: "" }));
+    expect(t).toMatchObject({ ok: true });
+    created.push(t.id!);
+    const tr = await prisma.receipt.findUniqueOrThrow({ where: { id: t.id } });
+    expect([tr.receiptDate, tr.txnDate]).toEqual([today, today]);
   });
 
   it("staff cannot cancel", async () => {
