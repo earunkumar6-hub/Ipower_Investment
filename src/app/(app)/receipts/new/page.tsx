@@ -2,8 +2,9 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { fmtDate } from "@/lib/dates";
+import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { payableDues } from "@/lib/dues";
 import { maskMobile } from "@/lib/lead-labels";
 import { canActOn, ownerScope } from "@/lib/leads";
 import { requirePermission } from "@/lib/session";
@@ -21,7 +22,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
         include: {
           policies: {
             where: { status: "Active" },
-            include: { renewals: { where: { status: { in: ["Due", "Overdue"] } }, orderBy: { dueDate: "asc" }, take: 3 } },
+            include: { renewals: true },
             orderBy: { productType: "asc" },
           },
           ownerPaidSlips: { where: { status: "CustomerOwes" }, include: { policy: { select: { policyNumber: true } } }, orderBy: { month: "asc" } },
@@ -30,14 +31,17 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
     : null;
 
   if (customer && canActOn(user, customer.ownerId)) {
-    const firstDue = (p: (typeof customer.policies)[number]) => p.renewals[0]?.dueDate.getTime() ?? Infinity;
-    const policies: PolicyOption[] = [...customer.policies].sort((a, b) => firstDue(a) - firstDue(b)).map((p) => ({
+    const today = istToday();
+    const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+    const withDues = customer.policies.map((p) => ({ p, dues: payableDues(p, p.renewals, today) }));
+    const firstDue = (x: (typeof withDues)[number]) => x.dues[0]?.dueDate.getTime() ?? Infinity;
+    const policies: PolicyOption[] = withDues.sort((a, b) => firstDue(a) - firstDue(b)).map(({ p, dues }) => ({
       id: p.id,
       label: p.productType === "PoRd" ? `${p.policyNumber} · Post office RD` : `${p.partner} ${p.productName} · ${p.policyNumber}`,
-      items: p.renewals.map((r) => ({
-        id: r.id,
-        amount: r.premiumAmount.toFixed(2),
-        label: `${p.frequency === "Monthly" ? monthLabel(r.dueDate) : `Due ${fmtDate(r.dueDate)}`} · ${r.status}`,
+      dues: dues.map((d) => ({
+        amount: d.amount.toFixed(2),
+        label: p.frequency === "Monthly" ? monthLabel(d.dueDate) : fmtDate(d.dueDate),
+        tag: d.dueDate < today ? "Overdue" : d.dueDate > monthEnd ? "Advance" : "Due",
       })),
     }));
     return (

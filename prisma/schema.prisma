@@ -272,6 +272,7 @@ model Customer {
 
   policies       Policy[]
   receipts       Receipt[]
+  payments       Payment[]
   ownerPaidSlips OwnerPaidSlip[]
   quotations     Quotation[]
   proposals      Proposal[]
@@ -399,6 +400,8 @@ model Receipt {
   cancelledAt   DateTime?
   createdById   String
   createdAt     DateTime      @default(now())
+  paymentId     String? // set when several dues were paid together
+  payment       Payment?      @relation(fields: [paymentId], references: [id])
 
   poDepositLine PoDepositLine?
   closedSlips   OwnerPaidSlip[]
@@ -406,6 +409,31 @@ model Receipt {
 
   @@unique([tenantId, receiptNo, fy])
   @@index([tenantId, receiptDate])
+}
+
+/// One customer payment covering several dues: the customer gets one PAY- receipt, each due keeps its own RCPT line.
+model Payment {
+  id            String        @id @default(cuid())
+  tenantId      String
+  paymentNo     String
+  receiptDate   DateTime      @db.Date // bill date, same on every line
+  txnDate       DateTime      @db.Date
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  amount        Decimal       @db.Decimal(12, 2)
+  mode          PaymentMode
+  reference     String?
+  notes         String?
+  status        ReceiptStatus @default(Saved)
+  cancelReason  String?
+  cancelledById String?
+  cancelledAt   DateTime?
+  createdById   String
+  createdAt     DateTime      @default(now())
+
+  receipts Receipt[]
+
+  @@unique([tenantId, paymentNo])
 }
 
 enum OwnerPaidSlipStatus {

@@ -14,20 +14,22 @@ import { isoDate, istToday } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { createReceipt } from "../actions";
 
-export type PolicyOption = { id: string; label: string; items: { id: string; amount: string; label: string }[] };
+/** `dues`: payable instalments oldest first (unpaid, then advance up to 12 months ahead). */
+export type PolicyOption = { id: string; label: string; dues: { label: string; amount: string; tag: "Overdue" | "Due" | "Advance" }[] };
 type Slip = { id: string; slipNo: string; account: string; month: string; amount: string; poReceiptNo: string };
 
 const MODES = ["Cash", "UPI", "Cheque"] as const;
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v) * 100) : 0);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
+const TAG_STYLE = { Overdue: "text-destructive", Due: "text-foreground", Advance: "text-blue-700" };
 
 export function ReceiptForm({ customer, policies, openSlips }: { customer: { id: string; name: string; mobile: string }; policies: PolicyOption[]; openSlips: Slip[] }) {
   const router = useRouter();
-  // With owner-paid slips open the payment is usually for them, so start blank.
-  const first = openSlips.length ? undefined : (policies.find((p) => p.items.length) ?? policies[0]);
-  const [policyId, setPolicyId] = useState(first?.id ?? "");
-  const [itemId, setItemId] = useState(first?.items[0]?.id ?? "");
-  const [amount, setAmount] = useState(first?.items[0]?.amount ?? "");
+  // With owner-paid slips open the payment is usually for them, so start blank; otherwise the earliest due.
+  const first = openSlips.length ? undefined : policies.find((p) => p.dues.length);
+  const [counts, setCounts] = useState<Record<string, number>>(first ? { [first.id]: 1 } : {});
+  const [otherPolicyId, setOtherPolicyId] = useState("");
+  const [otherAmount, setOtherAmount] = useState("");
   const [mode, setMode] = useState<(typeof MODES)[number]>("Cash");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
@@ -40,19 +42,24 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
   const [state, dispatch, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await createReceipt(prev, form);
     if (r.ok) {
-      toast.success("Receipt saved and sent to the customer");
-      router.push(`/receipts/${r.id}`);
+      toast.success(r.href?.startsWith("/payments") ? "Payment saved and sent to the customer" : "Receipt saved and sent to the customer");
+      router.push(r.href ?? `/receipts/${r.id}`);
     } else setPopup(false);
     return r;
   }, { ok: false });
 
-  const policy = policies.find((p) => p.id === policyId);
-  const item = policy?.items.find((i) => i.id === itemId);
+  const picked = policies.filter((p) => (counts[p.id] ?? 0) > 0);
+  const duesTotal = picked.reduce((t, p) => t + p.dues.slice(0, counts[p.id]).reduce((s, d) => s + paise(d.amount), 0), 0);
+  const dueCount = picked.reduce((t, p) => t + counts[p.id], 0);
+  const amount = dueCount ? (duesTotal / 100).toFixed(2) : otherAmount;
 
   function submit(slipIds: string[]) {
     const form = new FormData();
-    Object.entries({ customerId: customer.id, policyId, renewalItemId: slipIds.length ? "" : itemId, amount, mode, reference, notes, slipIds: slipIds.join(","), receiptDate, txnDate })
-      .forEach(([k, v]) => form.set(k, v));
+    const dues = slipIds.length ? [] : picked.map((p) => ({ policyId: p.id, count: counts[p.id] }));
+    Object.entries({
+      customerId: customer.id, policyId: dues.length ? "" : otherPolicyId, dues: dues.length ? JSON.stringify(dues) : "",
+      amount, mode, reference, notes, slipIds: slipIds.join(","), receiptDate, txnDate,
+    }).forEach(([k, v]) => form.set(k, v));
     startTransition(() => dispatch(form));
   }
 
@@ -63,40 +70,66 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
     else submit([]);
   }
 
+  const range = (p: PolicyOption, n: number) => (n === 1 ? p.dues[0].label : `${p.dues[0].label} – ${p.dues[n - 1].label}`);
   const selected = openSlips.filter((s) => ticked.includes(s.id)).reduce((t, s) => t + paise(s.amount), 0);
   const diff = paise(amount) - selected;
   const err = state.fieldErrors ?? {};
+  const withDues = policies.filter((p) => p.dues.length);
 
   return (
-    <form onSubmit={onSave} className="max-w-2xl space-y-4 rounded-xl border bg-white p-4">
+    <form onSubmit={onSave} className="max-w-3xl space-y-4 rounded-xl border bg-white p-4">
       <div>
         <h2 className="font-semibold">{customer.name}</h2>
         <p className="text-xs text-muted-foreground">{customer.mobile}{openSlips.length > 0 && ` · ${openSlips.length} owner-paid instalment(s) open`}</p>
       </div>
+
+      {withDues.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Dues to pay</Label>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>Policy / account</TableHead><TableHead>Next due</TableHead><TableHead>Instalments</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
+              {withDues.map((p) => {
+                const n = counts[p.id] ?? 0;
+                const next = p.dues[0];
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="whitespace-normal">{p.label}</TableCell>
+                    <TableCell>{next.label} <span className={cn("text-xs", TAG_STYLE[next.tag])}>{next.tag}</span></TableCell>
+                    <TableCell>
+                      <NativeSelect aria-label={`Instalments for ${p.label}`} value={String(n)} className="w-56"
+                        onChange={(e) => setCounts({ ...counts, [p.id]: Number(e.target.value) })}>
+                        <NativeSelectOption value="0">None</NativeSelectOption>
+                        {p.dues.map((d, i) => (
+                          <NativeSelectOption key={i} value={String(i + 1)}>{i + 1} · {range(p, i + 1)}{d.tag === "Advance" ? " (advance)" : ""}</NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </TableCell>
+                    <TableCell className="text-right">{n ? inr(p.dues.slice(0, n).reduce((s, d) => s + paise(d.amount), 0)) : "—"}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <p className="text-xs text-muted-foreground">
+            Oldest dues are paid first; advance up to 12 months ahead.
+            {dueCount > 1 && ` ${dueCount} dues → one payment receipt for the customer, with a receipt line per due.`}
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="policyId">Policy / account</Label>
-          <NativeSelect id="policyId" value={policyId} className="w-full" aria-invalid={!!err.policyId} onChange={(e) => {
-            const p = policies.find((x) => x.id === e.target.value);
-            setPolicyId(e.target.value);
-            setItemId(p?.items[0]?.id ?? "");
-            setAmount(p?.items[0]?.amount ?? "");
-          }}>
-            <NativeSelectOption value="">Pick…</NativeSelectOption>
-            {policies.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
-          </NativeSelect>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="itemId">Instalment / renewal</Label>
-          <NativeSelect id="itemId" value={itemId} className="w-full" onChange={(e) => {
-            setItemId(e.target.value);
-            const i = policy?.items.find((x) => x.id === e.target.value);
-            if (i) setAmount(i.amount);
-          }}>
-            <NativeSelectOption value="">None (other payment)</NativeSelectOption>
-            {policy?.items.map((i) => <NativeSelectOption key={i.id} value={i.id}>{i.label} · {inr(paise(i.amount))}</NativeSelectOption>)}
-          </NativeSelect>
-        </div>
+        {dueCount === 0 && (
+          <div className="col-span-2 space-y-1.5">
+            <Label htmlFor="policyId">{withDues.length ? "Or another payment – policy / account" : "Policy / account"}</Label>
+            <NativeSelect id="policyId" value={otherPolicyId} className="w-full" aria-invalid={!!err.policyId} onChange={(e) => setOtherPolicyId(e.target.value)}>
+              <NativeSelectOption value="">Pick…</NativeSelectOption>
+              {policies.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="receiptDate">Bill date</Label>
           <Input id="receiptDate" type="date" value={receiptDate} max={today} required onChange={(e) => setReceiptDate(e.target.value)} aria-invalid={!!err.receiptDate} />
@@ -107,7 +140,7 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="amount">Amount (₹)</Label>
-          <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={!!item} inputMode="decimal" aria-invalid={!!err.amount} />
+          <Input id="amount" value={amount} onChange={(e) => setOtherAmount(e.target.value)} readOnly={dueCount > 0} inputMode="decimal" aria-invalid={!!err.amount} />
         </div>
         <div className="space-y-1.5">
           <Label>Mode</Label>

@@ -87,7 +87,10 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     for (let i = 0; i < 2; i++) {
       await arun.goto("/receipts/new?q=Lakshmi");
       await arun.getByRole("link", { name: /Lakshmi P/ }).click();
-      await expect(arun.getByLabel("Instalment / renewal")).toContainText("Oct");
+      // The earliest due (this month's RD instalment) is picked by default.
+      const pick = arun.getByRole("combobox", { name: /Instalments for RD 2231-10/ }).first();
+      await expect(pick).toHaveValue("1");
+      await expect(pick).toContainText("1 · Oct");
       await arun.getByRole("button", { name: "Save receipt" }).click();
       await arun.waitForURL(/\/receipts\/c/);
       await expect(arun.getByText("Collected", { exact: true })).toBeVisible();

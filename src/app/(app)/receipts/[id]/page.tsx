@@ -17,7 +17,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const r = await db.receipt.findFirst({
     where: { id, tenantId: user.tenantId },
-    include: { customer: true, policy: true, closedSlips: true, poDepositLine: { include: { poDeposit: true } } },
+    include: { customer: true, policy: true, closedSlips: true, poDepositLine: { include: { poDeposit: true } }, payment: { select: { id: true, paymentNo: true } } },
   });
   if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) notFound();
   const showCommission = hasPermission(user.role, "Commission.View");
@@ -37,6 +37,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     ["Bill date", `${fmtDate(r.receiptDate)} · entered by ${nameOf(r.createdById)} at ${fmtDateTime(r.createdAt)}`],
     ["Transaction date", fmtDate(r.txnDate)],
   ];
+  if (r.payment) rows.push(["Part of payment", <Link key="pay" href={`/payments/${r.payment.id}`} className="text-blue-700 hover:underline">{r.payment.paymentNo}</Link>]);
   if (r.rdStatus && r.status !== "Cancelled") rows.push(["RD status", r.poDepositLine ? `${r.rdStatus} · PO receipt ${r.poDepositLine.poDeposit.poReceiptNo}` : r.rdStatus]);
   if (r.closedSlips.length) rows.push(["Owner-paid slips closed", r.closedSlips.map((s) => s.slipNo).join(", ")]);
   if (showCommission && commissions.length) {
@@ -66,7 +67,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
             <Link href="/receipts" className={buttonVariants({ variant: "ghost" })}>Back to receipts</Link>
           </div>
         </div>
-        {hasPermission(user.role, "Receipt.Cancel") && !cancelled && (
+        {hasPermission(user.role, "Receipt.Cancel") && !cancelled && !r.payment && (
           <CancelReceiptForm receiptId={r.id} receiptNo={r.receiptNo} />
         )}
       </div>

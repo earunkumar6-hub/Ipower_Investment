@@ -27,7 +27,9 @@ const form = (o: Record<string, string>) => {
   Object.entries(o).forEach(([k, v]) => f.set(k, v));
   return f;
 };
-const base = { policyId: "", renewalItemId: "", reference: "", notes: "", slipIds: "" };
+const base = { policyId: "", reference: "", notes: "", slipIds: "" };
+// The oldest payable instalment of a policy.
+const oneDue = (policyId: string) => JSON.stringify([{ policyId, count: 1 }]);
 
 beforeAll(async () => {
   const admin = await prisma.user.findFirstOrThrow({ where: { username: "admin" } });
@@ -52,7 +54,7 @@ describe("Receipts", () => {
     const item = await prisma.renewalItem.findFirstOrThrow({ where: { policyId: policy.id, status: { in: ["Due", "Overdue"] } }, orderBy: { dueDate: "asc" } });
     touchedItems.push(item.id);
 
-    const r = await createReceipt({ ok: false }, form({ ...base, customerId: policy.customerId, policyId: policy.id, renewalItemId: item.id, amount: "1000", mode: "Cash" }));
+    const r = await createReceipt({ ok: false }, form({ ...base, customerId: policy.customerId, dues: oneDue(policy.id), amount: "1000", mode: "Cash" }));
     expect(r).toMatchObject({ ok: true });
     created.push(r.id!);
     const receipt = await prisma.receipt.findUniqueOrThrow({ where: { id: r.id } });
@@ -64,7 +66,7 @@ describe("Receipts", () => {
     expect([entry.direction, entry.amount.toFixed(2), entry.entryType]).toEqual(["In", "1000.00", "Collection"]);
 
     // Wrong amount for the instalment is refused
-    const bad = await createReceipt({ ok: false }, form({ ...base, customerId: policy.customerId, policyId: policy.id, renewalItemId: item.id, amount: "999", mode: "Cash" }));
+    const bad = await createReceipt({ ok: false }, form({ ...base, customerId: policy.customerId, dues: oneDue(policy.id), amount: "999", mode: "Cash" }));
     expect(bad.ok).toBe(false);
 
     const c = await cancelReceipt({ ok: false }, form({ receiptId: r.id!, reason: "test" }));
@@ -111,7 +113,7 @@ describe("Receipts", () => {
       where: { status: { in: ["Due", "Overdue"] }, policy: { productType: "PoRd" } }, include: { policy: true }, orderBy: { dueDate: "asc" },
     });
     const pay = (receiptDate: string, txnDate = receiptDate) => createReceipt({ ok: false }, form({
-      ...base, customerId: item.policy.customerId, policyId: item.policyId, renewalItemId: item.id, amount: item.premiumAmount.toFixed(2), mode: "Cash", receiptDate, txnDate,
+      ...base, customerId: item.policy.customerId, dues: oneDue(item.policyId), amount: item.premiumAmount.toFixed(2), mode: "Cash", receiptDate, txnDate,
     }));
 
     // Refused: future bill or transaction date, a closed day, and any day before the last close.

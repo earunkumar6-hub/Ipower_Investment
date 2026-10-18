@@ -47,6 +47,7 @@ async function CustomerReceipts({ tenantId, createdById, showCommission }: { ten
     include: {
       customer: { select: { name: true } },
       policy: { select: { partner: true, productName: true, policyNumber: true } },
+      payment: { select: { id: true, paymentNo: true } },
       // Commission is only read for roles allowed to see it.
       ...(showCommission && { commissions: { where: { status: { not: "Cancelled" } }, select: { gross: true } } }),
     },
@@ -72,7 +73,10 @@ async function CustomerReceipts({ tenantId, createdById, showCommission }: { ten
             const commission = "commissions" in r ? (r.commissions as { gross: Prisma.Decimal }[]) : [];
             return (
               <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
-                <TableCell><Link href={`/receipts/${r.id}`} className="text-blue-700 hover:underline">{r.receiptNo}</Link></TableCell>
+                <TableCell>
+                  <Link href={`/receipts/${r.id}`} className="text-blue-700 hover:underline">{r.receiptNo}</Link>
+                  {r.payment && <Link href={`/payments/${r.payment.id}`} className="block text-xs text-muted-foreground hover:underline">{r.payment.paymentNo}</Link>}
+                </TableCell>
                 <TableCell>{fmtDate(r.receiptDate)}</TableCell>
                 <TableCell>{fmtDate(r.txnDate)}</TableCell>
                 <TableCell>{r.customer.name}</TableCell>

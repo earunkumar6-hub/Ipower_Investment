@@ -8,6 +8,7 @@ const SERIES = {
   quotation: { table: "Quotation", column: "quoteNo", prefix: "Q-", width: 4 },
   proposal: { table: "Proposal", column: "proposalNo", prefix: "P-", width: 4 },
   receipt: { table: "Receipt", column: "receiptNo", prefix: "RCPT-", width: 4 },
+  payment: { table: "Payment", column: "paymentNo", prefix: "PAY-", width: 4 },
   slip: { table: "OwnerPaidSlip", column: "slipNo", prefix: "OWN-", width: 4 },
   service: { table: "ServiceTransaction", column: "txnNo", prefix: "SVC-", width: 4 },
   expense: { table: "Expense", column: "expenseNo", prefix: "EXP-", width: 4 },

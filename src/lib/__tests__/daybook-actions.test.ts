@@ -151,7 +151,7 @@ describe("Day Book: ATM, PO deposit, tally, verify, close", () => {
     // A receipt can't be recorded into the closed day — refused, not crashed
     as("arun");
     const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-104" } });
-    const r = await createReceipt({ ok: false }, form({ customerId: policy.customerId, policyId: policy.id, renewalItemId: "", amount: "1000", mode: "Cash", reference: "", notes: "", slipIds: "" }));
+    const r = await createReceipt({ ok: false }, form({ customerId: policy.customerId, policyId: policy.id, amount: "1000", mode: "Cash", reference: "", notes: "", slipIds: "" }));
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/closed/);
 

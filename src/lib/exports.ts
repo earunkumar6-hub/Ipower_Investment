@@ -293,6 +293,7 @@ export const REPORTS: Record<string, Report> = {
           include: {
             customer: { select: { name: true } },
             policy: { select: { partner: true, productName: true, policyNumber: true } },
+            payment: { select: { paymentNo: true } },
             // Commission is only read for roles allowed to see it.
             ...(showCommission && { commissions: { where: { status: { not: "Cancelled" } }, select: { gross: true } } }),
           },
@@ -312,13 +313,13 @@ export const REPORTS: Record<string, Report> = {
         sheets: [{
           name: "Customer receipts",
           totals: true,
-          columns: [{ header: "Receipt no." }, { header: "Bill date", type: "date" }, { header: "Transaction date", type: "date" }, { header: "Entered", type: "datetime", width: 20 }, { header: "Customer", width: 24 },
+          columns: [{ header: "Receipt no." }, { header: "Payment no." }, { header: "Bill date", type: "date" }, { header: "Transaction date", type: "date" }, { header: "Entered", type: "datetime", width: 20 }, { header: "Customer", width: 24 },
             { header: "For", width: 32 }, { header: "Mode" }, { header: "Reference" }, { header: "Account" }, { header: "Amount", type: "money" },
             ...(showCommission ? [{ header: "Commission", type: "money" as const }] : []), { header: "Status" }, { header: "RD status" }, { header: "Cancel reason", width: 24 }],
           rows: receipts.map((r) => {
             const commission = "commissions" in r ? (r.commissions as { gross: Prisma.Decimal }[]) : [];
             const forText = (r.policy ? (r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`) : r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : "");
-            return [r.receiptNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
+            return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
               ...(showCommission ? [commission.length ? sum(commission.map((c) => c.gross)) : null] : []),
               r.status, r.status !== "Cancelled" ? r.rdStatus : null, r.cancelReason];
           }),

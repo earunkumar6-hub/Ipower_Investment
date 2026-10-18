@@ -10,7 +10,7 @@ import { nextNumber } from "@/lib/numbering";
 import { seesAll } from "@/lib/permissions";
 import { authorize } from "@/lib/session";
 
-export type ActionResult = { ok: boolean; error?: string; message?: string; fieldErrors?: Record<string, string>; id?: string };
+export type ActionResult = { ok: boolean; error?: string; message?: string; fieldErrors?: Record<string, string>; id?: string; href?: string };
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
 
