@@ -1,0 +1,39 @@
+# IPower Investments on the client machine. Uses pre-built images loaded with `docker load` – no source, no build.
+# Start: docker compose up -d   ·   open http://localhost:3000
+name: flcrm
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flcrm
+      POSTGRES_PASSWORD: flcrm
+      POSTGRES_DB: flcrm
+    # No ports: only the app container talks to the database.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flcrm"]
+      interval: 5s
+      retries: 10
+
+  app:
+    image: ipower-crm:1.1
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://flcrm:flcrm@postgres:5432/flcrm
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - bills:/app/storage
+
+volumes:
+  pgdata:
+  bills:

@@ -1,0 +1,756 @@
+// FL_CRM demo schema — subset of the full-build schema (same entity and column names).
+// Money: Decimal(12,2). Calendar dates (@db.Date) are IST business dates.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Identity ─────────────────────────
+
+enum Role {
+  SuperAdmin
+  Admin
+  User
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+// Better Auth user + FL_CRM fields
+model User {
+  id              String    @id
+  name            String
+  email           String    @unique
+  emailVerified   Boolean   @default(false)
+  image           String?
+  username        String?   @unique
+  displayUsername String?
+  role            Role      @default(User)
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  active          Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions     Session[]
+  authAccounts AuthAccount[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Better Auth "account" (credentials) — renamed so it doesn't clash with money Account
+model AuthAccount {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ───────────────────────── Sales ─────────────────────────
+
+enum LeadSource {
+  Website
+  WalkIn
+  Partner
+  Call
+  Referral
+}
+
+enum LeadStatus {
+  New
+  CallScheduled
+  Interested
+  NotInterested
+  Quoted
+  Converted
+}
+
+model Lead {
+  id                  String     @id @default(cuid())
+  tenantId            String
+  leadNo              String
+  name                String
+  mobile              String
+  email               String?
+  source              LeadSource
+  status              LeadStatus @default(New)
+  interest            String?
+  notInterestedReason String?
+  ownerId             String
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  calls      Call[]
+  quotations Quotation[]
+
+  @@unique([tenantId, leadNo])
+  @@unique([tenantId, mobile])
+}
+
+enum CallOutcome {
+  Interested
+  NoAnswer
+  NotInterested
+}
+
+model Call {
+  id          String       @id @default(cuid())
+  tenantId    String
+  leadId      String
+  lead        Lead         @relation(fields: [leadId], references: [id])
+  ownerId     String
+  dueAt       DateTime
+  note        String?
+  outcome     CallOutcome?
+  outcomeNote String?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@index([ownerId, outcome, dueAt])
+}
+
+enum QuotationStatus {
+  Draft
+  Accepted
+}
+
+model Quotation {
+  id           String          @id @default(cuid())
+  tenantId     String
+  quoteNo      String
+  leadId       String?
+  lead         Lead?           @relation(fields: [leadId], references: [id])
+  customerId   String?
+  customer     Customer?       @relation(fields: [customerId], references: [id])
+  customerName String
+  mobile       String
+  status       QuotationStatus @default(Draft)
+  validUpto    DateTime        @db.Date
+  subtotal     Decimal         @db.Decimal(12, 2)
+  gstTotal     Decimal         @db.Decimal(12, 2)
+  total        Decimal         @db.Decimal(12, 2)
+  ownerId      String
+  acceptedAt   DateTime?
+  createdAt    DateTime        @default(now())
+
+  items     QuotationItem[]
+  proposals Proposal[]
+
+  @@unique([tenantId, quoteNo])
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  category    String // Health, Life, Motor, …
+  insurer     String
+  productName String
+  sumInsured  Decimal?  @db.Decimal(14, 2)
+  premium     Decimal   @db.Decimal(12, 2)
+  gstRate     Decimal   @db.Decimal(5, 2)
+  gstAmount   Decimal   @db.Decimal(12, 2)
+  total       Decimal   @db.Decimal(12, 2)
+  proposal    Proposal?
+}
+
+enum ProposalStatus {
+  Draft
+  ConsentPending
+  ConsentGiven
+  Issued
+}
+
+model Proposal {
+  id              String         @id @default(cuid())
+  tenantId        String
+  proposalNo      String
+  quotationId     String
+  quotation       Quotation      @relation(fields: [quotationId], references: [id])
+  quotationItemId String         @unique // one proposal per quoted product
+  quotationItem   QuotationItem  @relation(fields: [quotationItemId], references: [id])
+  customerId      String?
+  customer        Customer?      @relation(fields: [customerId], references: [id])
+  customerName    String
+  mobile          String
+  insurer         String
+  productName     String
+  sumInsured      Decimal?       @db.Decimal(14, 2)
+  premium         Decimal        @db.Decimal(12, 2) // incl. GST — what the customer pays
+  panMasked       String?
+  aadhaarLast4    String?
+  policyNumber    String?
+  status          ProposalStatus @default(Draft)
+  ownerId         String
+  createdAt       DateTime       @default(now())
+
+  consents Consent[]
+  policy   Policy?
+
+  @@unique([tenantId, proposalNo])
+}
+
+enum ConsentStatus {
+  Sent
+  Given
+  Declined
+  Expired
+  Withdrawn
+}
+
+model Consent {
+  id            String        @id @default(cuid())
+  tenantId      String
+  customerId    String?
+  proposalId    String
+  proposal      Proposal      @relation(fields: [proposalId], references: [id])
+  mobile        String
+  purpose       String
+  textVersion   String
+  status        ConsentStatus @default(Sent)
+  otpVerifiedOn DateTime?
+  ipAddress     String?
+  expiresOn     DateTime
+  createdAt     DateTime      @default(now())
+}
+
+// ───────────────────────── Customers and policies ─────────────────────────
+
+model Customer {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  mobile       String
+  email        String?
+  address      String?
+  panMasked    String?
+  aadhaarLast4 String?
+  ownerId      String
+  createdAt    DateTime @default(now())
+
+  policies       Policy[]
+  receipts       Receipt[]
+  ownerPaidSlips OwnerPaidSlip[]
+  quotations     Quotation[]
+  proposals      Proposal[]
+
+  @@index([tenantId, mobile])
+}
+
+enum ProductType {
+  Insurance
+  MutualFund
+  PoRd
+  PoTd
+  PoKvp
+  PoNsc
+}
+
+enum Frequency {
+  Monthly
+  Quarterly
+  HalfYearly
+  Yearly
+  OneTime
+}
+
+enum PolicyStatus {
+  Active
+  Lapsed
+  Matured
+}
+
+model Policy {
+  id            String       @id @default(cuid())
+  tenantId      String
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  proposalId    String?      @unique
+  proposal      Proposal?    @relation(fields: [proposalId], references: [id])
+  productType   ProductType
+  partner       String // insurer / AMC / "Post Office"
+  productName   String
+  policyNumber  String // policy, folio or PO account number
+  premiumAmount Decimal      @db.Decimal(12, 2) // premium, SIP or RD instalment
+  frequency     Frequency
+  startDate     DateTime     @db.Date
+  termMonths    Int?
+  sumAssured    Decimal?     @db.Decimal(14, 2)
+  status        PolicyStatus @default(Active)
+  ownerId       String
+  createdAt     DateTime     @default(now())
+
+  renewals       RenewalItem[]
+  receipts       Receipt[]
+  ownerPaidSlips OwnerPaidSlip[]
+  commissions    Commission[]
+
+  @@unique([tenantId, policyNumber])
+}
+
+enum RenewalStatus {
+  Due
+  Overdue
+  Paid
+  Lapsed
+}
+
+model RenewalItem {
+  id             String        @id @default(cuid())
+  tenantId       String
+  policyId       String
+  policy         Policy        @relation(fields: [policyId], references: [id])
+  dueDate        DateTime      @db.Date
+  premiumAmount  Decimal       @db.Decimal(12, 2)
+  status         RenewalStatus @default(Due)
+  paidReceiptId  String?
+  paidOn         DateTime?     @db.Date
+  lastReminderAt DateTime?
+
+  @@index([tenantId, status, dueDate])
+}
+
+// ───────────────────────── Receipts and RD ─────────────────────────
+
+enum PaymentMode {
+  Cash
+  UPI
+  Cheque
+  Bank
+  Card
+}
+
+enum ReceiptStatus {
+  Saved
+  Cancelled
+}
+
+enum RdStatus {
+  Collected
+  Deposited
+  Verified
+}
+
+model Receipt {
+  id            String        @id @default(cuid())
+  tenantId      String
+  receiptNo     String
+  fy            String // e.g. "2026-27"
+  receiptDate   DateTime      @db.Date
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  policyId      String?
+  policy        Policy?       @relation(fields: [policyId], references: [id])
+  renewalItemId String?
+  amount        Decimal       @db.Decimal(12, 2)
+  mode          PaymentMode
+  accountId     String // account the money came into
+  reference     String? // UTR / cheque no.
+  notes         String?
+  isPassThrough Boolean       @default(true)
+  rdStatus      RdStatus? // RD instalments only
+  ownerPaid     Boolean       @default(false) // closes owner-paid slips; never deposited to PO
+  status        ReceiptStatus @default(Saved)
+  cancelReason  String?
+  cancelledById String?
+  cancelledAt   DateTime?
+  createdById   String
+  createdAt     DateTime      @default(now())
+
+  poDepositLine PoDepositLine?
+  closedSlips   OwnerPaidSlip[]
+  commissions   Commission[]
+
+  @@unique([tenantId, receiptNo, fy])
+  @@index([tenantId, receiptDate])
+}
+
+enum OwnerPaidSlipStatus {
+  CustomerOwes
+  CollectedReturnToOwner
+  Settled
+  Cancelled
+}
+
+model OwnerPaidSlip {
+  id                String              @id @default(cuid())
+  tenantId          String
+  slipNo            String
+  policyId          String
+  policy            Policy              @relation(fields: [policyId], references: [id])
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id])
+  renewalItemId     String?
+  month             DateTime            @db.Date
+  amount            Decimal             @db.Decimal(12, 2)
+  poReceiptNo       String
+  status            OwnerPaidSlipStatus @default(CustomerOwes)
+  closedByReceiptId String?
+  closedByReceipt   Receipt?            @relation(fields: [closedByReceiptId], references: [id])
+  returnedEntryId   String?
+  confirmedById     String?
+  confirmedOn       DateTime?
+  createdById       String
+  createdAt         DateTime            @default(now())
+
+  @@unique([tenantId, slipNo])
+}
+
+model PoDeposit {
+  id               String   @id @default(cuid())
+  tenantId         String
+  poReceiptNo      String
+  depositDate      DateTime @db.Date
+  amount           Decimal  @db.Decimal(12, 2)
+  receiptsTotal    Decimal  @db.Decimal(12, 2)
+  upiPortion       Decimal  @db.Decimal(12, 2)
+  adjustmentReason String?
+  adjustmentNote   String?
+  createdById      String
+  createdAt        DateTime @default(now())
+
+  lines       PoDepositLine[]
+  commissions Commission[]
+}
+
+model PoDepositLine {
+  id          String    @id @default(cuid())
+  poDepositId String
+  poDeposit   PoDeposit @relation(fields: [poDepositId], references: [id])
+  receiptId   String    @unique
+  receipt     Receipt   @relation(fields: [receiptId], references: [id])
+  policyId    String
+  amount      Decimal   @db.Decimal(12, 2)
+}
+
+enum CommissionSourceType {
+  RdReceipt
+  Challan
+  Partner
+}
+
+enum CommissionStatus {
+  Expected
+  Received
+  Cancelled
+}
+
+model Commission {
+  id          String               @id @default(cuid())
+  tenantId    String
+  sourceType  CommissionSourceType
+  sourceNo    String // receipt no., challan no. or partner statement ref
+  policyId    String?
+  policy      Policy?              @relation(fields: [policyId], references: [id])
+  receiptId   String?
+  receipt     Receipt?             @relation(fields: [receiptId], references: [id])
+  poDepositId String?
+  poDeposit   PoDeposit?           @relation(fields: [poDepositId], references: [id])
+  earnedOn    DateTime             @db.Date
+  baseAmount  Decimal              @db.Decimal(14, 2)
+  rate        Decimal              @db.Decimal(6, 4) // 0.0040 = 0.4%
+  gross       Decimal              @db.Decimal(12, 2)
+  tdsRate     Decimal              @db.Decimal(6, 4)
+  tds         Decimal              @db.Decimal(12, 2)
+  net         Decimal              @db.Decimal(12, 2)
+  status      CommissionStatus     @default(Expected)
+  receivedOn  DateTime?            @db.Date
+
+  @@index([tenantId, earnedOn])
+}
+
+// ───────────────────────── E-Sevai ─────────────────────────
+
+model ServiceType {
+  id              String  @id @default(cuid())
+  tenantId        String
+  code            String // EB, PAN, CERT
+  name            String
+  walletAccountId String
+  allowBankPay    Boolean @default(false)
+
+  rates        ServiceRate[]
+  transactions ServiceTransaction[]
+
+  @@unique([tenantId, code])
+}
+
+model ServiceRate {
+  id                  String      @id @default(cuid())
+  serviceTypeId       String
+  serviceType         ServiceType @relation(fields: [serviceTypeId], references: [id])
+  minAmount           Decimal?    @db.Decimal(12, 2) // inclusive; slab rates only
+  maxAmount           Decimal?    @db.Decimal(12, 2) // inclusive
+  serviceCharge       Decimal?    @db.Decimal(12, 2) // slab: added to bill amount
+  walletCost          Decimal?    @db.Decimal(12, 2) // fixed: provider cost
+  fixedCustomerAmount Decimal?    @db.Decimal(12, 2) // fixed: customer pays
+  effectiveFrom       DateTime    @db.Date
+}
+
+enum ServiceTxnStatus {
+  Saved
+  Cancelled
+}
+
+model ServiceTransaction {
+  id                String           @id @default(cuid())
+  tenantId          String
+  txnNo             String
+  txnDate           DateTime         @db.Date
+  serviceTypeId     String
+  serviceType       ServiceType      @relation(fields: [serviceTypeId], references: [id])
+  customerName      String?
+  customerMobile    String?
+  paidFromAccountId String // wallet or bank
+  receivedAccountId String // cash or bank (customer payment)
+  baseAmount        Decimal          @db.Decimal(12, 2)
+  serviceCharge     Decimal          @db.Decimal(12, 2)
+  walletCost        Decimal          @db.Decimal(12, 2)
+  customerAmount    Decimal          @db.Decimal(12, 2)
+  profit            Decimal          @db.Decimal(12, 2)
+  providerRef       String?
+  paymentMode       PaymentMode
+  reference         String? // UTR when paid by UPI / bank
+  status            ServiceTxnStatus @default(Saved)
+  createdById       String
+  createdAt         DateTime         @default(now())
+
+  @@unique([tenantId, txnNo])
+}
+
+// ───────────────────────── Money accounts and Day Book ─────────────────────────
+
+enum AccountType {
+  Cash
+  Bank
+  Wallet
+}
+
+model Account {
+  id                  String      @id @default(cuid())
+  tenantId            String
+  type                AccountType
+  name                String
+  last4               String?
+  openingBalance      Decimal     @db.Decimal(14, 2)
+  openingDate         DateTime    @db.Date // balance is as at start of this date
+  lowBalanceThreshold Decimal?    @db.Decimal(12, 2)
+
+  entries   DayBookEntry[]
+  dayCloses DayClose[]
+}
+
+enum ExpenseStatus {
+  Saved // within auto-approve limit
+  Waiting
+  Approved
+  Rejected
+  Cancelled
+}
+
+enum ApprovalLevel {
+  None
+  Admin
+  SuperAdmin
+}
+
+enum PaidBy {
+  Company
+  Employee
+  Owner
+}
+
+enum RepaymentStatus {
+  NotNeeded
+  ToBeRepaid
+  Repaid
+}
+
+model Vendor {
+  id       String    @id @default(cuid())
+  tenantId String
+  name     String
+  expenses Expense[]
+
+  @@unique([tenantId, name])
+}
+
+model Expense {
+  id                  String          @id @default(cuid())
+  tenantId            String
+  expenseNo           String
+  expenseDate         DateTime        @db.Date
+  category            String
+  description         String
+  amount              Decimal         @db.Decimal(12, 2)
+  vendorId            String
+  vendor              Vendor          @relation(fields: [vendorId], references: [id])
+  billNo              String
+  billPhotoPath       String?
+  paidBy              PaidBy          @default(Company)
+  paidByName          String?
+  mode                PaymentMode
+  fromAccountId       String? // company account when paidBy = Company
+  repaymentStatus     RepaymentStatus @default(NotNeeded)
+  repaidOn            DateTime?       @db.Date
+  repaidFromAccountId String?
+  status              ExpenseStatus
+  approvalLevel       ApprovalLevel   @default(None)
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectReason        String?
+  cancelReason        String?
+  createdById         String
+  createdAt           DateTime        @default(now())
+
+  @@unique([tenantId, expenseNo])
+  @@unique([tenantId, vendorId, billNo])
+}
+
+enum Direction {
+  In
+  Out
+}
+
+enum EntryType {
+  Collection // customer receipt
+  ServiceCollection // E-Sevai customer payment
+  ServiceCost // E-Sevai provider cost (wallet/bank out)
+  WalletRecharge
+  Expense
+  ExpenseRepayment
+  Withdrawal // ATM / bank → cash (contra)
+  DepositToBank // cash → bank (contra)
+  DepositToPo
+  OwnerReturn
+  Adjustment
+}
+
+enum SourceType {
+  Receipt
+  ServiceTransaction
+  Expense
+  PoDeposit
+  OwnerPaidSlip
+  Contra
+  WalletRecharge
+  Manual
+}
+
+model DayBookEntry {
+  id              String        @id @default(cuid())
+  tenantId        String
+  accountId       String
+  account         Account       @relation(fields: [accountId], references: [id])
+  entryDate       DateTime      @db.Date
+  direction       Direction
+  amount          Decimal       @db.Decimal(12, 2)
+  entryType       EntryType
+  mode            PaymentMode?
+  isPassThrough   Boolean       @default(false)
+  sourceType      SourceType
+  sourceId        String?
+  sourceNo        String? // RCPT-0891, EXP-0142, PO receipt no.
+  particulars     String
+  productCategory String?
+  scheme          String?
+  notes           String?
+  reversalOfId    String?       @unique
+  reversalOf      DayBookEntry? @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy      DayBookEntry? @relation("Reversal")
+  idempotencyKey  String        @unique
+  createdById     String
+  createdAt       DateTime      @default(now())
+
+  @@index([tenantId, entryDate])
+  @@index([accountId, entryDate])
+  @@index([sourceType, sourceId])
+}
+
+enum DayCloseStatus {
+  Open // verification saved, not closed
+  Closed
+}
+
+model DayClose {
+  id           String         @id @default(cuid())
+  tenantId     String
+  accountId    String
+  account      Account        @relation(fields: [accountId], references: [id])
+  date         DateTime       @db.Date
+  opening      Decimal        @db.Decimal(14, 2)
+  totalIn      Decimal        @db.Decimal(14, 2)
+  totalOut     Decimal        @db.Decimal(14, 2)
+  computed     Decimal        @db.Decimal(14, 2)
+  physical     Decimal?       @db.Decimal(14, 2)
+  difference   Decimal?       @db.Decimal(14, 2)
+  cashBySource Json? // cash account only: { PostOffice, GRM, ESevai, PAN, Others }
+  status       DayCloseStatus @default(Open)
+  verifiedById String?
+  verifiedAt   DateTime?
+  closedById   String?
+  closedAt     DateTime?
+
+  @@unique([tenantId, accountId, date])
+}
+
+// ───────────────────────── Messages (mocked) ─────────────────────────
+
+enum MessageChannel {
+  WhatsApp
+  SMS
+  Email
+}
+
+model MessageLog {
+  id          String         @id @default(cuid())
+  tenantId    String
+  channel     MessageChannel
+  to          String
+  template    String
+  body        String
+  relatedType String?
+  relatedId   String?
+  status      String         @default("Sent (mock)")
+  createdById String?
+  createdAt   DateTime       @default(now())
+}

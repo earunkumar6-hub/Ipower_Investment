@@ -1,0 +1,10 @@
+node_modules
+.next
+storage
+.env
+.env.*
+!.env.example
+*.log
+coverage
+test-results
+e2e-report
