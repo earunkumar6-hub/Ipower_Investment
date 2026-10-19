@@ -13,7 +13,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
   const c = await db.customer.findFirst({
     where: { id, tenantId: user.tenantId },
     include: {
-      policies: { orderBy: [{ productType: "asc" }, { startDate: "asc" }], include: { renewals: { orderBy: { dueDate: "asc" } } } },
+      policies: { orderBy: [{ productType: "asc" }, { startDate: "asc" }], include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true } } } },
       receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } } } },
       ownerPaidSlips: { orderBy: { createdAt: "desc" }, include: { policy: { select: { policyNumber: true } }, closedByReceipt: { select: { receiptNo: true } } } },
     },

@@ -5,6 +5,7 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { addDays, fmtDate, fmtDateTime, isoDate, istToday } from "@/lib/dates";
+import { db } from "@/lib/db";
 import { CASH_SOURCES } from "@/lib/daybook-labels";
 import { loadDayBook } from "@/lib/daybook-view";
 import { dayBookDate } from "@/lib/lists";
@@ -12,7 +13,7 @@ import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { AtmForm, CashCountForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
+import { AtmForm, CashCountForm, OtherIncomeForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
 import { DayBookTabs } from "./daybook-tabs";
 
 export default async function DayBookPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
@@ -23,6 +24,10 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
   const iso = isoDate(date);
   const s = (v: { toFixed(n: number): string }) => v.toFixed(2);
   const nameOf = (id: string | null) => d.admins.find((a) => a.id === id)?.name ?? "—";
+  const canAddIncome = hasPermission(user.role, "DayBook.Close");
+  const incomeAccounts = canAddIncome
+    ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, select: { id: true, name: true }, orderBy: { type: "asc" } })
+    : [];
 
   return (
     <>
@@ -98,6 +103,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
         <div className="space-y-4">
           <AtmForm date={iso} closed={d.closed} />
           <CashCountForm date={iso} closed={d.closed} initial={Object.fromEntries(CASH_SOURCES.map((k) => [k, d.cashBySource?.[k] ?? ""]))} />
+          {canAddIncome && <OtherIncomeForm date={iso} closed={d.closed} accounts={incomeAccounts} />}
         </div>
         <div className="space-y-4">
           <PoDepositForm date={iso} closed={d.closed} receipts={d.collectedRd} atmToday={d.atmToday} isAdmin={hasPermission(user.role, "DayBook.Close")} />

@@ -15,4 +15,5 @@ export const MENU: MenuItem[] = [
   { href: "/daybook", label: "Day Book", permission: "DayBook.View" },
   { href: "/pnl", label: "Profit & Loss", permission: "PnL.View" },
   { href: "/messages", label: "Sent messages", permission: "Message.View" },
+  { href: "/settings", label: "Settings", permission: "Settings.Edit" },
 ];

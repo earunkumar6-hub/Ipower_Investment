@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   "PnL.View",
   "Message.View",
   "Report.Export",
+  "Settings.Edit", "Audit.View",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -27,6 +28,7 @@ export type AppAbility = MongoAbility<[Action, Subject]>;
 const STAFF_DENIED: Permission[] = [
   "Receipt.Cancel", "Wallet.Recharge", "Expense.Approve",
   "DayBook.Verify", "DayBook.Close", "Commission.View", "PnL.View", "Report.Export",
+  "Settings.Edit", "Audit.View",
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {

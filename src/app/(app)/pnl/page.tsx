@@ -43,7 +43,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
             <TableBody>
               <Section title="Income" />
               {pnl.serviceLines.map((l) => <Line key={l.label} label={`Service charges – ${l.label}`} value={fmtINR(l.amount)} prev={fmtINR(prevService(l.label) ?? 0)} indent />)}
-              <Line label="Commission – insurers and mutual funds (gross)" value={fmtINR(pnl.commissionPartner)} prev={fmtINR(prev.commissionPartner)} indent />
+              <Line label="Other income (entered in Day Book)" value={fmtINR(pnl.otherIncome)} prev={fmtINR(prev.otherIncome)} indent />
               <Line label="Total income" value={fmtINR(pnl.income)} prev={fmtINR(prev.income)} strong />
               <Section title="Less: expenses by category" />
               {pnl.expenseLines.map((l) => <Line key={l.label} label={l.label} value={fmtINR(l.amount)} prev={fmtINR(prevExpense(l.label) ?? 0)} indent />)}
@@ -54,7 +54,6 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
                 <TableCell className="text-right">{fmtINR(pnl.profit)}</TableCell>
                 <TableCell className="text-right text-sm font-normal text-muted-foreground">{fmtINR(prev.profit)}</TableCell>
               </TableRow>
-              <Line label="TDS deducted on commission (tax credit to claim – not an expense)" value={fmtINR(pnl.tdsCredit)} prev={fmtINR(prev.tdsCredit)} />
             </TableBody>
           </Table>
         </div>
@@ -62,7 +61,8 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           <h2 className="text-sm font-semibold text-foreground">How this is worked out</h2>
           <p>Service charges are what customers paid minus the provider cost (EB ₹10/₹20 slab, PAN ₹100, certificate ₹88).</p>
           <p>Expenses count on the date they were spent, whoever paid (company, employee or owner). Waiting, rejected and cancelled expenses are left out.</p>
-          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid RD; post office commission.</p>
+          <p>Other income is what an Admin records in the Day Book as Other income (interest, incentives…), less any reversals.</p>
+          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid bills. Commission is not counted.</p>
           <p className="font-medium text-foreground">Visible to the Super Admin only.</p>
         </div>
       </div>

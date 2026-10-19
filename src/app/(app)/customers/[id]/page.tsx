@@ -7,12 +7,18 @@ import { StatusBadge, type Tone } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HOLDING_KIND as KIND, loadCustomer360 } from "@/lib/customer-360";
-import { fmtDate } from "@/lib/dates";
+import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { fmtINR, sum, ZERO } from "@/lib/money";
+import { hasPermission } from "@/lib/permissions";
+import { lockInUntil } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { ClosePolicyButton } from "./close-policy-dialog";
 
-const RENEWAL_TONE: Record<string, Tone> = { Due: "orange", Overdue: "red", Paid: "green", Lapsed: "slate" };
+const RENEWAL_TONE: Record<string, Tone> = { Due: "orange", Overdue: "red", Paid: "green", Lapsed: "slate", Stopped: "slate" };
+const POLICY_STATUS: Record<string, [string, Tone]> = {
+  Active: ["Active", "green"], Lapsed: ["Lapsed", "red"], Matured: ["Matured", "slate"], PrematureClosed: ["Premature closed", "slate"], Withdrawn: ["Withdrawn", "slate"],
+};
 const SLIP: Record<string, [string, Tone]> = {
   CustomerOwes: ["Owner paid – customer owes", "indigo"], CollectedReturnToOwner: ["Collected – return to owner", "orange"], Settled: ["Settled", "green"], Cancelled: ["Cancelled", "slate"],
 };
@@ -24,6 +30,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const data = await loadCustomer360(user, (await params).id);
   if (!data) notFound();
   const { c, owner, renewals, receiptNo, active, yearlyPremium, unpaid, slipFor } = data;
+  const today = istToday();
+  const canClose = hasPermission(user.role, "Policy.Create");
 
   return (
     <>
@@ -53,7 +61,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
 
       <Section title="Holdings">
         <Table>
-          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Partner · plan</TableHead><TableHead>Policy / folio / account</TableHead><TableHead className="text-right">Premium / instalment</TableHead><TableHead>Frequency</TableHead><TableHead>Since</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Partner · plan</TableHead><TableHead>Policy / folio / account</TableHead><TableHead className="text-right">Premium / instalment</TableHead><TableHead>Frequency</TableHead><TableHead>Since</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
           <TableBody>
             {c.policies.map((p) => (
               <TableRow key={p.id}>
@@ -63,7 +71,16 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 <TableCell className="text-right">{fmtINR(p.premiumAmount)}</TableCell>
                 <TableCell>{p.frequency === "OneTime" ? "One-time deposit" : p.frequency}</TableCell>
                 <TableCell>{fmtDate(p.startDate)}</TableCell>
-                <TableCell><StatusBadge tone={p.status === "Active" ? "green" : "slate"}>{p.status}</StatusBadge></TableCell>
+                <TableCell>
+                  <StatusBadge tone={POLICY_STATUS[p.status][1]}>{POLICY_STATUS[p.status][0]}</StatusBadge>
+                  {p.closedOn && <div className="text-xs text-muted-foreground" title={p.closeReason ?? undefined}>{fmtDate(p.closedOn)}{p.closeReason && ` · ${p.closeReason}`}</div>}
+                </TableCell>
+                <TableCell className="text-right">
+                  {canClose && p.status === "Active" && (p.productType === "MutualFund" || p.product?.prematureClosure !== false) && (
+                    <ClosePolicyButton policyId={p.id} label={`${p.partner} ${p.productName} · ${p.policyNumber}`} isMf={p.productType === "MutualFund"}
+                      today={isoDate(today)} startDate={isoDate(p.startDate)} lockInUntil={(() => { const l = lockInUntil(p.startDate, p.product?.lockInMonths); return l && l > p.startDate ? isoDate(l) : null; })()} />
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

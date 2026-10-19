@@ -23,6 +23,7 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
   PaidToCompany: "Paid to company",
   OwnerReturn: "Return to owner",
   Adjustment: "Adjustment",
+  OtherIncome: "Other income",
 };
 
 const COLLECTION: EntryType[] = ["Collection", "ServiceCollection"];

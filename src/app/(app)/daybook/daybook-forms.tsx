@@ -11,7 +11,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { CASH_SOURCE_LABEL, CASH_SOURCES, UPI_ADJUSTMENT_REASONS, type CashSource } from "@/lib/daybook-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { cn } from "@/lib/utils";
-import { closeDayBook, depositToPostOffice, recordAtmWithdrawal, saveCashCount, saveVerification } from "./actions";
+import { closeDayBook, depositToPostOffice, recordAtmWithdrawal, recordOtherIncome, saveCashCount, saveVerification } from "./actions";
 
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v.trim()) ? Math.round(Number(v) * 100) : 0);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
@@ -51,6 +51,33 @@ export function AtmForm({ date, closed }: { date: string; closed: boolean }) {
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" variant="outline" disabled={pending} className="w-full">{pending ? "Saving…" : "Record ATM withdrawal"}</Button>
         <p className="text-xs text-muted-foreground">SBI ••1234 → cash. A transfer, never an expense.</p>
+      </form>
+    </Panel>
+  );
+}
+
+/** Other income (interest, incentives…): counted in Profit and Loss. Admin and Super Admin only. */
+export function OtherIncomeForm({ date, closed, accounts }: { date: string; closed: boolean; accounts: { id: string; name: string }[] }) {
+  const [key, setKey] = useState(0);
+  const [state, action, pending] = useDayBookAction(recordOtherIncome, "Other income recorded", () => setKey((k) => k + 1));
+  return (
+    <Panel title="Other income" closed={closed}>
+      <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
+        <input type="hidden" name="date" value={date} />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5"><Label htmlFor="oiAmount">Amount</Label><Input id="oiAmount" name="amount" inputMode="decimal" placeholder="2400" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="oiAccount">Received in</Label>
+            <NativeSelect id="oiAccount" name="accountId" defaultValue="" className="w-full">
+              <NativeSelectOption value="">Pick account</NativeSelectOption>
+              {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+        </div>
+        <div className="space-y-1.5"><Label htmlFor="oiReason">What is it for</Label><Input id="oiReason" name="reason" placeholder="e.g. SBI savings interest, LIC incentive" /></div>
+        {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+        <Button type="submit" variant="outline" disabled={pending} className="w-full">{pending ? "Saving…" : "Record other income"}</Button>
+        <p className="text-xs text-muted-foreground">Counted as income in Profit and Loss. Not for premiums or bills collected for others.</p>
       </form>
     </Panel>
   );

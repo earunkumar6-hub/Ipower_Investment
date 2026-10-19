@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank } from "@/lib/accounts";
+import { audit } from "@/lib/audit";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { accountDay, assertDayOpen, balanceAt, earliestOpenDayBefore, lockDay, post } from "@/lib/daybook";
 import { CASH_SOURCES, UPI_ADJUSTMENT_REASONS } from "@/lib/daybook-labels";
@@ -266,6 +267,44 @@ export async function closeDayBook(_: ActionResult, form: FormData): Promise<Act
           update: values,
         });
       }
+      return { ok: true };
+    }),
+  );
+}
+
+const otherIncomeSchema = z.object({
+  date: isoDay,
+  amount: money.refine((v) => Number(v) > 0, "Amount must be more than 0"),
+  accountId: z.string().min(1, "Pick where the money came in"),
+  reason: z.string().trim().min(3, "Enter what this income is for (e.g. SBI interest, LIC incentive)").max(200),
+});
+
+/**
+ * Other income (interest, incentives, …): money in to cash or bank that is business income, so it counts
+ * in Profit and Loss. Admin and Super Admin only; corrections are reversals like every Day Book entry.
+ */
+export async function recordOtherIncome(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("DayBook.Close");
+  const parsed = otherIncomeSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const { date, amount, accountId, reason } = parsed.data;
+  if (checkDate(date)) return fail(checkDate(date)!);
+  return guarded(() =>
+    db.$transaction(async (tx) => {
+      const account = await tx.account.findFirst({ where: { id: accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } } });
+      if (!account) return fail("Pick the cash or bank account the money came into");
+      const sourceId = randomUUID();
+      await post(tx, {
+        tenantId: user.tenantId, entryDate: date, sourceType: "Manual", sourceId, createdById: user.id,
+        lines: [{
+          key: "in", accountId: account.id, direction: "In", amount, entryType: "OtherIncome", mode: account.type === "Cash" ? "Cash" : "Bank",
+          particulars: `Other income · ${reason}`, productCategory: "Other income", notes: reason,
+        }],
+      });
+      await audit(tx, user, {
+        entity: "DayBook", entityId: sourceId, action: "Other income", summary: `${fmtINR(new D(amount))} into ${account.name} on ${fmtDate(date)}`,
+        after: { amount: fmtINR(new D(amount)), account: account.name, date: fmtDate(date) }, reason,
+      });
       return { ok: true };
     }),
   );

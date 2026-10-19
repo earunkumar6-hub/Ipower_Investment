@@ -305,6 +305,8 @@ enum PolicyStatus {
   Active
   Lapsed
   Matured
+  PrematureClosed // closed before maturity (date + reason); bills and reminders stop
+  Withdrawn // mutual funds: withdraw date entered
 }
 
 model Policy {
@@ -326,6 +328,12 @@ model Policy {
   status        PolicyStatus @default(Active)
   ownerId       String
   createdAt     DateTime     @default(now())
+  productId     String? // Settings → Products and schemes (null for policies made before the catalogue)
+  product       Product?     @relation(fields: [productId], references: [id])
+  schemeId      String?
+  scheme        Scheme?      @relation(fields: [schemeId], references: [id])
+  closedOn      DateTime?    @db.Date // premature closure or MF withdraw date
+  closeReason   String?
 
   renewals       RenewalItem[]
   receipts       Receipt[]
@@ -340,6 +348,113 @@ enum RenewalStatus {
   Overdue
   Paid
   Lapsed
+  Stopped // policy closed early or withdrawn before this was paid
+}
+
+// ── Settings → Products and schemes ──
+
+/**
+ * When bills stop for a product (rule #13 of the Oct 2026 spec).
+ */
+enum InvoiceRule {
+  UntilMaturity // RD: per pay mode, last bill the cycle before maturity
+  UntilPremiumTerm // LIC, PLI, SBI Life, SSA, PPF: until the premium paying term ends
+  UntilClosed // health: until withdrawn / closed
+  None // TD, KVP, NSC, SCSS, MIS, mutual funds: no bills
+}
+
+enum CustomFieldType {
+  Text
+  Number
+  Date
+  Dropdown
+}
+
+model Product {
+  id                  String      @id @default(cuid())
+  tenantId            String
+  name                String
+  productType         ProductType // posting category and post office scheme
+  partner             String // insurer / AMC / "Post Office"
+  invoiceRule         InvoiceRule
+  payModes            Frequency[]
+  lockInMonths        Int?
+  bankDetailsRequired Boolean     @default(false)
+  bankFields          String[] // keys of BANK_FIELDS
+  prematureClosure    Boolean     @default(true) // allowed (after lock-in)
+  fields              String[] // keys of ACCOUNT_FIELDS shown on the policy
+  requiredFields      String[]
+  active              Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  schemes      Scheme[]
+  customFields ProductCustomField[]
+  policies     Policy[]
+
+  @@unique([tenantId, partner, name])
+}
+
+model Scheme {
+  id           String       @id @default(cuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  name         String
+  tenureMonths Int? // null = open-ended / renewable
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  rates        SchemeRate[]
+  policies     Policy[]
+
+  @@unique([productId, name])
+}
+
+/**
+ * Interest rate history; a rate applies from `effectiveFrom` until the next one. Existing accounts keep their opening rate.
+ */
+model SchemeRate {
+  id            String   @id @default(cuid())
+  schemeId      String
+  scheme        Scheme   @relation(fields: [schemeId], references: [id])
+  rate          Decimal  @db.Decimal(5, 2)
+  effectiveFrom DateTime @db.Date
+  changedById   String
+  createdAt     DateTime @default(now())
+
+  @@unique([schemeId, effectiveFrom])
+}
+
+model ProductCustomField {
+  id        String          @id @default(cuid())
+  productId String
+  product   Product         @relation(fields: [productId], references: [id])
+  label     String
+  type      CustomFieldType
+  options   String[] // dropdown values
+  required  Boolean         @default(false)
+  sort      Int             @default(0)
+
+  @@unique([productId, label])
+}
+
+/**
+ * Change log: who changed what, when, old and new values.
+ */
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  entity    String // "Product", "Scheme", "Policy", …
+  entityId  String
+  action    String // "Created", "Updated", "Rate changed", "Closed early", …
+  summary   String
+  before    Json?
+  after     Json?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
 }
 
 model RenewalItem {
@@ -720,6 +835,7 @@ enum EntryType {
   PaidToCompany
   OwnerReturn
   Adjustment
+  OtherIncome // income entered in the Day Book (interest, incentives…); counted in P&L
 }
 
 enum SourceType {

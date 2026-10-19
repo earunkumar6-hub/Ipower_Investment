@@ -467,13 +467,12 @@ export const REPORTS: Record<string, Report> = {
       const rows: Cell[][] = [
         ["INCOME", null, null],
         ...pnl.serviceLines.map((l): Cell[] => [`Service charges – ${l.label}`, l.amount, prevOf(prev.serviceLines, l.label)]),
-        ["Commission – insurers and mutual funds (gross)", pnl.commissionPartner, prev.commissionPartner],
+        ["Other income (entered in Day Book)", pnl.otherIncome, prev.otherIncome],
         ["Total income", pnl.income, prev.income],
         ["LESS: EXPENSES BY CATEGORY", null, null],
         ...pnl.expenseLines.map((l): Cell[] => [l.label, l.amount, prevOf(prev.expenseLines, l.label)]),
         ["Total expenses", pnl.expenseTotal, prev.expenseTotal],
         [pnl.profit.isNegative() ? "Loss" : "Profit", pnl.profit, prev.profit],
-        ["TDS deducted on commission (tax credit – not an expense)", pnl.tdsCredit, prev.tdsCredit],
       ];
       return {
         file: `pnl-${key}.xlsx`,

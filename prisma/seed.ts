@@ -8,6 +8,7 @@ import { db, prisma, type Tx } from "@/lib/db";
 import { poCommission } from "@/lib/commission";
 import { D, ZERO } from "@/lib/money";
 import { postExpensePayment, postPoDeposit, postReceipt, postServiceTransaction } from "@/lib/posting";
+import { linkPolicies, seedProducts } from "./seed-products";
 
 const PASSWORD = "demo1234";
 const today = istToday();
@@ -475,6 +476,16 @@ async function main() {
       items: { create: { category: "Health", insurer: "Care Health", productName: "Care Supreme", sumInsured: "1000000.00", premium: "24000.00", gstRate: "18.00", gstAmount: "4320.00", total: "28320.00" } },
     },
   });
+
+  // ── Settings → Products and schemes; demo policies linked to it ──
+  await seedProducts(tenantId, { admin: users.admin, owner: users.owner });
+  await linkPolicies(tenantId);
+
+  // ── Other income today (P&L): insurer incentives received in SBI ──
+  await db.$transaction((tx) => post(tx, {
+    tenantId, entryDate: today, sourceType: "Manual", sourceId: "seed-other-income", createdById: users.admin,
+    lines: [{ key: "in", accountId: acc.sbi, direction: "In", amount: "24000.00", entryType: "OtherIncome", mode: "Bank", particulars: "Other income · Insurer incentives (September statements)", productCategory: "Other income", notes: "Insurer incentives (September statements)" }],
+  }));
 
   // ── Summary ──
   const rows = await accountDay(db as unknown as Tx, tenantId, today);
