@@ -31,7 +31,7 @@ export function LeadFilters({ status, source, q }: { status?: string; source?: s
         </NativeSelect>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="source">Source</Label>
+        <Label htmlFor="source">Business type</Label>
         <NativeSelect id="source" name="source" defaultValue={source ?? ""} onChange={(e) => apply(e.currentTarget.form!)}>
           <NativeSelectOption value="">All</NativeSelectOption>
           {Object.entries(LEAD_SOURCE_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}

@@ -44,7 +44,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
   const [customers, leads] = await Promise.all([
     db.customer.findMany({ where: { tenantId: user.tenantId, ...ownerScope(user), ...match }, orderBy: { name: "asc" }, take: 20 }),
     db.lead.findMany({
-      where: { tenantId: user.tenantId, ...ownerScope(user), ...match, status: { notIn: ["NotInterested", "Converted"] } },
+      where: { tenantId: user.tenantId, ...ownerScope(user), ...match, status: { not: "NotInterested" }, stage: { not: "Customer" } },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),

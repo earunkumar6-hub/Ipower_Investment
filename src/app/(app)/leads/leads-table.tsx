@@ -1,12 +1,12 @@
 "use client";
 
-import type { LeadSource, LeadStatus } from "@prisma/client";
+import type { LeadSource, LeadStage, LeadStatus } from "@prisma/client";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, maskMobile } from "@/lib/lead-labels";
+import { LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, maskMobile } from "@/lib/lead-labels";
 import { cn } from "@/lib/utils";
 
 export type LeadRow = {
@@ -15,7 +15,10 @@ export type LeadRow = {
   name: string;
   mobile: string;
   source: LeadSource;
+  referrerName: string | null;
+  interest: string | null;
   status: LeadStatus;
+  stage: LeadStage;
   nextCallAt: string | null;
   ownerName: string;
 };
@@ -37,9 +40,22 @@ const columns = [
   col.accessor("leadNo", { header: "Lead no." }),
   col.accessor("name", { header: "Name" }),
   col.accessor("mobile", { header: "Mobile", cell: (c) => maskMobile(c.getValue()), enableSorting: false }),
-  col.accessor("source", { header: "Source", cell: (c) => LEAD_SOURCE_LABEL[c.getValue()] }),
-  col.accessor("status", { header: "Status", cell: (c) => <StatusBadge tone={LEAD_STATUS_TONE[c.getValue()]}>{LEAD_STATUS_LABEL[c.getValue()]}</StatusBadge> }),
-  col.accessor("nextCallAt", { header: "Next follow-up", cell: (c) => <NextCall iso={c.getValue()} />, sortUndefined: "last" }),
+  col.accessor("source", {
+    header: "Business type",
+    cell: (c) => <>{LEAD_SOURCE_LABEL[c.getValue()]}{c.row.original.referrerName && <div className="text-xs text-muted-foreground">{c.row.original.referrerName}</div>}</>,
+  }),
+  col.accessor("interest", {
+    header: "Interested product",
+    cell: (c) => (c.getValue() ? <div className="max-w-40 truncate" title={c.getValue()!}>{c.getValue()}</div> : <span className="text-muted-foreground">—</span>),
+  }),
+  col.accessor("status", {
+    header: "Status",
+    cell: (c) => <>
+      <StatusBadge tone={LEAD_STATUS_TONE[c.getValue()]}>{LEAD_STATUS_LABEL[c.getValue()]}</StatusBadge>
+      {c.row.original.stage !== "Lead" && <div className="text-xs text-muted-foreground">{LEAD_STAGE_LABEL[c.row.original.stage]}</div>}
+    </>,
+  }),
+  col.accessor("nextCallAt", { header: "Next call", cell: (c) => <span className="whitespace-nowrap"><NextCall iso={c.getValue()} /></span>, sortUndefined: "last" }),
   col.accessor("ownerName", { header: "Owner" }),
 ];
 

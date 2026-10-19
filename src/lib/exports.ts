@@ -9,7 +9,8 @@ import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@
 import { esevaiEntries, walletSummary } from "@/lib/esevai-day";
 import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
-import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, maskMobile } from "@/lib/lead-labels";
+import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
+import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, maskMobile, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { ownerScope, userNames } from "@/lib/leads";
 import {
   customerFilter, dayBookDate, depositFilter, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
@@ -91,7 +92,7 @@ export const REPORTS: Record<string, Report> = {
     async build(user, sp) {
       const { where, status, source, q } = leadFilter(user, sp);
       const [leads, users] = await Promise.all([
-        db.lead.findMany({ where, orderBy: { createdAt: "desc" }, include: { calls: { where: { outcome: null }, orderBy: { dueAt: "asc" }, take: 1 } } }),
+        db.lead.findMany({ where, orderBy: { createdAt: "desc" }, include: { calls: { where: { outcome: null }, orderBy: { dueAt: "asc" }, take: 1 }, mobiles: { orderBy: { sort: "asc" } } } }),
         userNames(user.tenantId),
       ]);
       const owner = nameIn(users);
@@ -101,16 +102,39 @@ export const REPORTS: Record<string, Report> = {
         title: `Leads${filter ? ` – ${filter}` : ""}`,
         sheets: [{
           name: "Leads",
-          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile" }, { header: "WhatsApp" }, { header: "Email", width: 24 },
-            { header: "Date of birth", type: "date" }, { header: "Address", width: 30 }, { header: "Source" }, { header: "Status" },
-            { header: "Next call", type: "datetime", width: 20 }, { header: "Owner" }, { header: "Created", type: "datetime", width: 20 }],
-          rows: leads.map((l) => [l.leadNo, l.name, maskMobile(l.mobile), l.onWhatsApp ? "Yes" : "No", l.email, l.dob, l.address,
-            LEAD_SOURCE_LABEL[l.source], LEAD_STATUS_LABEL[l.status], l.calls[0]?.dueAt, owner(l.ownerId), l.createdAt]),
+          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile", width: 22 }, { header: "WhatsApp", width: 14 }, { header: "Date of birth", type: "date" },
+            { header: "Gender" }, { header: "Email", width: 24 }, { header: "Address", width: 30 }, { header: "Business type" }, { header: "Referred by", width: 18 },
+            { header: "Interested product", width: 24 }, { header: "Status" }, { header: "Stage" }, { header: "Next call", type: "datetime", width: 20 },
+            { header: "Owner" }, { header: "Notes", width: 30 }, { header: "Created", type: "datetime", width: 20 }],
+          rows: leads.map((l) => {
+            const nums = l.mobiles.length ? l.mobiles : [{ number: l.mobile, isWhatsApp: l.onWhatsApp }];
+            return [l.leadNo, l.name, nums.map((m) => maskMobile(m.number)).join(", "), nums.filter((m) => m.isWhatsApp).map((m) => maskMobile(m.number)).join(", ") || "No", l.dob,
+              l.gender && GENDER_LABEL[l.gender], l.email, l.address, LEAD_SOURCE_LABEL[l.source], l.referrerName, l.interest, LEAD_STATUS_LABEL[l.status],
+              LEAD_STAGE_LABEL[l.stage], l.calls[0]?.dueAt, owner(l.ownerId), l.notes, l.createdAt];
+          }),
         }],
       };
     },
   },
 
+  followups: {
+    permission: "Lead.View",
+    async build(user, sp) {
+      const f = await loadFollowUps(user, sp);
+      const label = FOLLOWUP_TABS.find(([k]) => k === f.tab)![1];
+      return {
+        file: `followups-${f.tab}-${stamp()}.xlsx`,
+        title: `Follow-ups – ${label}`,
+        sheets: [{
+          name: "Follow-ups",
+          columns: [{ header: "Due", type: "datetime", width: 20 }, { header: "Name", width: 22 }, { header: "Mobile" }, { header: "For", width: 24 },
+            { header: "Last note", width: 36 }, { header: "Owner" }, { header: "Status", width: 18 }, { header: "Closed", type: "datetime", width: 20 }],
+          rows: f.rows.map((r) => [r.dueAt, r.name, maskMobile(r.mobile), r.forLabel, r.outcomeNote ?? r.note, r.ownerName,
+            r.outcome ? OUTCOME_LABEL[r.outcome] : r.overdue ? "Open" : "Scheduled", r.completedAt]),
+        }],
+      };
+    },
+  },
   quotations: {
     permission: "Quote.View",
     async build(user) {

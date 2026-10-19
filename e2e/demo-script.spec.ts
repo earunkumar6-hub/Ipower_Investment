@@ -36,9 +36,14 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await arun.keyboard.press("Escape");
     await expect(reminder).toBeVisible(); // can't be dismissed without an outcome
     await reminder.getByRole("radio", { name: "Interested", exact: true }).check();
-    await reminder.getByRole("button", { name: "Save and reschedule" }).click();
+    // Interested: the next call is optional; book one for tomorrow 11:00.
+    const tomorrow = new Date(Date.now() + 5.5 * 3_600_000 + 86_400_000).toISOString().slice(0, 10);
+    await reminder.getByLabel("Next call (optional)").fill(tomorrow);
+    await reminder.getByLabel("Time").fill("11:00");
+    await reminder.getByRole("button", { name: "Save", exact: true }).click();
     await expect(reminder).toBeHidden();
-    await expect(arun.getByRole("button", { name: "2 calls open" })).toBeVisible();
+    // Revathi's new call, Priya's call later today and Gopinath's call tomorrow
+    await expect(arun.getByRole("button", { name: "3 calls open" })).toBeVisible();
   });
 
   test("2. Quotation for Meena R: two products + 18% GST, download PDF, mark accepted", async () => {
@@ -53,6 +58,8 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await premium.nth(1).fill("10500");
     await expect(arun.getByText("₹34,789.94")).toBeVisible(); // live total incl. GST
     await arun.getByRole("button", { name: "Save quotation" }).click();
+    await expect(arun.getByText("Check before saving")).toBeVisible();
+    await arun.getByRole("button", { name: "Yes, save" }).click();
     await arun.waitForURL(/\/quotations\/c/);
     await expect(arun.getByRole("heading", { name: /Quotation Q-\d+ · Meena R/ })).toBeVisible();
 

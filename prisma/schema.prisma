@@ -87,41 +87,64 @@ model Verification {
 
 // ───────────────────────── Sales ─────────────────────────
 
+/**
+ * Business type (how the lead came in).
+ */
 enum LeadSource {
-  Website
+  Direct
   WalkIn
-  Partner
-  Call
-  Referral
+  Referral // referrerName required
+  Website
+  SocialMedia
 }
 
 enum LeadStatus {
-  New
-  CallScheduled
   Interested
-  NotInterested
-  Quoted
-  Converted
+  NotInterested // reason required; closes the lead
+  CallBack // a call is booked
+}
+
+/**
+ * Moved by the system: quotation made → Quotation, proposal → Proposal, policy number → Customer.
+ */
+enum LeadStage {
+  Lead
+  Quotation
+  Proposal
+  Customer
+}
+
+enum Gender {
+  Female
+  Male
+  Other
 }
 
 model Lead {
   id                  String     @id @default(cuid())
   tenantId            String
   leadNo              String
-  name                String
-  mobile              String
+  name                String // full name (first + last), used everywhere a lead is shown
+  firstName           String
+  lastName            String?
+  gender              Gender? // required for new leads; older leads may not have it
+  mobile              String // first number; all numbers are in `mobiles`
   email               String?
   dob                 DateTime?  @db.Date
   address             String?
-  onWhatsApp          Boolean    @default(false) // the mobile number uses WhatsApp
+  onWhatsApp          Boolean    @default(false) // the first number uses WhatsApp
   source              LeadSource
-  status              LeadStatus @default(New)
-  interest            String?
+  referrerName        String?
+  status              LeadStatus @default(CallBack)
+  stage               LeadStage  @default(Lead)
+  interest            String? // interested product
+  notes               String?
   notInterestedReason String?
   ownerId             String
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
+  mobiles    LeadMobile[]
   calls      Call[]
   quotations Quotation[]
 
@@ -129,17 +152,41 @@ model Lead {
   @@unique([tenantId, mobile])
 }
 
-enum CallOutcome {
-  Interested
-  NoAnswer
-  NotInterested
+/**
+ * Every mobile number of a lead; a number belongs to one lead only (duplicate check).
+ */
+model LeadMobile {
+  id         String  @id @default(cuid())
+  tenantId   String
+  leadId     String
+  lead       Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  number     String
+  isWhatsApp Boolean @default(false)
+  sort       Int     @default(0)
+
+  @@unique([tenantId, number])
+  @@index([leadId])
 }
 
+enum CallOutcome {
+  Interested
+  NoAnswer // call back: next call booked
+  NotInterested
+  Done // renewal / proposal call finished, no next call
+}
+
+/**
+ * A follow-up call about a lead, a renewal (policy) or a proposal.
+ */
 model Call {
   id          String       @id @default(cuid())
   tenantId    String
-  leadId      String
-  lead        Lead         @relation(fields: [leadId], references: [id])
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  policyId    String?
+  policy      Policy?      @relation(fields: [policyId], references: [id])
+  proposalId  String?
+  proposal    Proposal?    @relation(fields: [proposalId], references: [id])
   ownerId     String
   dueAt       DateTime
   note        String?
@@ -227,6 +274,7 @@ model Proposal {
   createdAt       DateTime       @default(now())
 
   consents Consent[]
+  calls    Call[]
   policy   Policy?
 
   @@unique([tenantId, proposalNo])
@@ -335,6 +383,7 @@ model Policy {
   closedOn      DateTime?    @db.Date // premature closure or MF withdraw date
   closeReason   String?
 
+  calls          Call[]
   renewals       RenewalItem[]
   receipts       Receipt[]
   ownerPaidSlips OwnerPaidSlip[]

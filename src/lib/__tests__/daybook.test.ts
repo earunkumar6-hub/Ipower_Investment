@@ -133,7 +133,7 @@ describe("Numbering", () => {
     await inRollback(async (tx) => {
       const first = await nextNumber(tx, tenantId, "lead");
       expect(first).toMatch(/^L-\d{4}$/);
-      await tx.lead.create({ data: { tenantId, leadNo: first, name: "Test", mobile: "9000000001", source: "Call", ownerId: userId } });
+      await tx.lead.create({ data: { tenantId, leadNo: first, name: "Test", firstName: "Test", mobile: "9000000001", source: "Direct", ownerId: userId } });
       const second = await nextNumber(tx, tenantId, "lead");
       expect(Number(second.slice(2))).toBe(Number(first.slice(2)) + 1);
       expect(await nextNumber(tx, tenantId, "proposal")).toMatch(/^P-\d{4}$/);

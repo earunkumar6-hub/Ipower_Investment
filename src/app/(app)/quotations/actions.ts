@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { addDays, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
 import { priceQuotation } from "@/lib/quotation";
 import { authorize } from "@/lib/session";
@@ -83,9 +83,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
         },
       },
     });
-    if (lead && !["Quoted", "Converted"].includes(lead.status)) {
-      await tx.lead.update({ where: { id: lead.id }, data: { status: "Quoted" } });
-    }
+    if (lead) await advanceStage(tx, lead.id, "Quotation");
     return q;
   });
   revalidatePath("/", "layout");
@@ -136,6 +134,7 @@ export async function createProposal(quotationItemId: string): Promise<ActionRes
         ownerId: q.ownerId,
       },
     });
+    if (q.leadId) await advanceStage(tx, q.leadId, "Proposal");
     await tx.consent.create({
       data: {
         tenantId: user.tenantId, proposalId: p.id, customerId: q.customerId, mobile: q.mobile,

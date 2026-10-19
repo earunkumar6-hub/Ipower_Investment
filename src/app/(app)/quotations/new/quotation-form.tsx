@@ -2,12 +2,12 @@
 
 import { useActionState, useState } from "react";
 import type { ActionResult } from "@/app/(app)/leads/actions";
+import { useConfirmBeforeSave } from "@/components/confirm-save";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { submitKeepingValues } from "@/lib/form";
 import { createQuotation } from "../actions";
 
 const CATEGORIES = ["Health", "Life", "Motor", "Personal accident", "Other"];
@@ -32,9 +32,19 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
     },
     { premium: 0, gst: 0, total: 0 },
   );
+  const fmtValid = (iso: string) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
+  const confirm = useConfirmBeforeSave(action, (form) => [
+    ["Customer", String(form.get("customerName") ?? "")],
+    ["Mobile", String(form.get("mobile") ?? "")],
+    ["Valid till", fmtValid(String(form.get("validUpto") ?? ""))],
+    ...items.filter((it) => it.insurer || it.productName || it.premium).map((it, n): [string, string] => [
+      `Product ${n + 1}`, `${it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")}\n${inr(paise(it.premium))} + GST ${inr(gstPaise(paise(it.premium)))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
+    ]),
+    ["Total", inr(totals.total)],
+  ]);
 
   return (
-    <form onSubmit={submitKeepingValues(action)} className="space-y-4 rounded-xl border bg-white p-4">
+    <form onSubmit={confirm.onSubmit} className="space-y-4 rounded-xl border bg-white p-4">
       <input type="hidden" name="customerId" value={props.customerId} />
       <input type="hidden" name="leadId" value={props.leadId} />
       <input type="hidden" name="items" value={JSON.stringify(items)} />
@@ -101,6 +111,7 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save quotation"}</Button>
+      {confirm.dialog}
     </form>
   );
 }

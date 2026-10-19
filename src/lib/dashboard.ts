@@ -4,6 +4,7 @@ import { addDays, fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { canApprove } from "@/lib/expenses";
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
+import { callInclude, callParty } from "@/lib/leads";
 import { fmtINR, sum, ZERO } from "@/lib/money";
 import { monthKey, monthRange, profitAndLoss } from "@/lib/pnl";
 import { refreshOverdue } from "@/lib/renewals";
@@ -30,13 +31,13 @@ export async function userDashboard(user: SessionUser) {
   const now = new Date();
   await refreshOverdue(user.tenantId, today);
   const [leads, newToday, calls, renewals, receipts] = await Promise.all([
-    db.lead.count({ where: { tenantId: user.tenantId, ownerId: user.id, status: { notIn: ["Converted", "NotInterested"] } } }),
+    db.lead.count({ where: { tenantId: user.tenantId, ownerId: user.id, status: { not: "NotInterested" }, stage: { not: "Customer" } } }),
     db.lead.count({ where: { tenantId: user.tenantId, ownerId: user.id, createdAt: { gte: dayStart(today) } } }),
     db.call.findMany({
       where: { tenantId: user.tenantId, ownerId: user.id, outcome: null, dueAt: { lt: dayStart(addDays(today, 1)) } },
-      include: { lead: true },
+      include: callInclude,
       orderBy: { dueAt: "asc" },
-    }),
+    }).then((cs) => cs.map((c) => ({ ...c, party: callParty(c) }))),
     renewalsDueThisWeek(user.tenantId, today, user.id),
     db.receipt.findMany({ where: { tenantId: user.tenantId, createdById: user.id, receiptDate: today, status: "Saved" } }),
   ]);

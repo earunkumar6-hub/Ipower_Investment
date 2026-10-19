@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { advanceStage, canActOn } from "@/lib/leads";
 import { renewalDueDates } from "@/lib/renewals";
 import { authorize, type SessionUser } from "@/lib/session";
 
@@ -113,7 +113,7 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
         data: dues.map((dueDate) => ({ tenantId: user.tenantId, policyId: policy.id, dueDate, premiumAmount: p.premium })),
       });
       await tx.proposal.update({ where: { id: p.id }, data: { status: "Issued", policyNumber, customerId: customer.id } });
-      if (p.quotation.leadId) await tx.lead.update({ where: { id: p.quotation.leadId }, data: { status: "Converted" } });
+      if (p.quotation.leadId) await advanceStage(tx, p.quotation.leadId, "Customer");
       return { ok: true, id: customer.id };
     });
     revalidatePath("/", "layout");

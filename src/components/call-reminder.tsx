@@ -3,7 +3,7 @@
 import { PhoneIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { saveCallOutcome, type ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,15 @@ import { cn } from "@/lib/utils";
 
 export const OPEN_CALL_REMINDER = "open-call-reminder";
 
-const OUTCOMES = [
-  ["Interested", "Interested"],
-  ["NotInterested", "Not interested"],
-  ["NoAnswer", "No answer"],
-] as const;
+/** Lead calls end with Interested / Not interested / call back; renewal and proposal calls with Done or call back. */
+const OUTCOMES = {
+  lead: [["Interested", "Interested"], ["NotInterested", "Not interested"], ["NoAnswer", "No answer / call back"]],
+  renewal: [["Done", "Done"], ["NoAnswer", "No answer / call back"]],
+  proposal: [["Done", "Done"], ["NoAnswer", "No answer / call back"]],
+} as const;
+
+/** Opens the reminder; with a call id it shows that call. */
+export const openCallReminder = (callId?: string) => window.dispatchEvent(new CustomEvent(OPEN_CALL_REMINDER, { detail: { callId } }));
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
@@ -46,11 +50,18 @@ export function CallReminder({ calls }: { calls: OpenCall[] }) {
   const [now, setNow] = useState(() => Date.now());
   const [manualOpen, setManualOpen] = useState(false);
   const [index, setIndex] = useState(0);
+  const callsRef = useRef(calls);
+  useEffect(() => { callsRef.current = calls; }, [calls]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 15_000);
     const refresh = setInterval(() => router.refresh(), 60_000); // pick up calls added by others
-    const open = () => setManualOpen(true);
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<{ callId?: string }>).detail?.callId;
+      const at = id ? callsRef.current.findIndex((c) => c.id === id) : -1;
+      if (at >= 0) setIndex(at);
+      setManualOpen(true);
+    };
     window.addEventListener(OPEN_CALL_REMINDER, open);
     return () => {
       clearInterval(tick);
@@ -86,22 +97,24 @@ export function CallReminder({ calls }: { calls: OpenCall[] }) {
             <div>
               <DialogTitle className="text-lg font-semibold">{call.name}</DialogTitle>
               <DialogDescription className="text-xs">
-                {call.mobile} · Lead {call.leadNo} · Owner: {call.ownerName} · Due {fmtTime(call.dueAt)}
+                {call.mobile} · {call.forLabel} · Owner: {call.ownerName} · Due {fmtTime(call.dueAt)}
               </DialogDescription>
               {call.note && <p className="mt-1 text-xs">Last note: {call.note}</p>}
             </div>
             <a href={`tel:${call.mobile}`} className="flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-medium text-white hover:bg-brand-700">
               <PhoneIcon className="size-4" /> Call now
             </a>
-            <OutcomeForm key={call.id} call={call} onSaved={() => setIndex(0)} />
-            {!forced && (
+            <OutcomeForm key={call.id} call={call} onSaved={() => { setIndex(0); if (!forced) setManualOpen(false); }} />
+            {!forced && (call.leadId ? (
               <Link href={`/quotations/new?leadId=${call.leadId}`} onClick={() => setManualOpen(false)} className="text-sm text-brand-700 hover:underline">
                 Create quotation for {call.name}
               </Link>
-            )}
+            ) : (
+              <Link href={call.href} onClick={() => setManualOpen(false)} className="text-sm text-brand-700 hover:underline">Open {call.forLabel}</Link>
+            ))}
             {forced && (
               <p className="text-xs text-muted-foreground">
-                This reminder cannot be closed. It stays open on every screen until you save an outcome: Interested or No answer need a new call time; Not interested needs a reason and closes the lead.
+                This reminder cannot be closed. It stays open on every screen until you save an outcome: No answer needs a new call time; Not interested needs a reason and closes the lead.
               </p>
             )}
           </>
@@ -121,6 +134,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
     return result;
   }, { ok: false });
   const [outcome, setOutcome] = useState<string>("");
+  const needsTime = outcome === "NoAnswer";
 
   const err = state.fieldErrors ?? {};
   return (
@@ -133,7 +147,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
       <fieldset className="space-y-1.5">
         <legend className="text-sm font-medium">Outcome</legend>
         <div className="flex gap-2">
-          {OUTCOMES.map(([value, label]) => (
+          {OUTCOMES[call.kind].map(([value, label]) => (
             <label key={value} className={cn("flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 py-2 text-sm",
               outcome === value && "border-brand-600 ring-1 ring-brand-600")}>
               <input type="radio" name="outcome" value={value} checked={outcome === value} onChange={() => setOutcome(value)} />
@@ -143,7 +157,13 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
         </div>
         {err.outcome && <p className="text-xs text-destructive">{err.outcome}</p>}
       </fieldset>
-      {outcome === "NotInterested" ? (
+      {outcome === "Done" ? (
+        <>
+          <input type="hidden" name="reason" value="" />
+          <input type="hidden" name="callDate" value="" />
+          <input type="hidden" name="callTime" value="" />
+        </>
+      ) : outcome === "NotInterested" ? (
         <div className="space-y-1.5">
           <Label htmlFor="reason">Reason</Label>
           <Input id="reason" name="reason" aria-invalid={!!err.reason} placeholder="e.g. Already has a policy" />
@@ -154,18 +174,18 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
         <div className="grid grid-cols-2 gap-3">
           <input type="hidden" name="reason" value="" />
           <div className="space-y-1.5">
-            <Label htmlFor="callDate">Reschedule call to</Label>
-            <Input id="callDate" name="callDate" type="date" defaultValue={tomorrowIst()} aria-invalid={!!err.callDate} />
+            <Label htmlFor="callDate">{needsTime ? "Reschedule call to" : "Next call (optional)"}</Label>
+            <Input key={`d-${needsTime}`} id="callDate" name="callDate" type="date" defaultValue={needsTime ? tomorrowIst() : ""} aria-invalid={!!err.callDate} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="callTime">Time</Label>
-            <Input id="callTime" name="callTime" type="time" defaultValue="11:00" />
+            <Input key={`t-${needsTime}`} id="callTime" name="callTime" type="time" defaultValue={needsTime ? "11:00" : ""} />
           </div>
         </div>
       )}
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">
-        {pending ? "Saving…" : outcome === "NotInterested" ? "Save and close lead" : "Save and reschedule"}
+        {pending ? "Saving…" : outcome === "NotInterested" ? "Save and close lead" : outcome === "NoAnswer" ? "Save and reschedule" : "Save"}
       </Button>
     </form>
   );
@@ -174,7 +194,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
 /** Header badge: "N calls open"; opens the reminder. */
 export function CallsBadge({ count }: { count: number }) {
   return (
-    <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CALL_REMINDER))}
+    <button type="button" onClick={() => openCallReminder()}
       className="flex h-8 items-center gap-1.5 rounded-lg bg-orange-100 px-3 text-sm font-medium text-orange-800 hover:bg-orange-200">
       <PhoneIcon className="size-3.5" /> {count} {count === 1 ? "call" : "calls"} open
     </button>

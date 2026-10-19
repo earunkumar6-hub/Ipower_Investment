@@ -5,6 +5,7 @@ export type MenuItem = { href: string; label: string; permission?: Permission };
 export const MENU: MenuItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/leads", label: "Leads", permission: "Lead.View" },
+  { href: "/followups", label: "Follow-ups", permission: "Lead.View" },
   { href: "/quotations", label: "Quotations", permission: "Quote.View" },
   { href: "/proposals", label: "Proposals", permission: "Proposal.View" },
   { href: "/customers", label: "Partners / Customers", permission: "Policy.View" },

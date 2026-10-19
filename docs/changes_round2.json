@@ -208,7 +208,7 @@
         {
           "id": "C01",
           "title": "Lead form fields",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "Screen p2, rule #3, U-01",
           "current": "Single name, one mobile, email, DOB, address, onWhatsApp tick, source, interest.",
@@ -223,12 +223,13 @@
           "depends_on": [
             "D03",
             "D04"
-          ]
+          ],
+          "done": "2026-10-19 phase 2 (uncommitted): Lead form: first/last name, DOB*, gender*, several mobiles with WhatsApp tick (LeadMobile, unique per number), business type (+ referred by), interested product (suggestions from Settings), notes; Edit details (logged)."
         },
         {
           "id": "C02",
           "title": "Lead status + automatic stage",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "rule #3, U-03, Use cases p11",
           "required": "Status Interested / Not interested (reason required, closes lead) / Call back (opens a call reminder). Stage shown separately and moved by the system: Lead → Quotation → Proposal → Partner / Customer.",
@@ -238,23 +239,25 @@
           ],
           "depends_on": [
             "D03"
-          ]
+          ],
+          "done": "2026-10-19 phase 2 (uncommitted): Status Interested / Not interested / Call back; stage Lead → Quotation → Proposal → Customer moved by quotation, proposal and policy."
         },
         {
           "id": "C03",
           "title": "Call outcomes",
-          "status": "partial",
+          "status": "done",
           "size": "S",
           "source": "Screen p22, U-02",
           "required": "Outcomes Interested, Not interested, Call back / No answer. Interested and No answer need a new call time; Not interested needs a reason. Reminder card shows last note, owner, due time and 'Create quotation'.",
           "acceptance": [
             "Reminder cannot be closed without one of these outcomes"
-          ]
+          ],
+          "done": "2026-10-19 phase 2 (uncommitted): Lead outcomes Interested (next call optional) / Not interested (reason) / No answer–call back (next call required); renewal/proposal calls Done or call back."
         },
         {
           "id": "C04",
           "title": "Follow-ups screen",
-          "status": "new",
+          "status": "done",
           "size": "M",
           "source": "Screen p3",
           "required": "Menu item 'Follow-ups'. Cards: Calls open (overdue count), Due later today, Rescheduled today, Closed today (Interested / Not interested). Tabs Open / Due later today / Rescheduled / Closed. Columns Due, Name, Mobile, For (Lead L-, Renewal policy no., Proposal P-), Last note, Owner, Status. 'Schedule call' button for leads, renewals and proposals.",
@@ -262,18 +265,20 @@
           "acceptance": [
             "Users see own calls, Admin/Super Admin all",
             "Export works with the same filter"
-          ]
+          ],
+          "done": "2026-10-19 phase 2 (uncommitted): Follow-ups screen (cards, tabs Due now / Due later today / Upcoming / Rescheduled / Closed, export); calls for leads, renewals (policy) and proposals; Schedule call."
         },
         {
           "id": "C05",
           "title": "Check-before-save pop-up",
-          "status": "new",
+          "status": "done",
           "size": "S",
           "source": "Screen p21, rule #10",
           "required": "Before saving a lead, customer, product or quotation, show a 'Check before saving' dialog listing the entered fields with 'Yes, save' / 'Go back and edit'.",
           "acceptance": [
             "Going back keeps every typed value"
-          ]
+          ],
+          "done": "2026-10-19 phase 2 (uncommitted): Check before saving pop-up on new lead, edit lead and new quotation (customer/product forms come in phases 3–4)."
         }
       ]
     },

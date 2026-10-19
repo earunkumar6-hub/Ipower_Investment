@@ -1,30 +1,42 @@
-// Display labels for leads — safe to import from client components.
-import type { LeadSource, LeadStatus } from "@prisma/client";
+// Display labels for leads and calls — safe to import from client components.
+import type { CallOutcome, Gender, LeadSource, LeadStage, LeadStatus } from "@prisma/client";
 
 export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
-  New: "New",
-  CallScheduled: "Call scheduled",
   Interested: "Interested",
   NotInterested: "Not interested",
-  Quoted: "Quoted",
-  Converted: "Converted",
+  CallBack: "Call back",
 };
 
 export const LEAD_STATUS_TONE = {
-  New: "blue",
-  CallScheduled: "slate",
-  Interested: "indigo",
+  Interested: "green",
   NotInterested: "orange",
-  Quoted: "purple",
-  Converted: "green",
+  CallBack: "blue",
 } as const satisfies Record<LeadStatus, string>;
 
+/** Moved by the system as the lead goes through quotation, proposal and policy. */
+export const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
+  Lead: "Lead",
+  Quotation: "Quotation",
+  Proposal: "Proposal",
+  Customer: "Partner / Customer",
+};
+
+/** "Business type" on the owner's screens. */
 export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
-  Website: "Website",
+  Direct: "Direct",
   WalkIn: "Walk-in",
-  Partner: "Partner",
-  Call: "Call",
   Referral: "Referral",
+  Website: "Website",
+  SocialMedia: "Social media",
+};
+
+export const GENDER_LABEL: Record<Gender, string> = { Female: "Female", Male: "Male", Other: "Other" };
+
+export const OUTCOME_LABEL: Record<CallOutcome, string> = {
+  Interested: "Interested",
+  NotInterested: "Not interested",
+  NoAnswer: "No answer / call back",
+  Done: "Done",
 };
 
 /** "98xxxxxx21" — list views never show the full mobile. */

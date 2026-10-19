@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies, userDashboard } from "@/lib/dashboard";
 import { fmtDate, fmtTime } from "@/lib/dates";
-import { userNames } from "@/lib/leads";
+import { interestOptions, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { seesAll } from "@/lib/permissions";
 import { requireUser, type SessionUser } from "@/lib/session";
@@ -18,11 +18,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const user = await requireUser();
   const { denied } = await searchParams;
   const owners = seesAll(user.role) ? (await userNames(user.tenantId)).filter((u) => u.role === "User") : [];
+  const products = await interestOptions(user.tenantId);
   return (
     <>
       <PageHeader title="Dashboard" user={user} actions={<>
         <ExportButton report="dashboard" user={user} />
-        <AddLeadDialog owners={owners} />
+        <AddLeadDialog owners={owners} products={products} />
       </>} />
       {denied && <p className="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">You don&apos;t have access to that page.</p>}
       {user.role === "User" ? <UserView user={user} /> : <AdminView user={user} />}
@@ -42,15 +43,15 @@ async function UserView({ user }: { user: SessionUser }) {
         <StatCard title="My collections today" value={fmtINR(d.collections)} sub={`Cash ${fmtINR(d.collectionsCash)} · UPI ${fmtINR(d.collectionsOther)}`} href="/receipts" />
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Panel title="My calls today" more={{ href: "/leads", label: "All leads" }}>
+        <Panel title="My calls today" more={{ href: "/followups", label: "All follow-ups" }}>
           <Table>
             <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Name</TableHead><TableHead>For</TableHead><TableHead>Last note</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {d.calls.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>{c.dueAt < new Date(now.getTime() - 86_400_000) ? fmtDate(c.dueAt) : fmtTime(c.dueAt)}</TableCell>
-                  <TableCell><Link href={`/leads?id=${c.leadId}`} className="text-brand-700 hover:underline">{c.lead.name}</Link></TableCell>
-                  <TableCell>Lead {c.lead.leadNo}</TableCell>
+                  <TableCell><Link href={c.party.href} className="text-brand-700 hover:underline">{c.party.name}</Link></TableCell>
+                  <TableCell>{c.party.forLabel}</TableCell>
                   <TableCell className="max-w-48 truncate">{c.note ?? "—"}</TableCell>
                   <TableCell>{c.dueAt <= now ? <StatusBadge tone="red">Overdue</StatusBadge> : <StatusBadge tone="slate">Scheduled</StatusBadge>}</TableCell>
                 </TableRow>

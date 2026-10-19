@@ -1,59 +1,66 @@
 "use client";
 
+import type { LeadStatus } from "@prisma/client";
 import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
+import { useConfirmBeforeSave } from "@/components/confirm-save";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { addDays, isoDate, istToday } from "@/lib/dates";
-import { LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
-import { submitKeepingValues } from "@/lib/form";
-import { createLead, type ActionResult } from "./actions";
+import { LEAD_STATUS_LABEL } from "@/lib/lead-labels";
+import { createLead, editLead, type ActionResult } from "./actions";
+import { EMPTY_LEAD, Field, LeadDetailFields, summarizeLead, type LeadDetails } from "./lead-fields";
+
+const fmtCall = (form: FormData) => {
+  const d = String(form.get("callDate") ?? ""), t = String(form.get("callTime") ?? "");
+  if (!d) return "";
+  const day = new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  return t ? `${day}, ${new Date(`1970-01-01T${t}:00Z`).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" })}` : day;
+};
 
 /** `owners` is non-empty only for Admin / Super Admin, who may assign the lead. */
-export function AddLeadDialog({ owners }: { owners: { id: string; name: string }[] }) {
+export function AddLeadDialog({ owners, products }: { owners: { id: string; name: string }[]; products: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<LeadStatus | "">("");
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const result = await createLead(prev, form);
     if (result.ok) {
       toast.success("Lead added");
       setOpen(false);
+      setStatus("");
       router.push(`${pathname}?id=${result.id}`);
     }
     return result;
   }, { ok: false });
+  const confirm = useConfirmBeforeSave(action, (form) => {
+    const s = String(form.get("status") ?? "") as LeadStatus;
+    return [
+      ...summarizeLead(form),
+      ["Status", s ? `${LEAD_STATUS_LABEL[s]}${s === "NotInterested" ? ` – ${form.get("reason") ?? ""}` : fmtCall(form) ? ` – ${fmtCall(form)}` : ""}` : ""],
+    ];
+  });
   const err = state.fieldErrors ?? {};
 
   return (
     <>
       <Button onClick={() => setOpen(true)} className="bg-brand-600 hover:bg-brand-700">Add lead</Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle className="text-lg font-semibold">Add lead</DialogTitle>
-          <form onSubmit={submitKeepingValues(action)} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Name" name="name" error={err.name} required />
-              <Field label="Mobile" name="mobile" error={err.mobile} inputMode="numeric" maxLength={10} required />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="onWhatsApp" className="size-4" /> Mobile is on WhatsApp
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Email (optional)" name="email" error={err.email} type="email" />
-              <Field label="Date of birth (optional)" name="dob" error={err.dob} type="date" max={isoDate(addDays(istToday(), -1))} />
-            </div>
-            <Field label="Address (optional)" name="address" error={err.address} maxLength={300} />
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogTitle className="text-lg font-semibold">New lead</DialogTitle>
+          <form onSubmit={confirm.onSubmit} className="space-y-3">
+            <LeadDetailFields initial={EMPTY_LEAD} err={err} products={products} />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="source">Source</Label>
-                <NativeSelect id="source" name="source" defaultValue="WalkIn" className="w-full">
-                  {Object.entries(LEAD_SOURCE_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
+                <Label htmlFor="status">Lead status<span className="text-destructive"> *</span></Label>
+                <NativeSelect id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} className="w-full" aria-invalid={!!err.status}>
+                  <NativeSelectOption value="">Pick</NativeSelectOption>
+                  {Object.entries(LEAD_STATUS_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
                 </NativeSelect>
+                {err.status && <p className="text-xs text-destructive">{err.status}</p>}
               </div>
               {owners.length > 0 ? (
                 <div className="space-y-1.5">
@@ -66,29 +73,66 @@ export function AddLeadDialog({ owners }: { owners: { id: string; name: string }
                 <input type="hidden" name="ownerId" value="" />
               )}
             </div>
-            <Field label="Interested in" name="interest" placeholder="e.g. Health cover for parents" />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="First call (optional)" name="callDate" type="date" error={err.callDate} />
-              <Field label="Time" name="callTime" type="time" />
-            </div>
+            {status === "NotInterested" ? (
+              <>
+                <Field label="Reason" name="reason" error={err.reason} required placeholder="e.g. Already has a policy" />
+                <input type="hidden" name="callDate" value="" /><input type="hidden" name="callTime" value="" />
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <input type="hidden" name="reason" value="" />
+                <Field label={status === "CallBack" ? "Call back on" : "First call (optional)"} name="callDate" type="date" error={err.callDate} required={status === "CallBack"} />
+                <Field label="Time" name="callTime" type="time" />
+              </div>
+            )}
+            {status === "CallBack" && <p className="text-xs text-muted-foreground">Call back opens a call reminder that stays open until the status is updated or the call is rescheduled.</p>}
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save lead"}</Button>
             </div>
           </form>
+          {confirm.dialog}
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
-function Field({ label, name, error, ...props }: { label: string; name: string; error?: string } & React.ComponentProps<"input">) {
+/** Correct a saved lead's details; the change log keeps the old values. */
+export function EditLeadDialog({ leadId, leadNo, initial, products }: { leadId: string; leadNo: string; initial: LeadDetails; products: string[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
+    const result = await editLead(prev, form);
+    if (result.ok) {
+      toast.success(`${leadNo} updated`);
+      setOpen(false);
+      router.refresh();
+    }
+    return result;
+  }, { ok: false });
+  const confirm = useConfirmBeforeSave(action, summarizeLead);
+  const err = state.fieldErrors ?? {};
+
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} aria-invalid={!!error} {...props} />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
+    <>
+      <Button type="button" size="xs" variant="outline" onClick={() => setOpen(true)}>Edit details</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogTitle className="text-lg font-semibold">Edit {leadNo}</DialogTitle>
+          <form onSubmit={confirm.onSubmit} className="space-y-3">
+            <input type="hidden" name="leadId" value={leadId} />
+            <LeadDetailFields initial={initial} err={err} products={products} />
+            {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save changes"}</Button>
+            </div>
+          </form>
+          {confirm.dialog}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

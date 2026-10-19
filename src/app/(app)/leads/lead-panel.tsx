@@ -1,37 +1,34 @@
 "use client";
 
-import type { CallOutcome, LeadSource, LeadStatus } from "@prisma/client";
+import type { CallOutcome, LeadStage, LeadStatus } from "@prisma/client";
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
-import Link from "next/link";
+import { StatusBadge } from "@/components/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
+import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { updateLead, type ActionResult } from "./actions";
+import { EditLeadDialog } from "./add-lead-dialog";
+import type { LeadDetails } from "./lead-fields";
 
 type PanelLead = {
   id: string;
   leadNo: string;
   name: string;
-  mobile: string;
-  email: string | null;
-  dob: string | null; // "12 Mar 1985"
-  address: string | null;
-  onWhatsApp: boolean;
-  source: LeadSource;
+  details: LeadDetails; // for Edit
+  dobLabel: string | null; // "12 Mar 1985"
   status: LeadStatus;
-  interest: string | null;
+  stage: LeadStage;
   notInterestedReason: string | null;
   ownerName: string;
   calls: { id: string; dueAt: string; note: string | null; outcome: CallOutcome | null; outcomeNote: string | null }[];
 };
 
-const OUTCOME_LABEL: Record<CallOutcome, string> = { Interested: "Interested", NoAnswer: "No answer", NotInterested: "Not interested" };
-const SYSTEM_STATUSES: LeadStatus[] = ["Quoted", "Converted"];
 const IST = "Asia/Kolkata";
 const fmt = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });
@@ -40,7 +37,8 @@ const istParts = (iso: string) => {
   return { date: local.slice(0, 10), time: local.slice(11, 16) };
 };
 
-export function LeadPanel({ lead }: { lead: PanelLead }) {
+export function LeadPanel({ lead, products }: { lead: PanelLead; products: string[] }) {
+  const d = lead.details;
   const openCall = [...lead.calls].reverse().find((c) => !c.outcome);
   const next = openCall ? istParts(openCall.dueAt) : { date: "", time: "" };
   const [status, setStatus] = useState<LeadStatus>(lead.status);
@@ -50,39 +48,41 @@ export function LeadPanel({ lead }: { lead: PanelLead }) {
     return result;
   }, { ok: false });
   const err = state.fieldErrors ?? {};
-  const locked = SYSTEM_STATUSES.includes(lead.status);
   const closed = status === "NotInterested";
 
   return (
     <aside className="w-80 shrink-0 space-y-4 rounded-xl border bg-white p-4">
-      <div>
-        <h2 className="font-semibold">{lead.leadNo} · {lead.name}</h2>
-        <p className="text-xs text-muted-foreground">
-          {lead.mobile}{lead.onWhatsApp && " (WhatsApp)"}{lead.email && ` · ${lead.email}`} · {LEAD_SOURCE_LABEL[lead.source]} · Owner: {lead.ownerName}
-        </p>
-        {(lead.dob || lead.address) && (
-          <p className="mt-1 text-xs text-muted-foreground">{[lead.dob && `DOB ${lead.dob}`, lead.address].filter(Boolean).join(" · ")}</p>
-        )}
-        {lead.interest && <p className="mt-1 text-xs">Interest: {lead.interest}</p>}
-        {lead.notInterestedReason && <p className="mt-1 text-xs text-orange-700">Not interested: {lead.notInterestedReason}</p>}
+      <div className="space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="font-semibold">{lead.leadNo} · {lead.name}</h2>
+          <EditLeadDialog leadId={lead.id} leadNo={lead.leadNo} initial={d} products={products} />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <StatusBadge tone={LEAD_STATUS_TONE[lead.status]}>{LEAD_STATUS_LABEL[lead.status]}</StatusBadge>
+          <span className="text-muted-foreground">Stage: {LEAD_STAGE_LABEL[lead.stage]}</span>
+        </div>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 pt-1 text-xs">
+          <dt className="text-muted-foreground">Mobile</dt>
+          <dd>{d.mobiles.map((m) => `${m.number}${m.isWhatsApp ? " (WhatsApp)" : ""}`).join(", ")}</dd>
+          {lead.dobLabel && <><dt className="text-muted-foreground">DOB</dt><dd>{lead.dobLabel}{d.gender && ` · ${GENDER_LABEL[d.gender]}`}</dd></>}
+          {!lead.dobLabel && d.gender && <><dt className="text-muted-foreground">Gender</dt><dd>{GENDER_LABEL[d.gender]}</dd></>}
+          {d.source && <><dt className="text-muted-foreground">Business type</dt><dd>{LEAD_SOURCE_LABEL[d.source]}{d.referrerName && ` – ${d.referrerName}`}</dd></>}
+          {d.interest && <><dt className="text-muted-foreground">Interested in</dt><dd>{d.interest}</dd></>}
+          {d.email && <><dt className="text-muted-foreground">Email</dt><dd>{d.email}</dd></>}
+          {d.address && <><dt className="text-muted-foreground">Address</dt><dd>{d.address}</dd></>}
+          {d.notes && <><dt className="text-muted-foreground">Notes</dt><dd className="whitespace-pre-line">{d.notes}</dd></>}
+          <dt className="text-muted-foreground">Owner</dt><dd>{lead.ownerName}</dd>
+        </dl>
+        {lead.notInterestedReason && <p className="text-xs text-orange-700">Not interested: {lead.notInterestedReason}</p>}
       </div>
 
       <form onSubmit={submitKeepingValues(action)} className="space-y-3">
         <input type="hidden" name="leadId" value={lead.id} />
         <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
-          {locked ? (
-            <>
-              <input type="hidden" name="status" value={lead.status} />
-              <p className="text-sm">{LEAD_STATUS_LABEL[lead.status]} <span className="text-xs text-muted-foreground">(set by quotation / proposal)</span></p>
-            </>
-          ) : (
-            <NativeSelect id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} className="w-full">
-              {Object.entries(LEAD_STATUS_LABEL)
-                .filter(([v]) => !SYSTEM_STATUSES.includes(v as LeadStatus))
-                .map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
-            </NativeSelect>
-          )}
+          <NativeSelect id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} className="w-full">
+            {Object.entries(LEAD_STATUS_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
+          </NativeSelect>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="note">{closed ? "Reason" : "Call note"}</Label>
@@ -96,7 +96,7 @@ export function LeadPanel({ lead }: { lead: PanelLead }) {
         ) : (
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label htmlFor="callDate">Next follow-up</Label>
+              <Label htmlFor="callDate">{status === "CallBack" ? "Call back on" : "Next follow-up"}</Label>
               <Input id="callDate" name="callDate" type="date" defaultValue={next.date} aria-invalid={!!err.callDate} />
             </div>
             <div className="space-y-1.5">
@@ -116,7 +116,7 @@ export function LeadPanel({ lead }: { lead: PanelLead }) {
         </Button>
       </form>
 
-      {!["NotInterested", "Converted"].includes(lead.status) && (
+      {lead.status !== "NotInterested" && lead.stage !== "Customer" && (
         <Link href={`/quotations/new?leadId=${lead.id}`} className={buttonVariants({ variant: "outline", className: "w-full" })}>Create quotation</Link>
       )}
       <p className="text-xs text-muted-foreground">Aadhaar and PAN are not collected at lead stage.</p>

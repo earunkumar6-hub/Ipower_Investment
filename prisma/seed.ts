@@ -427,31 +427,38 @@ async function main() {
   }
 
   // ── Leads and calls ──
-  const LEADS: [string, string, "Website" | "WalkIn" | "Partner" | "Call" | "Referral", "New" | "CallScheduled" | "Interested" | "NotInterested" | "Quoted" | "Converted", string, number][] = [
-    ["L-2017", "Kumaravel S", "Referral", "Converted", users.divya, -20],
-    ["L-2018", "Nandhini R", "Website", "NotInterested", users.divya, -18],
-    ["L-2019", "Sanjay P", "Call", "NotInterested", users.arun, -16],
-    ["L-2020", "Fathima B", "WalkIn", "Interested", users.divya, -14],
-    ["L-2021", "Gopinath V", "Website", "CallScheduled", users.arun, -12],
-    ["L-2022", "Harini K", "Partner", "Quoted", users.divya, -10],
-    ["L-2023", "Iniyan M", "Website", "New", users.arun, -8],
-    ["L-2024", "Janani S", "Referral", "Interested", users.divya, -6],
-    ["L-2025", "Revathi M", "Website", "Interested", users.arun, -5],
-    ["L-2026", "Selvakumar T", "WalkIn", "CallScheduled", users.divya, -3],
-    ["L-2027", "Vignesh P", "Call", "New", users.arun, -1],
-    ["L-2028", "Ganesh K", "Partner", "Quoted", users.arun, 0],
-    ["L-2029", "Anitha Suresh", "Website", "New", users.divya, 0],
-    ["L-2030", "Mohammed I", "WalkIn", "CallScheduled", users.divya, 0],
-    ["L-2031", "Priya S", "Website", "CallScheduled", users.arun, 0],
+  // [lead no, first name, last name, gender, business type, status, owner, created days ago, interested product, 2nd mobile?]
+  type Seed = [string, string, string, "Female" | "Male", "Direct" | "WalkIn" | "Referral" | "Website" | "SocialMedia", "Interested" | "NotInterested" | "CallBack", string, number, string, boolean?];
+  const LEADS: Seed[] = [
+    ["L-2017", "Kumaravel", "S", "Male", "Referral", "Interested", users.divya, -20, "LIC Jeevan Anand"],
+    ["L-2018", "Nandhini", "R", "Female", "Website", "NotInterested", users.divya, -18, "Star Health Family Health Optima"],
+    ["L-2019", "Sanjay", "P", "Male", "Direct", "NotInterested", users.arun, -16, "NSC"],
+    ["L-2020", "Fathima", "B", "Female", "WalkIn", "Interested", users.divya, -14, "Post Office RD"],
+    ["L-2021", "Gopinath", "V", "Male", "Website", "CallBack", users.arun, -12, "SBI Life Smart Shield"],
+    ["L-2022", "Harini", "K", "Female", "SocialMedia", "Interested", users.divya, -10, "Care Health Care Supreme"],
+    ["L-2023", "Iniyan", "M", "Male", "Website", "CallBack", users.arun, -8, "HDFC MF Flexi Cap SIP"],
+    ["L-2024", "Janani", "S", "Female", "Referral", "Interested", users.divya, -6, "Post Office TD"],
+    ["L-2025", "Revathi", "M", "Female", "SocialMedia", "CallBack", users.arun, -5, "SBI Life eWealth", true],
+    ["L-2026", "Selvakumar", "T", "Male", "WalkIn", "CallBack", users.divya, -3, "KVP"],
+    ["L-2027", "Vignesh", "P", "Male", "Direct", "CallBack", users.arun, -1, "Star Health Comprehensive"],
+    ["L-2028", "Ganesh", "K", "Male", "Referral", "Interested", users.arun, 0, "Care Health Care Supreme"],
+    ["L-2029", "Anitha", "Suresh", "Female", "Website", "Interested", users.divya, 0, "Post Office RD"],
+    ["L-2030", "Mohammed", "I", "Male", "WalkIn", "CallBack", users.divya, 0, "Post Office RD"],
+    ["L-2031", "Priya", "S", "Female", "Website", "CallBack", users.arun, 0, "Star Health Family Health Optima"],
   ];
+  const REFERRERS = ["Rajesh Kumar", "Meena R", "Karthik V"];
+  const STAGE: Record<string, "Quotation" | "Customer"> = { "L-2017": "Customer", "L-2022": "Quotation", "L-2028": "Quotation" };
   const leads: Record<string, string> = {};
-  for (const [leadNo, name, source, status, ownerId, day] of LEADS) {
+  for (const [i, [leadNo, firstName, lastName, gender, source, status, ownerId, day, interest, second]] of LEADS.entries()) {
     const created = new Date(now.getTime() + day * 86_400_000 - 3_600_000);
+    const mobile = String(9790050000 + Number(leadNo.slice(2)));
+    const numbers = [{ number: mobile, isWhatsApp: true }, ...(second ? [{ number: String(9840070000 + Number(leadNo.slice(2))), isWhatsApp: false }] : [])];
     const l = await prisma.lead.create({
       data: {
-        tenantId, leadNo, name, mobile: String(9790050000 + Number(leadNo.slice(2))), source, status, ownerId,
-        interest: pick(["Health cover for parents", "Term insurance", "Post office RD", "MF SIP", "Family floater"]),
-        notInterestedReason: status === "NotInterested" ? "Already has a policy" : null, createdAt: created,
+        tenantId, leadNo, name: `${firstName} ${lastName}`, firstName, lastName, gender, dob: new Date(Date.UTC(1965 + (i * 7) % 35, (i * 5) % 12, 1 + (i * 3) % 27)),
+        mobile, onWhatsApp: true, source, referrerName: source === "Referral" ? REFERRERS[i % REFERRERS.length] : null, status, stage: STAGE[leadNo] ?? "Lead", ownerId,
+        interest, address: i % 3 === 0 ? "Chennai" : null, notInterestedReason: status === "NotInterested" ? "Already has a policy" : null, createdAt: created,
+        mobiles: { create: numbers.map((m, sort) => ({ tenantId, ...m, sort })) },
       },
     });
     leads[leadNo] = l.id;
@@ -459,16 +466,21 @@ async function main() {
   const hours = (h: number) => new Date(now.getTime() + h * 3_600_000);
   await prisma.call.createMany({
     data: [
-      // Open calls (3): one overdue for Arun → blocking reminder on login
+      // Open lead calls (3): one overdue for Arun → blocking reminder on login
       { tenantId, leadId: leads["L-2025"], ownerId: users.arun, dueAt: hours(-0.5), note: "Wants health cover for parents; call back" },
       { tenantId, leadId: leads["L-2031"], ownerId: users.arun, dueAt: hours(2), note: "Website enquiry – term plan" },
       { tenantId, leadId: leads["L-2030"], ownerId: users.divya, dueAt: hours(3), note: "Walk-in; asked for RD details" },
+      // Renewal follow-ups (Divya): one later today, one tomorrow
+      { tenantId, policyId: policies["karthik-care"].id, ownerId: policies["karthik-care"].ownerId, dueAt: hours(4), note: "Promised to pay by Friday" },
+      { tenantId, policyId: policies["vijay-sbi"].id, ownerId: policies["vijay-sbi"].ownerId, dueAt: hours(26), note: "38 days overdue – remind about the grace period" },
       // History
       { tenantId, leadId: leads["L-2025"], ownerId: users.arun, dueAt: hours(-50), outcome: "Interested", outcomeNote: "Send options", completedAt: hours(-50) },
       { tenantId, leadId: leads["L-2019"], ownerId: users.arun, dueAt: hours(-300), outcome: "NotInterested", outcomeNote: "Already has a policy", completedAt: hours(-300) },
       { tenantId, leadId: leads["L-2021"], ownerId: users.arun, dueAt: hours(-30), outcome: "NoAnswer", completedAt: hours(-30) },
     ],
   });
+  // Lead L-2021 was not reachable yesterday: its next call is booked for tomorrow.
+  await prisma.call.create({ data: { tenantId, leadId: leads["L-2021"], ownerId: users.arun, dueAt: hours(22), note: "No answer yesterday" } });
   await prisma.quotation.create({
     data: {
       tenantId, quoteNo: "Q-0416", leadId: leads["L-2028"], customerName: "Ganesh K", mobile: String(9790050000 + 2028),

@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <AppSidebar items={items} userName={user.name} roleLabel={ROLE_LABEL[user.role]} />
-      <main className="flex-1 bg-slate-50 p-6">{children}</main>
+      <main className="min-w-0 flex-1 bg-slate-50 p-6">{children}</main>
       <CallReminder calls={calls} />
     </div>
   );

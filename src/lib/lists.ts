@@ -41,7 +41,7 @@ export function leadFilter(user: SessionUser, sp: Params) {
     ...(q && {
       OR: [
         { name: { contains: q, mode: "insensitive" } },
-        { mobile: { contains: q } },
+        { mobiles: { some: { number: { contains: q } } } },
         { leadNo: { contains: q, mode: "insensitive" } },
       ],
     }),
