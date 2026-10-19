@@ -36,6 +36,17 @@ export async function htmlToPdf(html: string, opts: { landscape?: boolean; foote
   }
 }
 
+/** The same HTML as a PNG image (for WhatsApp sharing): A4 width, full height, white page margins. */
+export async function htmlToPng(html: string): Promise<Buffer> {
+  const page = await (await browser()).newPage({ viewport: { width: 794, height: 100 }, deviceScaleFactor: 2 });
+  try {
+    await page.setContent(html.replace("<body>", '<body style="margin:0;padding:40px 48px;background:#fff">'), { waitUntil: "load" });
+    return await page.screenshot({ fullPage: true, type: "png" });
+  } finally {
+    await page.close();
+  }
+}
+
 /** Company logo for PDF headers, inlined so the headless page needs no URL. */
 let logoTag: string | undefined;
 export function pdfLogo() {

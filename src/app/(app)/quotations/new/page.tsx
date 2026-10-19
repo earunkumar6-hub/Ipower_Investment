@@ -22,6 +22,8 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
       : null;
 
   if (party && canActOn(user, party.ownerId)) {
+    // Plan suggestions: insurance products from Settings → Products and schemes.
+    const plans = await db.product.findMany({ where: { tenantId: user.tenantId, active: true, productType: "Insurance" }, select: { partner: true, name: true, payModes: true }, orderBy: [{ partner: "asc" }, { name: "asc" }] });
     return (
       <>
         <PageHeader title="New quotation" user={user} />
@@ -31,6 +33,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
           customerName={party.name}
           mobile={party.mobile}
           defaultValidUpto={isoDate(addDays(istToday(), 15))}
+          plans={plans}
         />
       </>
     );

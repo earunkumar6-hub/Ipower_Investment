@@ -46,7 +46,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(arun.getByRole("button", { name: "3 calls open" })).toBeVisible();
   });
 
-  test("2. Quotation for Meena R: two products + 18% GST, download PDF, mark accepted", async () => {
+  test("2. Quotation for Meena R: two products + 18% GST, export PDF, customer accepts one product", async () => {
     await arun.goto("/quotations/new?q=Meena");
     await arun.getByRole("link", { name: /Meena R/ }).click();
     const [insurer, plan, premium] = [arun.getByLabel("Insurer"), arun.getByLabel("Plan"), arun.getByLabel("Premium")];
@@ -64,15 +64,18 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(arun.getByRole("heading", { name: /Quotation Q-\d+ · Meena R/ })).toBeVisible();
 
     const download = arun.waitForEvent("download");
-    await arun.getByRole("link", { name: "Download PDF" }).click();
+    await arun.getByRole("link", { name: "Export PDF" }).click();
     expect((await download).suggestedFilename()).toMatch(/^Q-\d+\.pdf$/);
 
-    await arun.getByRole("button", { name: "Mark accepted" }).click();
-    await expect(arun.getByText("Accepted", { exact: true })).toBeVisible();
+    // The customer takes the Star Health plan only: untick SBI Life, then create the proposal.
+    await arun.getByLabel("Select SBI Life – eShield Next").uncheck();
+    await arun.getByRole("button", { name: "Create proposal from selected (1)" }).click();
+    await expect(arun.getByText("Accepted", { exact: true }).first()).toBeVisible();
+    await expect(arun.getByText("Not accepted").first()).toBeVisible();
   });
 
   test("3. Proposal: PAN locked until OTP, then masked; policy number creates customer + renewal", async () => {
-    await arun.getByRole("button", { name: "Create proposal" }).first().click();
+    await arun.getByRole("link", { name: /^P-\d+$/ }).first().click();
     await arun.waitForURL(/\/proposals\/c/);
     await arun.getByRole("button", { name: "Save Aadhaar / PAN" }).click();
     await expect(arun.getByText("Locked: the customer has not given OTP consent yet")).toBeVisible();
@@ -84,7 +87,12 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(arun.getByText("ABCxxxxx4M").first()).toBeVisible();
     await expect(arun.getByText("ABCDE1234M")).toHaveCount(0); // full PAN never shown back
 
-    await arun.getByLabel("Policy number (from the partner)").fill("STAR-P-700123");
+    // Pay mode comes from the quotation (Yearly); enter the term and start date.
+    await arun.getByLabel("Term (years)").fill("1");
+    await arun.getByLabel("Start date").fill(new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10));
+    await arun.getByRole("button", { name: "Save details" }).click();
+    await expect(arun.getByText("Policy details saved")).toBeVisible();
+    await arun.getByLabel("Policy number (leave blank until issued)").fill("STAR-P-700123");
     await arun.getByRole("button", { name: "Save policy number" }).click();
     await expect(arun.getByText(/Policy STAR-P-700123 issued and moved to Partners \/ Customers under Meena R/)).toBeVisible();
     await expect(arun.getByText(/Next renewal due/)).toBeVisible();

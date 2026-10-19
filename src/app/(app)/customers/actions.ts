@@ -1,13 +1,17 @@
 "use server";
 
+import { Frequency, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { audit } from "@/lib/audit";
-import { fmtDate, istToday } from "@/lib/dates";
+import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
+import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
-import { lockInUntil } from "@/lib/products";
+import { nextNumber } from "@/lib/numbering";
+import { createPolicyWithSchedule } from "@/lib/policies";
+import { BANK_FIELDS, lockInUntil, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
@@ -63,4 +67,122 @@ export async function closePolicy(_: ActionResult, form: FormData): Promise<Acti
   revalidatePath(`/customers/${policy.customer.id}`);
   revalidatePath("/renewals");
   return { ok: true };
+}
+
+// ── Add product directly (no quotation) ──
+
+const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter the amount");
+const yearsField = z.string().trim().regex(/^(\d{1,2}(\.5)?)?$/, "Years must be a number like 5 or 2.5").transform((v) => (v ? Math.round(Number(v) * 12) : null));
+const addSchema = z.object({
+  customerId: z.string().min(1),
+  productId: z.string().min(1, "Pick the product"),
+  schemeId: z.string().default(""),
+  policyNumber: z.string().trim().toUpperCase().max(40).default(""),
+  amount: money.refine((v) => Number(v) > 0, "Amount must be more than 0"),
+  sumAssured: z.union([z.literal(""), money]).default(""),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date of commencement").transform((v) => new Date(`${v}T00:00:00Z`)),
+  frequency: z.enum(Frequency, "Pick the pay mode"),
+  term: yearsField.default(null),
+  premiumPayingTerm: yearsField.default(null),
+  nominee: z.string().trim().max(80).default(""),
+});
+
+const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+/**
+ * "Add product directly" on a customer: every rule comes from Settings → Products and schemes (pay modes, shown /
+ * required fields, bank details, custom fields). With a policy number it is saved as an Active policy with its
+ * renewal schedule; without one it waits in Proposals (no consent step – the customer already exists).
+ */
+export async function addProductDirect(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Policy.Create");
+  const parsed = addSchema.safeParse(Object.fromEntries([...form.entries()].filter(([k]) => !k.startsWith("cf_") && !k.startsWith("bank_"))));
+  if (!parsed.success) return fail(parsed.error.issues[0].message, { [String(parsed.error.issues[0].path[0])]: parsed.error.issues[0].message });
+  const v = parsed.data;
+
+  const customer = await db.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId } });
+  if (!customer) return fail("Customer not found");
+  if (!canActOn(user, customer.ownerId)) return fail("This customer belongs to another user");
+  const product = await db.product.findFirst({
+    where: { id: v.productId, tenantId: user.tenantId, active: true },
+    include: { schemes: { where: { active: true }, include: { rates: true } }, customFields: { orderBy: { sort: "asc" } } },
+  });
+  if (!product) return fail("Pick an active product");
+  const scheme = product.schemes.find((s) => s.id === v.schemeId) ?? null;
+  if (product.schemes.length > 0 && !scheme) return fail("Pick the scheme", { schemeId: "Required" });
+  if (!product.payModes.includes(v.frequency)) return fail(`${product.name} is paid ${product.payModes.map((m) => PAY_MODE_LABEL[m].toLowerCase()).join(" or ")}`, { frequency: "Not allowed" });
+  if (v.startDate > addMonths(istToday(), 1)) return fail("Date of commencement can't be more than a month ahead", { startDate: "Too far ahead" });
+
+  const shown = (f: string) => product.fields.includes(f);
+  const needed = (f: string) => product.requiredFields.includes(f);
+  const termMonths = scheme?.tenureMonths ?? v.term;
+  if (needed("premiumPayingTerm") && !v.premiumPayingTerm) return fail("Enter the premium paying term", { premiumPayingTerm: "Required" });
+  if (v.premiumPayingTerm && termMonths && v.premiumPayingTerm > termMonths) return fail("Premium paying term can't be longer than the term", { premiumPayingTerm: "Too long" });
+  if (needed("nominee") && !v.nominee) return fail("Enter the nominee", { nominee: "Required" });
+
+  // Custom fields: cf_<id>
+  const customValues: Record<string, string | number> = {};
+  for (const f of product.customFields) {
+    const raw = String(form.get(`cf_${f.id}`) ?? "").trim();
+    if (!raw) {
+      if (f.required) return fail(`Enter ${f.label}`, { [`cf_${f.id}`]: "Required" });
+      continue;
+    }
+    if (f.type === "Number" && !/^-?\d+(\.\d+)?$/.test(raw)) return fail(`${f.label} must be a number`, { [`cf_${f.id}`]: "Number" });
+    if (f.type === "Date" && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return fail(`${f.label} must be a date`, { [`cf_${f.id}`]: "Date" });
+    if (f.type === "Dropdown" && !f.options.includes(raw)) return fail(`Pick ${f.label} from the list`, { [`cf_${f.id}`]: "Pick" });
+    customValues[f.label] = f.type === "Number" ? Number(raw) : raw;
+  }
+
+  // Bank details: bank_<field>, encrypted
+  let bankDetailsEnc: string | null = null;
+  if (product.bankDetailsRequired) {
+    const bank: Record<string, string> = {};
+    for (const k of product.bankFields as BankField[]) {
+      const raw = String(form.get(`bank_${k}`) ?? "").trim().toUpperCase();
+      if (!raw) return fail(`Enter the ${BANK_FIELDS[k].toLowerCase()}`, { [`bank_${k}`]: "Required" });
+      if (k === "ifsc" && !IFSC.test(raw)) return fail("IFSC looks like SBIN0001234", { bank_ifsc: "Format" });
+      if (k === "accountNo" && !/^\d{6,18}$/.test(raw)) return fail("Account number should be 6–18 digits", { bank_accountNo: "Format" });
+      bank[k] = k === "holder" || k === "bank" || k === "branch" ? String(form.get(`bank_${k}`)).trim() : raw;
+    }
+    try {
+      bankDetailsEnc = encryptJson(bank);
+    } catch (e) {
+      if (e instanceof EncryptionKeyMissing) return fail(e.message);
+      throw e;
+    }
+  }
+
+  const details = {
+    productType: product.productType, partner: product.partner,
+    // Post office accounts show their scheme ("TD 5 years"); insurance and funds their product name.
+    productName: product.productType === "Insurance" || product.productType === "MutualFund" || !scheme ? product.name : scheme.name,
+    productId: product.id, schemeId: scheme?.id ?? null, frequency: v.frequency, startDate: v.startDate, termMonths,
+    premiumPayingTermMonths: shown("premiumPayingTerm") ? v.premiumPayingTerm : null, nominee: shown("nominee") ? v.nominee || null : null,
+    rateAtOpen: scheme ? rateOn(scheme.rates, v.startDate)?.rate ?? null : null,
+    customValues: Object.keys(customValues).length ? customValues : undefined, bankDetailsEnc,
+  };
+
+  try {
+    if (v.policyNumber) {
+      const policy = await db.$transaction((tx) => createPolicyWithSchedule(tx, {
+        tenantId: user.tenantId, customerId: customer.id, ownerId: customer.ownerId, policyNumber: v.policyNumber, premiumAmount: v.amount,
+        sumAssured: v.sumAssured || null, invoiceRule: product.invoiceRule, ...details,
+      }));
+      revalidatePath("/", "layout");
+      return { ok: true, id: policy.id, href: `/customers/${customer.id}`, message: `${details.productName} ${v.policyNumber} added as Active` };
+    }
+    const { partner, ...proposalDetails } = details;
+    const proposal = await db.$transaction(async (tx) => tx.proposal.create({
+      data: {
+        tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), customerId: customer.id, customerName: customer.name,
+        mobile: customer.mobile, insurer: partner, premium: v.amount, sumInsured: v.sumAssured || null, status: "Draft", ownerId: customer.ownerId, ...proposalDetails,
+      },
+    }));
+    revalidatePath("/", "layout");
+    return { ok: true, id: proposal.id, href: `/proposals/${proposal.id}`, message: `Saved as proposal ${proposal.proposalNo} – enter the policy number when it is issued` };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(`Policy number ${v.policyNumber} already exists`, { policyNumber: "Duplicate" });
+    throw e;
+  }
 }

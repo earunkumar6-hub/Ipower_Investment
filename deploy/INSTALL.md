@@ -50,7 +50,9 @@ IPower_package\
    ```powershell
    $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
    ```
-   Paste the output as `BETTER_AUTH_SECRET="..."`.
+   Paste the output as `BETTER_AUTH_SECRET="..."`. Run the command again and paste the new output as
+   `DATA_ENCRYPTION_KEY="..."` (it encrypts customers' bank details). Keep a copy of `.env` somewhere safe:
+   without this key, saved bank details can't be read.
 5. Start:
    ```powershell
    docker compose up -d

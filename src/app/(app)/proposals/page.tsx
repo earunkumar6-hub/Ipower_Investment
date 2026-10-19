@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
-import { CONSENT_TONE, PROPOSAL_NEXT, PROPOSAL_STATUS } from "./labels";
+import { CONSENT_TONE, proposalNext, proposalStatusLabel } from "./labels";
 
 export default async function ProposalsPage() {
   const user = await requirePermission("Proposal.View");
@@ -32,21 +32,21 @@ export default async function ProposalsPage() {
           <TableBody>
             {proposals.map((p) => {
               const consent = p.consents[0]?.status;
-              const [label, tone] = PROPOSAL_STATUS[p.status];
+              const [label, tone] = proposalStatusLabel(p);
               return (
                 <TableRow key={p.id}>
                   <TableCell><Link href={`/proposals/${p.id}`} className="text-brand-700 hover:underline">{p.proposalNo}</Link></TableCell>
                   <TableCell>{p.customerName}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
-                  <TableCell>{consent ? <StatusBadge tone={CONSENT_TONE[consent]}>{consent}</StatusBadge> : "—"}</TableCell>
+                  <TableCell>{consent ? <StatusBadge tone={CONSENT_TONE[consent]}>{consent}</StatusBadge> : p.quotationId ? "—" : <span className="text-xs text-muted-foreground">Not needed</span>}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
-                  <TableCell className="text-muted-foreground">{p.status === "ConsentGiven" && !p.panMasked ? "Enter PAN" : PROPOSAL_NEXT[p.status]}</TableCell>
+                  <TableCell className="text-muted-foreground">{proposalNext(p)}</TableCell>
                 </TableRow>
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No proposals yet. Create one from an accepted quotation.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

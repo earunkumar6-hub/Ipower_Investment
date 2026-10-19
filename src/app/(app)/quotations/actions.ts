@@ -1,15 +1,17 @@
 "use server";
 
+import { Frequency, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
+import { audit } from "@/lib/audit";
 import { addDays, istToday } from "@/lib/dates";
-import { db } from "@/lib/db";
+import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
 import { priceQuotation } from "@/lib/quotation";
-import { authorize } from "@/lib/session";
+import { authorize, type SessionUser } from "@/lib/session";
 
 const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount");
 
@@ -19,6 +21,7 @@ const itemSchema = z.object({
   productName: z.string().trim().min(2, "Enter the plan"),
   sumInsured: z.union([z.literal(""), money]),
   premium: money.refine((v) => Number(v) > 0, "Premium must be more than 0"),
+  payMode: z.enum(Frequency).default("Yearly"),
 });
 
 const quotationSchema = z.object({
@@ -78,6 +81,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
             insurer: i.insurer,
             productName: i.productName,
             sumInsured: i.sumInsured || null,
+            payMode: i.payMode,
             ...priced.items[n],
           })),
         },
@@ -90,66 +94,108 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
   redirect(`/quotations/${quotation.id}`);
 }
 
-export async function acceptQuotation(quotationId: string): Promise<ActionResult> {
+/** A quotation the user may act on, not deleted. */
+async function ownQuotation(user: SessionUser, quotationId: string) {
+  const q = await db.quotation.findFirst({ where: { id: quotationId, tenantId: user.tenantId, deletedAt: null }, include: { items: { include: { proposal: true } } } });
+  if (!q) return { error: "Quotation not found" } as const;
+  if (!canActOn(user, q.ownerId)) return { error: "This quotation belongs to another user" } as const;
+  return { q } as const;
+}
+
+type QuotedItem = { id: string; insurer: string; productName: string; sumInsured: Prisma.Decimal | null; total: Prisma.Decimal; payMode: Frequency };
+type QuoteParty = { id: string; customerId: string | null; customerName: string; mobile: string; ownerId: string };
+
+/** One proposal for a quoted product, linked to the catalogue product when the plan matches; sends the (mocked) consent link. */
+async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: QuotedItem) {
+  const product = await tx.product.findFirst({
+    where: { tenantId: user.tenantId, partner: item.insurer, name: item.productName },
+    include: { schemes: { where: { active: true }, orderBy: { tenureMonths: "asc" } } },
+  });
+  const onlyScheme = product?.schemes.length === 1 ? product.schemes[0] : null;
+  const p = await tx.proposal.create({
+    data: {
+      tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), quotationId: q.id, quotationItemId: item.id,
+      customerId: q.customerId, customerName: q.customerName, mobile: q.mobile, insurer: item.insurer, productName: item.productName,
+      sumInsured: item.sumInsured, premium: item.total, status: "ConsentPending", ownerId: q.ownerId,
+      productType: product?.productType ?? "Insurance", productId: product?.id, schemeId: onlyScheme?.id, frequency: item.payMode, termMonths: onlyScheme?.tenureMonths,
+    },
+  });
+  await tx.consent.create({
+    data: {
+      tenantId: user.tenantId, proposalId: p.id, customerId: q.customerId, mobile: q.mobile,
+      purpose: "Aadhaar and PAN for insurance proposal", textVersion: "KYC-v1", expiresOn: addDays(new Date(), 2),
+    },
+  });
+  const body = `IPower Investments - R. Murali needs your consent to collect Aadhaar and PAN for your ${item.insurer} ${item.productName} proposal ${p.proposalNo}. Open the link and enter the OTP: https://consent.example/${p.id.slice(-8)}`;
+  await tx.messageLog.createMany({
+    data: (["SMS", "WhatsApp"] as const).map((channel) => ({
+      tenantId: user.tenantId, channel, to: q.mobile, template: "kyc_consent_link", body,
+      relatedType: "Proposal", relatedId: p.id, createdById: user.id,
+    })),
+  });
+  return p;
+}
+
+/**
+ * The customer's decision: the ticked products become proposals (one each), the rest Not accepted.
+ * A product marked not accepted can still be confirmed later from the same quotation.
+ */
+export async function createProposalsFromSelected(quotationId: string, itemIds: string[]): Promise<ActionResult> {
+  const user = await authorize("Proposal.Create");
+  const r = await ownQuotation(user, quotationId);
+  if ("error" in r) return { ok: false, error: r.error };
+  const { q } = r;
+  if (q.status === "NotAccepted") return { ok: false, error: "This quotation was marked not accepted" };
+  if (q.validUpto < istToday() && q.status !== "Accepted") return { ok: false, error: "This quotation has expired; create a new one" };
+  const picked = q.items.filter((i) => itemIds.includes(i.id) && !i.proposal);
+  if (picked.length === 0) return { ok: false, error: "Tick the products the customer accepted" };
+
+  await db.$transaction(async (tx) => {
+    for (const item of picked) await proposalFor(tx, user, q, item);
+    const ids = picked.map((i) => i.id);
+    await tx.quotationItem.updateMany({ where: { id: { in: ids } }, data: { decision: "Selected" } });
+    await tx.quotationItem.updateMany({ where: { quotationId: q.id, decision: "Pending", id: { notIn: ids } }, data: { decision: "NotAccepted" } });
+    await tx.quotation.update({ where: { id: q.id }, data: { status: "Accepted", acceptedAt: q.acceptedAt ?? new Date() } });
+    if (q.leadId) await advanceStage(tx, q.leadId, "Proposal");
+  });
+  revalidatePath("/", "layout");
+  return { ok: true, message: `${picked.length} proposal${picked.length > 1 ? "s" : ""} created` };
+}
+
+const reasonSchema = z.string().trim().min(3, "Enter the reason").max(200);
+
+/** The customer said no to the whole quotation. */
+export async function markNotAccepted(quotationId: string, reason: string): Promise<ActionResult> {
   const user = await authorize("Quote.Create");
-  const q = await db.quotation.findFirst({ where: { id: quotationId, tenantId: user.tenantId } });
-  if (!q) return { ok: false, error: "Quotation not found" };
-  if (!canActOn(user, q.ownerId)) return { ok: false, error: "This quotation belongs to another user" };
-  if (q.status === "Accepted") return { ok: true };
-  if (q.validUpto < istToday()) return { ok: false, error: "This quotation has expired; create a new one" };
-  await db.quotation.update({ where: { id: q.id }, data: { status: "Accepted", acceptedAt: new Date() } });
-  revalidatePath(`/quotations/${q.id}`);
+  const r = await ownQuotation(user, quotationId);
+  if ("error" in r) return { ok: false, error: r.error };
+  const why = reasonSchema.safeParse(reason);
+  if (!why.success) return { ok: false, error: why.error.issues[0].message };
+  if (r.q.items.some((i) => i.proposal)) return { ok: false, error: "Proposals were already made from this quotation" };
+  await db.$transaction([
+    db.quotation.update({ where: { id: r.q.id }, data: { status: "NotAccepted", notAcceptedReason: why.data } }),
+    db.quotationItem.updateMany({ where: { quotationId: r.q.id }, data: { decision: "NotAccepted" } }),
+  ]);
   revalidatePath("/quotations");
+  revalidatePath(`/quotations/${r.q.id}`);
   return { ok: true };
 }
 
-/** Proposal for one product of an accepted quotation; sends the (mocked) consent link. */
-export async function createProposal(quotationItemId: string): Promise<ActionResult> {
-  const user = await authorize("Proposal.Create");
-  const item = await db.quotationItem.findFirst({
-    where: { id: quotationItemId, quotation: { tenantId: user.tenantId } },
-    include: { quotation: true, proposal: true },
-  });
-  if (!item) return { ok: false, error: "Product not found" };
-  const q = item.quotation;
-  if (!canActOn(user, q.ownerId)) return { ok: false, error: "This quotation belongs to another user" };
-  if (q.status !== "Accepted") return { ok: false, error: "Mark the quotation accepted first" };
-  if (item.proposal) redirect(`/proposals/${item.proposal.id}`);
-
-  const proposal = await db.$transaction(async (tx) => {
-    const p = await tx.proposal.create({
-      data: {
-        tenantId: user.tenantId,
-        proposalNo: await nextNumber(tx, user.tenantId, "proposal"),
-        quotationId: q.id,
-        quotationItemId: item.id,
-        customerId: q.customerId,
-        customerName: q.customerName,
-        mobile: q.mobile,
-        insurer: item.insurer,
-        productName: item.productName,
-        sumInsured: item.sumInsured,
-        premium: item.total,
-        status: "ConsentPending",
-        ownerId: q.ownerId,
-      },
+/** Delete a quotation while no proposal exists; staff their own, Admin any. Kept (hidden) for the change log. */
+export async function deleteQuotation(quotationId: string, reason: string): Promise<ActionResult> {
+  const user = await authorize("Quote.Create");
+  const r = await ownQuotation(user, quotationId);
+  if ("error" in r) return { ok: false, error: r.error };
+  const why = reasonSchema.safeParse(reason);
+  if (!why.success) return { ok: false, error: why.error.issues[0].message };
+  if (r.q.items.some((i) => i.proposal)) return { ok: false, error: "A proposal was made from this quotation; it can't be deleted" };
+  await db.$transaction(async (tx) => {
+    await tx.quotation.update({ where: { id: r.q.id }, data: { deletedAt: new Date(), deletedById: user.id, deleteReason: why.data } });
+    await audit(tx, user, {
+      entity: "Quotation", entityId: r.q.id, action: "Deleted", summary: `Quotation ${r.q.quoteNo} for ${r.q.customerName} deleted`,
+      before: { products: r.q.items.map((i) => `${i.insurer} ${i.productName}`).join(", "), total: r.q.total.toFixed(2) }, reason: why.data,
     });
-    if (q.leadId) await advanceStage(tx, q.leadId, "Proposal");
-    await tx.consent.create({
-      data: {
-        tenantId: user.tenantId, proposalId: p.id, customerId: q.customerId, mobile: q.mobile,
-        purpose: "Aadhaar and PAN for insurance proposal", textVersion: "KYC-v1", expiresOn: addDays(new Date(), 2),
-      },
-    });
-    const body = `IPower Investments - R. Murali needs your consent to collect Aadhaar and PAN for your ${item.insurer} ${item.productName} proposal ${p.proposalNo}. Open the link and enter the OTP: https://consent.example/${p.id.slice(-8)}`;
-    await tx.messageLog.createMany({
-      data: (["SMS", "WhatsApp"] as const).map((channel) => ({
-        tenantId: user.tenantId, channel, to: q.mobile, template: "kyc_consent_link", body,
-        relatedType: "Proposal", relatedId: p.id, createdById: user.id,
-      })),
-    });
-    return p;
   });
   revalidatePath("/", "layout");
-  redirect(`/proposals/${proposal.id}`);
+  return { ok: true, href: "/quotations" };
 }

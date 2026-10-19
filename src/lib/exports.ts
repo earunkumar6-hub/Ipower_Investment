@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { PROPOSAL_NEXT, PROPOSAL_STATUS } from "@/app/(app)/proposals/labels";
+import { proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels";
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
@@ -19,6 +19,7 @@ import {
 import { fmtINR, sum } from "@/lib/money";
 import { seesAll, type Permission } from "@/lib/permissions";
 import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
+import { quotationStatus } from "@/lib/quotation";
 import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
 
@@ -139,8 +140,8 @@ export const REPORTS: Record<string, Report> = {
     permission: "Quote.View",
     async build(user) {
       const quotations = await db.quotation.findMany({
-        where: { tenantId: user.tenantId, ...ownerScope(user) },
-        include: { items: true, proposals: { select: { status: true } } },
+        where: { tenantId: user.tenantId, ...ownerScope(user), deletedAt: null },
+        include: { items: { include: { proposal: { select: { status: true } } } } },
         orderBy: { createdAt: "desc" },
       });
       return {
@@ -151,8 +152,8 @@ export const REPORTS: Record<string, Report> = {
           totals: true,
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Products", width: 30 },
             { header: "Subtotal", type: "money" }, { header: "GST", type: "money" }, { header: "Total", type: "money" }, { header: "Valid till", type: "date" }, { header: "Status" }],
-          rows: quotations.map((q) => [q.quoteNo, q.createdAt, q.customerName, q.items.map((i) => i.category).join(", "), q.subtotal, q.gstTotal, q.total, q.validUpto,
-            q.proposals.some((p) => p.status === "Issued") ? "Converted" : q.status === "Accepted" ? "Accepted" : "Draft"]),
+          rows: quotations.map((q) => [q.quoteNo, q.createdAt, q.customerName, q.items.map((i) => `${i.insurer} ${i.productName}`).join(", "), q.subtotal, q.gstTotal, q.total, q.validUpto,
+            quotationStatus(q)[0]]),
         }],
       };
     },
@@ -176,8 +177,8 @@ export const REPORTS: Record<string, Report> = {
             { header: "Premium", type: "money" }, { header: "Consent" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
           rows: proposals.map((p) => {
             const consent = p.consents[0]?.status;
-            return [p.proposalNo, p.createdAt, p.customerName, `${p.insurer} – ${p.productName}`, p.premium, consent,
-              PROPOSAL_STATUS[p.status][0], p.policyNumber, p.status === "ConsentGiven" && !p.panMasked ? "Enter PAN" : PROPOSAL_NEXT[p.status]];
+            return [p.proposalNo, p.createdAt, p.customerName, `${p.insurer} – ${p.productName}`, p.premium, consent ?? (p.quotationId ? null : "Not needed"),
+              proposalStatusLabel(p)[0], p.policyNumber, proposalNext(p)];
           }),
         }],
       };

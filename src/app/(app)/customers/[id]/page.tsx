@@ -6,6 +6,8 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge, type Tone } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AttachmentsPanel } from "@/components/attachments-panel";
+import { ATTACHMENT_KINDS, attachmentRows } from "@/lib/attachments";
 import { HOLDING_KIND as KIND, loadCustomer360 } from "@/lib/customer-360";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { fmtINR, sum, ZERO } from "@/lib/money";
@@ -32,6 +34,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const { c, owner, renewals, receiptNo, active, yearlyPremium, unpaid, slipFor } = data;
   const today = istToday();
   const canClose = hasPermission(user.role, "Policy.Create");
+  const files = await attachmentRows(user, "Customer", c.id);
 
   return (
     <>
@@ -39,6 +42,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         <>
           <ExportButton report="customer" user={user} params={{ id: c.id }} />
           <Link href={`/quotations/new?customerId=${c.id}`} className={buttonVariants({ variant: "outline" })}>New quotation</Link>
+          {hasPermission(user.role, "Policy.Create") && <Link href={`/customers/${c.id}/add-product`} className={buttonVariants({ variant: "outline" })}>Add product directly</Link>}
           <Link href={`/receipts/new?customerId=${c.id}`} className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>Generate receipt</Link>
         </>
       } />
@@ -126,6 +130,9 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 {c.receipts.length === 0 && <TableRow><TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No receipts yet.</TableCell></TableRow>}
               </TableBody>
             </Table>
+          </Section>
+          <Section title="Documents">
+            <AttachmentsPanel ownerType="Customer" ownerId={c.id} kinds={ATTACHMENT_KINDS.Customer} files={files} />
           </Section>
           <Section title="Owner-paid slips">
             <Table>

@@ -1,13 +1,13 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
+import { Frequency, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
-import { renewalDueDates } from "@/lib/renewals";
+import { createPolicyWithSchedule } from "@/lib/policies";
+import { rateOn } from "@/lib/products";
 import { authorize, type SessionUser } from "@/lib/session";
 
 async function loadProposal(tx: Tx, user: SessionUser, proposalId: string) {
@@ -69,12 +69,50 @@ export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionRe
   return res;
 }
 
+const years = z.string().trim().regex(/^(\d{1,2}(\.5)?)?$/, "Years must be a number like 5 or 2.5").transform((v) => (v ? Math.round(Number(v) * 12) : null));
+
+const detailsSchema = z.object({
+  proposalId: z.string(),
+  frequency: z.enum(Frequency, "Pick the pay mode"),
+  term: years,
+  premiumPayingTerm: years,
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the start date").transform((v) => new Date(`${v}T00:00:00Z`)),
+  schemeId: z.string().default(""),
+});
+
+/** Pay mode, term, start date and premium paying term – used to build the renewal schedule when the policy number comes. */
+export async function savePolicyDetails(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Proposal.Create");
+  const parsed = detailsSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const v = parsed.data;
+  if (v.premiumPayingTerm && v.term && v.premiumPayingTerm > v.term) return { ok: false, error: "Premium paying term can't be longer than the term" };
+  const res = await db.$transaction(async (tx) => {
+    const r = await loadProposal(tx, user, v.proposalId);
+    if ("error" in r) return { ok: false, error: r.error };
+    if (r.p.status === "Issued") return { ok: false, error: "Policy already issued" };
+    const scheme = v.schemeId && r.p.productId ? await tx.scheme.findFirst({ where: { id: v.schemeId, productId: r.p.productId } }) : null;
+    if (v.schemeId && !scheme) return { ok: false, error: "Pick a scheme of this product" };
+    await tx.proposal.update({
+      where: { id: r.p.id },
+      data: { frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
+    });
+    return { ok: true };
+  });
+  revalidatePath(`/proposals/${v.proposalId}`);
+  return res;
+}
+
 const issueSchema = z.object({
   proposalId: z.string(),
   policyNumber: z.string().trim().toUpperCase().min(4, "Enter the policy number").max(40),
 });
 
-/** The policy number turns the proposal into a customer policy with its renewal schedule. */
+/**
+ * The policy number turns the proposal into a customer policy with its renewal schedule (pay mode, term and
+ * start date from the proposal). Proposals from a quotation need the customer's OTP consent and PAN first;
+ * products added directly on an existing customer don't.
+ */
 export async function issuePolicy(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Policy.Create");
   const parsed = issueSchema.safeParse(Object.fromEntries(form));
@@ -87,33 +125,31 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       if ("error" in r) return { ok: false, error: r.error };
       const { p, consent } = r;
       if (p.status === "Issued") return { ok: false, error: "Policy already issued" };
-      if (consent?.status !== "Given") return { ok: false, error: "Customer consent is required before submitting" };
-      if (!p.panMasked) return { ok: false, error: "Enter the customer's PAN first" };
+      const direct = !p.quotationId;
+      if (!direct && consent?.status !== "Given") return { ok: false, error: "Customer consent is required before submitting" };
+      if (!direct && !p.panMasked) return { ok: false, error: "Enter the customer's PAN first" };
+      if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
 
       // One person, many policies: reuse the customer by id, else by mobile.
       const customer =
         (p.customerId && (await tx.customer.findFirst({ where: { id: p.customerId, tenantId: user.tenantId } }))) ||
         (await tx.customer.findFirst({ where: { tenantId: user.tenantId, mobile: p.mobile } })) ||
         (await tx.customer.create({ data: { tenantId: user.tenantId, name: p.customerName, mobile: p.mobile, ownerId: p.ownerId } }));
-      await tx.customer.update({
-        where: { id: customer.id },
-        data: { panMasked: p.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 },
-      });
+      if (p.panMasked) {
+        await tx.customer.update({ where: { id: customer.id }, data: { panMasked: p.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 } });
+      }
 
-      const startDate = istToday();
-      const policy = await tx.policy.create({
-        data: {
-          tenantId: user.tenantId, customerId: customer.id, proposalId: p.id, productType: "Insurance",
-          partner: p.insurer, productName: p.productName, policyNumber, premiumAmount: p.premium,
-          frequency: "Yearly", startDate, sumAssured: p.sumInsured, ownerId: p.ownerId,
-        },
-      });
-      const dues = renewalDueDates(startDate, "Yearly");
-      await tx.renewalItem.createMany({
-        data: dues.map((dueDate) => ({ tenantId: user.tenantId, policyId: policy.id, dueDate, premiumAmount: p.premium })),
+      const product = p.productId ? await tx.product.findUnique({ where: { id: p.productId } }) : null;
+      const scheme = p.schemeId ? await tx.scheme.findUnique({ where: { id: p.schemeId }, include: { rates: true } }) : null;
+      await createPolicyWithSchedule(tx, {
+        tenantId: user.tenantId, customerId: customer.id, ownerId: p.ownerId, proposalId: p.id, policyNumber,
+        productType: p.productType, partner: p.insurer, productName: p.productName, productId: p.productId, schemeId: p.schemeId,
+        premiumAmount: p.premium, frequency: p.frequency, startDate: p.startDate, termMonths: p.termMonths, sumAssured: p.sumInsured,
+        premiumPayingTermMonths: p.premiumPayingTermMonths, nominee: p.nominee, customValues: (p.customValues ?? undefined) as Prisma.InputJsonValue | undefined,
+        bankDetailsEnc: p.bankDetailsEnc, rateAtOpen: p.rateAtOpen ?? (scheme ? rateOn(scheme.rates, p.startDate)?.rate : null), invoiceRule: product?.invoiceRule,
       });
       await tx.proposal.update({ where: { id: p.id }, data: { status: "Issued", policyNumber, customerId: customer.id } });
-      if (p.quotation.leadId) await advanceStage(tx, p.quotation.leadId, "Customer");
+      if (p.quotation?.leadId) await advanceStage(tx, p.quotation.leadId, "Customer");
       return { ok: true, id: customer.id };
     });
     revalidatePath("/", "layout");

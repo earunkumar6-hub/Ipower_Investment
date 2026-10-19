@@ -1,35 +1,50 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AttachmentsPanel } from "@/components/attachments-panel";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fmtDate, fmtDateTime } from "@/lib/dates";
+import { ATTACHMENT_KINDS, attachmentRows, KYC_KINDS } from "@/lib/attachments";
+import { addMonths, fmtDate, fmtDateTime, isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
+import { fmtTenure, PAY_MODE_LABEL, PAY_MODES } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
-import { CONSENT_TONE, PROPOSAL_STATUS } from "../labels";
-import { IssuePolicyForm, KycForm, SimulateOtpButton } from "./proposal-forms";
+import { CONSENT_TONE, proposalNext, proposalStatusLabel } from "../labels";
+import { IssuePolicyForm, KycForm, PolicyDetailsForm, SimulateOtpButton } from "./proposal-forms";
+
+const yearsText = (months: number | null) => (months ? String(months / 12) : "");
 
 export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Proposal.View");
   const { id } = await params;
   const p = await db.proposal.findFirst({
     where: { id, tenantId: user.tenantId },
-    include: { quotation: true, consents: { orderBy: { createdAt: "desc" }, take: 1 }, policy: { include: { renewals: { orderBy: { dueDate: "asc" } } } } },
+    include: {
+      quotation: true, consents: { orderBy: { createdAt: "desc" }, take: 1 }, policy: { include: { renewals: { orderBy: { dueDate: "asc" } } } },
+      product: { include: { schemes: { where: { active: true }, orderBy: [{ tenureMonths: "asc" }, { name: "asc" }] } } }, scheme: true, customer: { select: { id: true } },
+    },
   });
   if (!p || !canActOn(user, p.ownerId)) notFound();
+  const files = await attachmentRows(user, "Proposal", p.id);
+  const kycDone = KYC_KINDS.filter((k) => files.some((f) => f.kind === k)).length;
+  const direct = !p.quotationId;
   const consent = p.consents[0] ?? null;
   const consentGiven = consent?.status === "Given";
   const issued = p.status === "Issued";
-  const [statusLabel, statusTone] = PROPOSAL_STATUS[p.status];
+  const detailsSaved = !!p.frequency && !!p.startDate;
+  const ready = detailsSaved && (direct || (consentGiven && !!p.panMasked));
+  const [statusLabel, statusTone] = proposalStatusLabel(p);
+  const payModes = (p.product?.payModes.length ? p.product.payModes : PAY_MODES).map((m) => ({ value: m, label: PAY_MODE_LABEL[m] }));
+  const showPpt = !p.product || p.product.fields.includes("premiumPayingTerm");
 
   return (
     <>
       <PageHeader title="Proposals" user={user} />
       {issued && p.policy && (
         <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-          Policy <b>{p.policy.policyNumber}</b> issued and moved to Partners / Customers under {p.customerName}.
+          Policy <b>{p.policy.policyNumber}</b> issued and moved to <Link href={`/customers/${p.policy.customerId}`} className="underline">Partners / Customers</Link> under {p.customerName}.
           {p.policy.renewals[0] && <> Next renewal due {fmtDate(p.policy.renewals[0].dueDate)} ({fmtINR(p.policy.renewals[0].premiumAmount)}).</>}
         </div>
       )}
@@ -37,33 +52,69 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         <div className="min-w-0 flex-1 space-y-4 rounded-xl border bg-white p-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">
-              Proposal {p.proposalNo} · {p.customerName} · from{" "}
-              <Link href={`/quotations/${p.quotationId}`} className="text-brand-700 hover:underline">{p.quotation.quoteNo}</Link>
+              Proposal {p.proposalNo} · {p.customerName} ·{" "}
+              {p.quotation ? <>from <Link href={`/quotations/${p.quotationId}`} className="text-brand-700 hover:underline">{p.quotation.quoteNo}</Link></>
+                : <>added directly{p.customer && <> on <Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">the customer</Link></>}</>}
             </h2>
             <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
           </div>
           <dl className="grid grid-cols-3 gap-3 text-sm">
             <div><dt className="text-xs text-muted-foreground">Partner</dt><dd>{p.insurer}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Plan</dt><dd>{p.productName}{p.sumInsured && ` · ${fmtINR(p.sumInsured)}`}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Premium (incl. GST)</dt><dd>{fmtINR(p.premium)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Plan</dt><dd>{p.productName}{p.scheme && ` · ${p.scheme.name}`}{p.sumInsured && ` · ${fmtINR(p.sumInsured)}`}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Premium{p.quotationId ? " (incl. GST)" : ""}</dt><dd>{fmtINR(p.premium)}</dd></div>
           </dl>
+
+          <div className="rounded-lg border p-3">
+            <h3 className="mb-2 text-sm font-medium">Policy details</h3>
+            {issued ? (
+              <p className="text-sm">
+                {p.frequency && PAY_MODE_LABEL[p.frequency]} · term {fmtTenure(p.termMonths)} · from {p.startDate && fmtDate(p.startDate)}
+                {p.premiumPayingTermMonths && ` · premium paying term ${fmtTenure(p.premiumPayingTermMonths)}`}
+                {p.startDate && p.termMonths && ` · matures ${fmtDate(addMonths(p.startDate, p.termMonths))}`}
+              </p>
+            ) : (
+              <PolicyDetailsForm proposalId={p.id} payModes={payModes} schemes={p.product?.schemes.map((s) => ({ id: s.id, name: s.name, tenureMonths: s.tenureMonths })) ?? []} showPpt={showPpt}
+                initial={{ frequency: p.frequency ?? "", term: yearsText(p.termMonths), ppt: yearsText(p.premiumPayingTermMonths), startDate: p.startDate ? isoDate(p.startDate) : "", schemeId: p.schemeId ?? "" }} />
+            )}
+          </div>
+
           <Table>
             <TableHeader><TableRow><TableHead>Step</TableHead><TableHead>Status</TableHead><TableHead>When / detail</TableHead></TableRow></TableHeader>
             <TableBody>
+              {direct ? (
+                <TableRow>
+                  <TableCell>Added directly on the customer</TableCell>
+                  <TableCell><StatusBadge tone="green">Done</StatusBadge></TableCell>
+                  <TableCell>{fmtDateTime(p.createdAt)} · no consent step needed</TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  <TableRow>
+                    <TableCell>Consent link sent (SMS + WhatsApp)</TableCell>
+                    <TableCell>{consent ? <StatusBadge tone="green">Sent</StatusBadge> : "—"}</TableCell>
+                    <TableCell>{consent && fmtDateTime(consent.createdAt)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Customer OTP approval</TableCell>
+                    <TableCell>{consent && <StatusBadge tone={consentGiven ? "green" : CONSENT_TONE[consent.status]}>{consentGiven ? "Given" : consent.status === "Sent" ? "Waiting" : consent.status}</StatusBadge>}</TableCell>
+                    <TableCell>{consent?.otpVerifiedOn ? fmtDateTime(consent.otpVerifiedOn) : !issued && consent?.status === "Sent" && <SimulateOtpButton proposalId={p.id} />}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Aadhaar and PAN</TableCell>
+                    <TableCell>{p.panMasked ? <StatusBadge tone="green">Entered – masked</StatusBadge> : consentGiven ? <StatusBadge tone="orange">Not yet</StatusBadge> : <StatusBadge tone="slate">Locked</StatusBadge>}</TableCell>
+                    <TableCell>{[p.aadhaarLast4 && `XXXX-XXXX-${p.aadhaarLast4}`, p.panMasked].filter(Boolean).join(" · ")}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>KYC documents</TableCell>
+                    <TableCell><StatusBadge tone={kycDone === KYC_KINDS.length ? "green" : "orange"}>{kycDone} of {KYC_KINDS.length} uploaded</StatusBadge></TableCell>
+                    <TableCell>{KYC_KINDS.filter((k) => !files.some((f) => f.kind === k)).map((k) => `${k} pending`).join(" · ") || "All uploaded"}</TableCell>
+                  </TableRow>
+                </>
+              )}
               <TableRow>
-                <TableCell>Consent link sent (SMS + WhatsApp)</TableCell>
-                <TableCell>{consent ? <StatusBadge tone="green">Sent</StatusBadge> : "—"}</TableCell>
-                <TableCell>{consent && fmtDateTime(consent.createdAt)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Customer OTP approval</TableCell>
-                <TableCell>{consent && <StatusBadge tone={consentGiven ? "green" : CONSENT_TONE[consent.status]}>{consentGiven ? "Given" : consent.status === "Sent" ? "Waiting" : consent.status}</StatusBadge>}</TableCell>
-                <TableCell>{consent?.otpVerifiedOn ? fmtDateTime(consent.otpVerifiedOn) : !issued && consent?.status === "Sent" && <SimulateOtpButton proposalId={p.id} />}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Aadhaar and PAN</TableCell>
-                <TableCell>{p.panMasked ? <StatusBadge tone="green">Entered – masked</StatusBadge> : consentGiven ? <StatusBadge tone="orange">Not yet</StatusBadge> : <StatusBadge tone="slate">Locked</StatusBadge>}</TableCell>
-                <TableCell>{[p.aadhaarLast4 && `XXXX-XXXX-${p.aadhaarLast4}`, p.panMasked].filter(Boolean).join(" · ")}</TableCell>
+                <TableCell>Policy details (pay mode, term, start)</TableCell>
+                <TableCell>{detailsSaved ? <StatusBadge tone="green">Saved</StatusBadge> : <StatusBadge tone="orange">Not yet</StatusBadge>}</TableCell>
+                <TableCell>{detailsSaved && `${PAY_MODE_LABEL[p.frequency!]} from ${fmtDate(p.startDate!)}`}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Policy issued by partner</TableCell>
@@ -72,20 +123,28 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
               </TableRow>
             </TableBody>
           </Table>
-          {!issued && <IssuePolicyForm proposalId={p.id} ready={consentGiven && !!p.panMasked} />}
+          {!issued && <IssuePolicyForm proposalId={p.id} ready={ready} waitingFor={`Next: ${proposalNext(p).toLowerCase()}`} />}
+          {!issued && <p className="text-xs text-muted-foreground">Policy number blank: the record stays in Proposals and no bills are made. When it is entered it moves to Partners / Customers and the renewal schedule is created from pay mode and term.</p>}
           {issued && p.policy && (
             <div>
               <h3 className="mb-2 text-sm font-medium">Renewal schedule</h3>
               <ul className="text-sm">
                 {p.policy.renewals.map((r) => <li key={r.id}>{fmtDate(r.dueDate)} · {fmtINR(r.premiumAmount)} · {r.status}</li>)}
+                {p.policy.renewals.length === 0 && <li className="text-muted-foreground">No renewals (one-time or no bills).</li>}
               </ul>
             </div>
           )}
+          <div>
+            <h3 className="mb-1 text-sm font-medium">Documents</h3>
+            <AttachmentsPanel ownerType="Proposal" ownerId={p.id} kinds={ATTACHMENT_KINDS.Proposal} files={files} />
+          </div>
         </div>
-        <aside className="w-80 shrink-0 rounded-xl border bg-white p-4">
-          <h2 className="mb-3 font-semibold">Aadhaar and PAN</h2>
-          <KycForm key={`${consentGiven}-${issued}-${p.panMasked}-${p.aadhaarLast4}`} proposalId={p.id} unlocked={consentGiven && !issued} panMasked={p.panMasked} aadhaarLast4={p.aadhaarLast4} />
-        </aside>
+        {!direct && (
+          <aside className="w-80 shrink-0 rounded-xl border bg-white p-4">
+            <h2 className="mb-3 font-semibold">Aadhaar and PAN</h2>
+            <KycForm key={`${consentGiven}-${issued}-${p.panMasked}-${p.aadhaarLast4}`} proposalId={p.id} unlocked={consentGiven && !issued} panMasked={p.panMasked} aadhaarLast4={p.aadhaarLast4} />
+          </aside>
+        )}
       </div>
     </>
   );

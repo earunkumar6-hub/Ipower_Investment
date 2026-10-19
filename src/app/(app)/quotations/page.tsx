@@ -8,14 +8,15 @@ import { fmtDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
+import { quotationStatus } from "@/lib/quotation";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 export default async function QuotationsPage() {
   const user = await requirePermission("Quote.View");
   const quotations = await db.quotation.findMany({
-    where: { tenantId: user.tenantId, ...ownerScope(user) },
-    include: { items: true, proposals: { select: { status: true } } },
+    where: { tenantId: user.tenantId, ...ownerScope(user), deletedAt: null },
+    include: { items: { include: { proposal: { select: { status: true } } } } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -37,19 +38,15 @@ export default async function QuotationsPage() {
           </TableHeader>
           <TableBody>
             {quotations.map((q) => {
-              const converted = q.proposals.some((p) => p.status === "Issued");
+              const [label, tone] = quotationStatus(q);
               return (
                 <TableRow key={q.id}>
                   <TableCell><Link href={`/quotations/${q.id}`} className="text-brand-700 hover:underline">{q.quoteNo}</Link></TableCell>
                   <TableCell>{q.customerName}</TableCell>
-                  <TableCell>{q.items.map((i) => i.category).join(", ")}</TableCell>
+                  <TableCell className="whitespace-normal">{q.items.map((i) => `${i.insurer} ${i.productName}`).join(", ")}</TableCell>
                   <TableCell className="text-right">{fmtINR(q.total)}</TableCell>
                   <TableCell>{fmtDate(q.validUpto)}</TableCell>
-                  <TableCell>
-                    {converted ? <StatusBadge tone="green">Converted</StatusBadge>
-                      : q.status === "Accepted" ? <StatusBadge tone="indigo">Accepted</StatusBadge>
-                      : <StatusBadge tone="slate">Draft</StatusBadge>}
-                  </TableCell>
+                  <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                 </TableRow>
               );
             })}

@@ -200,7 +200,17 @@ model Call {
 
 enum QuotationStatus {
   Draft
-  Accepted
+  Accepted // proposals made from the selected products
+  NotAccepted
+}
+
+/**
+ * The customer's decision on each quoted product.
+ */
+enum QuoteItemDecision {
+  Pending
+  Selected
+  NotAccepted
 }
 
 model Quotation {
@@ -222,6 +232,11 @@ model Quotation {
   acceptedAt   DateTime?
   createdAt    DateTime        @default(now())
 
+  notAcceptedReason String?
+  deletedAt         DateTime? // deleted (only while no proposal exists); kept for the change log
+  deletedById       String?
+  deleteReason      String?
+
   items     QuotationItem[]
   proposals Proposal[]
 
@@ -229,17 +244,19 @@ model Quotation {
 }
 
 model QuotationItem {
-  id          String    @id @default(cuid())
+  id          String            @id @default(cuid())
   quotationId String
-  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  quotation   Quotation         @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   category    String // Health, Life, Motor, …
   insurer     String
   productName String
-  sumInsured  Decimal?  @db.Decimal(14, 2)
-  premium     Decimal   @db.Decimal(12, 2)
-  gstRate     Decimal   @db.Decimal(5, 2)
-  gstAmount   Decimal   @db.Decimal(12, 2)
-  total       Decimal   @db.Decimal(12, 2)
+  sumInsured  Decimal?          @db.Decimal(14, 2)
+  premium     Decimal           @db.Decimal(12, 2)
+  gstRate     Decimal           @db.Decimal(5, 2)
+  gstAmount   Decimal           @db.Decimal(12, 2)
+  total       Decimal           @db.Decimal(12, 2)
+  payMode     Frequency         @default(Yearly)
+  decision    QuoteItemDecision @default(Pending)
   proposal    Proposal?
 }
 
@@ -251,27 +268,41 @@ enum ProposalStatus {
 }
 
 model Proposal {
-  id              String         @id @default(cuid())
-  tenantId        String
-  proposalNo      String
-  quotationId     String
-  quotation       Quotation      @relation(fields: [quotationId], references: [id])
-  quotationItemId String         @unique // one proposal per quoted product
-  quotationItem   QuotationItem  @relation(fields: [quotationItemId], references: [id])
-  customerId      String?
-  customer        Customer?      @relation(fields: [customerId], references: [id])
-  customerName    String
-  mobile          String
-  insurer         String
-  productName     String
-  sumInsured      Decimal?       @db.Decimal(14, 2)
-  premium         Decimal        @db.Decimal(12, 2) // incl. GST — what the customer pays
-  panMasked       String?
-  aadhaarLast4    String?
-  policyNumber    String?
-  status          ProposalStatus @default(Draft)
-  ownerId         String
-  createdAt       DateTime       @default(now())
+  id                      String         @id @default(cuid())
+  tenantId                String
+  proposalNo              String
+  quotationId             String? // null = added directly on a customer (no quotation)
+  quotation               Quotation?     @relation(fields: [quotationId], references: [id])
+  quotationItemId         String?        @unique // one proposal per quoted product
+  quotationItem           QuotationItem? @relation(fields: [quotationItemId], references: [id])
+  customerId              String?
+  customer                Customer?      @relation(fields: [customerId], references: [id])
+  customerName            String
+  mobile                  String
+  insurer                 String
+  productName             String
+  sumInsured              Decimal?       @db.Decimal(14, 2)
+  premium                 Decimal        @db.Decimal(12, 2) // incl. GST — what the customer pays
+  panMasked               String?
+  aadhaarLast4            String?
+  policyNumber            String?
+  status                  ProposalStatus @default(Draft)
+  ownerId                 String
+  createdAt               DateTime       @default(now())
+  // Policy details entered on the proposal (or by "Add product directly"); copied to the policy when issued.
+  productType             ProductType    @default(Insurance)
+  productId               String?
+  product                 Product?       @relation(fields: [productId], references: [id])
+  schemeId                String?
+  scheme                  Scheme?        @relation(fields: [schemeId], references: [id])
+  frequency               Frequency?
+  termMonths              Int?
+  startDate               DateTime?      @db.Date
+  premiumPayingTermMonths Int?
+  nominee                 String?
+  rateAtOpen              Decimal?       @db.Decimal(5, 2)
+  customValues            Json? // { "<field label>": value }
+  bankDetailsEnc          String? // AES-256-GCM, see src/lib/crypto.ts
 
   consents Consent[]
   calls    Call[]
@@ -358,30 +389,35 @@ enum PolicyStatus {
 }
 
 model Policy {
-  id            String       @id @default(cuid())
-  tenantId      String
-  customerId    String
-  customer      Customer     @relation(fields: [customerId], references: [id])
-  proposalId    String?      @unique
-  proposal      Proposal?    @relation(fields: [proposalId], references: [id])
-  productType   ProductType
-  partner       String // insurer / AMC / "Post Office"
-  productName   String
-  policyNumber  String // policy, folio or PO account number
-  premiumAmount Decimal      @db.Decimal(12, 2) // premium, SIP or RD instalment
-  frequency     Frequency
-  startDate     DateTime     @db.Date
-  termMonths    Int?
-  sumAssured    Decimal?     @db.Decimal(14, 2)
-  status        PolicyStatus @default(Active)
-  ownerId       String
-  createdAt     DateTime     @default(now())
-  productId     String? // Settings → Products and schemes (null for policies made before the catalogue)
-  product       Product?     @relation(fields: [productId], references: [id])
-  schemeId      String?
-  scheme        Scheme?      @relation(fields: [schemeId], references: [id])
-  closedOn      DateTime?    @db.Date // premature closure or MF withdraw date
-  closeReason   String?
+  id                      String       @id @default(cuid())
+  tenantId                String
+  customerId              String
+  customer                Customer     @relation(fields: [customerId], references: [id])
+  proposalId              String?      @unique
+  proposal                Proposal?    @relation(fields: [proposalId], references: [id])
+  productType             ProductType
+  partner                 String // insurer / AMC / "Post Office"
+  productName             String
+  policyNumber            String // policy, folio or PO account number
+  premiumAmount           Decimal      @db.Decimal(12, 2) // premium, SIP or RD instalment
+  frequency               Frequency
+  startDate               DateTime     @db.Date
+  termMonths              Int?
+  sumAssured              Decimal?     @db.Decimal(14, 2)
+  status                  PolicyStatus @default(Active)
+  ownerId                 String
+  createdAt               DateTime     @default(now())
+  productId               String? // Settings → Products and schemes (null for policies made before the catalogue)
+  product                 Product?     @relation(fields: [productId], references: [id])
+  schemeId                String?
+  scheme                  Scheme?      @relation(fields: [schemeId], references: [id])
+  closedOn                DateTime?    @db.Date // premature closure or MF withdraw date
+  closeReason             String?
+  premiumPayingTermMonths Int?
+  nominee                 String?
+  rateAtOpen              Decimal?     @db.Decimal(5, 2) // scheme rate on the start date; later rate changes don't apply
+  customValues            Json? // { "<field label>": value }
+  bankDetailsEnc          String? // AES-256-GCM, see src/lib/crypto.ts
 
   calls          Call[]
   renewals       RenewalItem[]
@@ -440,6 +476,7 @@ model Product {
   schemes      Scheme[]
   customFields ProductCustomField[]
   policies     Policy[]
+  proposals    Proposal[]
 
   @@unique([tenantId, partner, name])
 }
@@ -454,6 +491,7 @@ model Scheme {
   createdAt    DateTime     @default(now())
   rates        SchemeRate[]
   policies     Policy[]
+  proposals    Proposal[]
 
   @@unique([productId, name])
 }
@@ -976,4 +1014,31 @@ model MessageLog {
   status      String         @default("Sent (mock)")
   createdById String?
   createdAt   DateTime       @default(now())
+}
+
+// ── Attachments ──
+
+enum AttachmentOwner {
+  Quotation
+  Proposal
+  Customer
+}
+
+/**
+ * A file on a quotation, proposal or customer (files live in storage/attachments, served by /api/attachments/[id]).
+ */
+model Attachment {
+  id           String          @id @default(cuid())
+  tenantId     String
+  ownerType    AttachmentOwner
+  ownerId      String
+  kind         String // "Aadhaar", "PAN", "Photo", "Health declaration", "Other", …
+  fileName     String // as uploaded
+  storedName   String
+  contentType  String
+  size         Int
+  uploadedById String
+  createdAt    DateTime        @default(now())
+
+  @@index([ownerType, ownerId])
 }

@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql://flcrm:flcrm@postgres:5432/flcrm
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-}
     ports:
       - "3000:3000"
     volumes:

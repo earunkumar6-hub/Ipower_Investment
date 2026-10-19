@@ -289,47 +289,52 @@
         {
           "id": "C06",
           "title": "Accept / reject each product",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "Screen p4, rule #4, Changes.txt item 1",
           "current": "Quotation status Draft/Accepted; one proposal per item.",
           "required": "Per-item 'Selected' tick; 'Create proposal from selected (n)'; 'Mark not accepted'. Customer decision timeline: sent on WhatsApp → accepted → proposal ready. Recent quotations list with status Sent / Accepted / Converted / Not accepted.",
-          "data": "QuotationItem.decision (Pending/Selected/NotAccepted); QuotationStatus adds Sent, NotAccepted, Converted."
+          "data": "QuotationItem.decision (Pending/Selected/NotAccepted); QuotationStatus adds Sent, NotAccepted, Converted.",
+          "done": "2026-10-19 phase 3 (uncommitted): Per-product Selected tick, \"Create proposal from selected (n)\", Mark not accepted (reason); statuses Draft/Expired/Accepted/Not accepted/Converted; pay mode per product."
         },
         {
           "id": "C07",
           "title": "Export quotation as image",
-          "status": "new",
+          "status": "done",
           "size": "S",
           "source": "Screen p4, rule #16, Changes.txt item 2",
-          "required": "'Export image' (PNG of the same letterhead layout as the PDF) beside 'Export PDF'."
+          "required": "'Export image' (PNG of the same letterhead layout as the PDF) beside 'Export PDF'.",
+          "done": "2026-10-19 phase 3 (uncommitted): Export image (PNG, same letterhead) via /api/quotations/[id]/pdf?format=png."
         },
         {
           "id": "C08",
           "title": "Attachments",
-          "status": "new",
+          "status": "done",
           "size": "M",
           "source": "rule #2, screens p4, p6–7",
           "required": "Attach files (PDF/JPG/PNG) to quotations, proposals and customers; list with file name and date added; Customer 'Documents' section shows them.",
-          "data": "Attachment {tenantId, ownerType, ownerId, fileName, path, uploadedById, createdAt}; files under app/storage like expense bills."
+          "data": "Attachment {tenantId, ownerType, ownerId, fileName, path, uploadedById, createdAt}; files under app/storage like expense bills.",
+          "done": "2026-10-19 phase 3 (uncommitted): Attachments on quotations, proposals and customers (storage/attachments, /api/attachments/[id]); proposals show KYC documents x of 3; removal logged."
         },
         {
           "id": "C09",
           "title": "Delete quotation",
-          "status": "new",
+          "status": "done",
           "size": "S",
           "source": "rule #9, U-21, A-19",
           "required": "Delete only while no proposal exists; reason required; User own only, Admin/Super Admin any; soft delete kept in audit log.",
-          "data": "Quotation.deletedAt, deletedById, deleteReason."
+          "data": "Quotation.deletedAt, deletedById, deleteReason.",
+          "done": "2026-10-19 phase 3 (uncommitted): Delete quotation while no proposal exists, reason required, soft delete + change log."
         },
         {
           "id": "C10",
           "title": "Pay mode, term and start date on proposal",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "Screen p5, rules #24–25, U-23",
           "required": "Proposal holds pay mode (One-time/Monthly/Quarterly/Half-yearly/Yearly), term, start date, plan, premium; policy number 'leave blank until issued'. Blank → stays in Proposals, no bills. Entered → moves to Partners / Customers as Active and the renewal schedule (C24) is created. Proposals list: Consent, Status, Next action, 'Resend link'.",
-          "data": "Proposal.frequency, termMonths, startDate, premiumPayingTermMonths; Proposal.quotationId/quotationItemId nullable (for C16)."
+          "data": "Proposal.frequency, termMonths, startDate, premiumPayingTermMonths; Proposal.quotationId/quotationItemId nullable (for C16).",
+          "done": "2026-10-19 phase 3 (uncommitted): Proposal pay mode, term, start date, premium paying term (+ scheme); policy created from them with its schedule; direct proposals skip consent."
         }
       ]
     },
@@ -399,14 +404,15 @@
         {
           "id": "C16",
           "title": "Add product directly",
-          "status": "new",
+          "status": "done",
           "size": "L",
           "source": "rule #5, U-15 (add product), screen p6, Changes.txt item 3",
           "required": "On a customer: 'Add product directly' without a quotation – product, scheme/tenure, policy number, amount/premium, lock-in until (auto), date of commencement, maturity date (auto), pay mode, term, premium paying term, bank account (if product needs it), nominee, custom fields, attachments, check-before-save. Blank policy number → saved as a Proposal; with number → Active policy + renewal schedule. One-time products (TD etc.) get no bills and mature on start + term.",
           "depends_on": [
             "C10",
             "C11"
-          ]
+          ],
+          "done": "2026-10-19 phase 3 (uncommitted): Add product directly on a customer: catalogue rules, custom fields, bank details encrypted (DATA_ENCRYPTION_KEY), rate at opening; blank policy number → proposal."
         },
         {
           "id": "C17",
