@@ -130,11 +130,20 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       if (!direct && !p.panMasked) return { ok: false, error: "Enter the customer's PAN first" };
       if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
 
-      // One person, many policies: reuse the customer by id, else by mobile.
+      // One person, many policies: reuse the customer by id, else by any of their mobile numbers.
+      const lead = p.quotation?.leadId ? await tx.lead.findUnique({ where: { id: p.quotation.leadId }, include: { mobiles: { orderBy: { sort: "asc" } } } }) : null;
       const customer =
         (p.customerId && (await tx.customer.findFirst({ where: { id: p.customerId, tenantId: user.tenantId } }))) ||
-        (await tx.customer.findFirst({ where: { tenantId: user.tenantId, mobile: p.mobile } })) ||
-        (await tx.customer.create({ data: { tenantId: user.tenantId, name: p.customerName, mobile: p.mobile, ownerId: p.ownerId } }));
+        (await tx.customer.findFirst({ where: { tenantId: user.tenantId, mobiles: { some: { number: p.mobile } } } })) ||
+        (await tx.customer.create({
+          data: {
+            tenantId: user.tenantId, name: p.customerName, mobile: p.mobile, ownerId: p.ownerId, email: lead?.email, address: lead?.address,
+            mobiles: {
+              create: (lead?.mobiles.length ? lead.mobiles : [{ number: p.mobile, isWhatsApp: false }])
+                .map((m, sort) => ({ tenantId: user.tenantId, number: m.number, isWhatsApp: m.isWhatsApp, sort })),
+            },
+          },
+        }));
       if (p.panMasked) {
         await tx.customer.update({ where: { id: customer.id }, data: { panMasked: p.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 } });
       }

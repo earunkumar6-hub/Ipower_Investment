@@ -54,7 +54,7 @@ export function customerFilter(user: SessionUser, sp: Params) {
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
     ...ownerScope(user),
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { policies: { some: { policyNumber: { contains: q, mode: "insensitive" } } } }] }),
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { policyNumber: { contains: q, mode: "insensitive" } } } }] }),
   };
   return { q, where };
 }

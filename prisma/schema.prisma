@@ -355,8 +355,25 @@ model Customer {
   ownerPaidSlips OwnerPaidSlip[]
   quotations     Quotation[]
   proposals      Proposal[]
+  mobiles        CustomerMobile[]
 
   @@index([tenantId, mobile])
+}
+
+/**
+ * Every mobile number of a customer (family members may share one, so not unique). `Customer.mobile` is the first.
+ */
+model CustomerMobile {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  number     String
+  isWhatsApp Boolean  @default(false)
+  sort       Int      @default(0)
+
+  @@index([tenantId, number])
+  @@index([customerId])
 }
 
 enum ProductType {

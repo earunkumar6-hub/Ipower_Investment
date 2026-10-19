@@ -195,7 +195,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
 export function CallsBadge({ count }: { count: number }) {
   return (
     <button type="button" onClick={() => openCallReminder()}
-      className="flex h-8 items-center gap-1.5 rounded-lg bg-orange-100 px-3 text-sm font-medium text-orange-800 hover:bg-orange-200">
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-orange-100 px-3 text-sm font-medium whitespace-nowrap text-orange-800 hover:bg-orange-200">
       <PhoneIcon className="size-3.5" /> {count} {count === 1 ? "call" : "calls"} open
     </button>
   );

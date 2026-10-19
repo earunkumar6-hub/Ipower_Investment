@@ -366,13 +366,14 @@
         {
           "id": "C12",
           "title": "Products invested table and header",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "Screen p6, rule #5",
           "required": "Header: name, all mobiles (WhatsApp marked), email, address, family name, masked Aadhaar/PAN, consent date; cards Holdings (n, sources), Total yearly premium, Investments (MF + post office), Next renewal. Table: Product, Scheme, Policy/account no., Invested/premium (with frequency), Rate, Commenced, Tenure, Lock-in until, Maturity, Status. Footer totals: one-time invested, regular premiums.",
           "depends_on": [
             "C11"
-          ]
+          ],
+          "done": "2026-10-19 phase 4 (uncommitted): Products invested table (scheme, rate at opening, commenced, tenure, lock-in, maturity, status, Details with nominee / custom fields / masked bank), cards Holdings / Yearly premium / Investments / Next renewal, one-time total and regular premiums."
         },
         {
           "id": "C13",
@@ -387,19 +388,21 @@
         {
           "id": "C14",
           "title": "Mobiles and email on customers",
-          "status": "partial",
+          "status": "done",
           "size": "S",
           "source": "rule #8, screen p6",
-          "required": "Same '+ number' and 'Same as WhatsApp' as leads; copied from the lead when the customer is created."
+          "required": "Same '+ number' and 'Same as WhatsApp' as leads; copied from the lead when the customer is created.",
+          "done": "2026-10-19 phase 4 (uncommitted): CustomerMobile (several numbers, WhatsApp tick), Edit details (logged); new customers copy the lead's numbers, email and address; existing customers matched by any number."
         },
         {
           "id": "C15",
           "title": "Family grouping",
-          "status": "new",
+          "status": "deferred",
           "size": "L",
           "source": "rule #7, U-18, A-18, screen p6, Changes.txt item 3",
           "required": "Family {name, head} with members and relation. System suggests groups by same surname + address or shared mobile; Users can suggest/create, Admin confirms, edits or rejects. Family panel on the customer: member, relation, products count, next due, 'Add member'. Receipts can combine due bills of a whole family (C29).",
-          "data": "Family, FamilyMember {customerId, relation}, FamilySuggestion {status}."
+          "data": "Family, FamilyMember {customerId, relation}, FamilySuggestion {status}.",
+          "note": "Owner 19 Oct 2026: skip family grouping for now; build later. Combine-bills-for-family (C29) waits on it."
         },
         {
           "id": "C16",
@@ -417,10 +420,11 @@
         {
           "id": "C17",
           "title": "Linked by mobile, documents, activity",
-          "status": "partial",
+          "status": "done",
           "size": "M",
           "source": "rule #22, screens p6–7",
-          "required": "Customer view lists E-Sevai entries and receipts linked by any of the customer's mobile numbers; Documents section (C08); Recent activity (reminders sent, partner sync, merges); Owner-paid slips for this customer with 'Record customer payment'; Renewals – all policies (paid on, receipt or OWN no., status); Receipts for this customer including OWN slips 'Closed automatically by RCPT-…'; 'Generate receipt' and 'New quotation' buttons."
+          "required": "Customer view lists E-Sevai entries and receipts linked by any of the customer's mobile numbers; Documents section (C08); Recent activity (reminders sent, partner sync, merges); Owner-paid slips for this customer with 'Record customer payment'; Renewals – all policies (paid on, receipt or OWN no., status); Receipts for this customer including OWN slips 'Closed automatically by RCPT-…'; 'Generate receipt' and 'New quotation' buttons.",
+          "done": "2026-10-19 phase 4 (uncommitted): Linked by mobile number (E-Sevai entries), Recent activity (messages + change log), receipts incl. owner-paid slips closed by a receipt, owner-paid renewals with Record customer payment."
         },
         {
           "id": "C18",

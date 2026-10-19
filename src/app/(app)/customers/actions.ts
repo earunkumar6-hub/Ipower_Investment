@@ -4,11 +4,12 @@ import { Frequency, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { audit } from "@/lib/audit";
+import { audit, changedOnly } from "@/lib/audit";
 import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
+import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { BANK_FIELDS, lockInUntil, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
@@ -185,4 +186,38 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return fail(`Policy number ${v.policyNumber} already exists`, { policyNumber: "Duplicate" });
     throw e;
   }
+}
+
+// ── Customer details ──
+
+const customerSchema = z.object({
+  customerId: z.string().min(1),
+  name: z.string().trim().min(2, "Enter the name").max(80),
+  email: z.union([z.literal(""), z.email("Enter a valid email")]),
+  address: z.string().trim().max(300),
+});
+
+/** Correct a customer's name, mobiles, email and address. Owner or Admin; the change log keeps the old values. */
+export async function editCustomer(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Policy.Create");
+  const parsed = customerSchema.safeParse({ customerId: form.get("customerId"), name: form.get("name") ?? "", email: form.get("email") ?? "", address: form.get("address") ?? "" });
+  if (!parsed.success) return fail(parsed.error.issues[0].message, { [String(parsed.error.issues[0].path[0])]: parsed.error.issues[0].message });
+  const v = parsed.data;
+  const m = readMobiles(form);
+  if ("error" in m) return fail(m.error, { mobile: m.error });
+  const c = await db.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId }, include: { mobiles: { orderBy: { sort: "asc" } } } });
+  if (!c) return fail("Customer not found");
+  if (!canActOn(user, c.ownerId)) return fail("This customer belongs to another user");
+
+  await db.$transaction(async (tx) => {
+    await tx.customer.update({ where: { id: c.id }, data: { name: v.name, email: v.email || null, address: v.address || null, mobile: m.numbers[0].number } });
+    await tx.customerMobile.deleteMany({ where: { customerId: c.id } });
+    await tx.customerMobile.createMany({ data: m.numbers.map((n, sort) => ({ tenantId: user.tenantId, customerId: c.id, number: n.number, isWhatsApp: n.isWhatsApp, sort })) });
+    const snap = (x: { name: string; email: string | null; address: string | null }, ms: { number: string; isWhatsApp: boolean }[]) => ({ name: x.name, mobiles: mobilesText(ms), email: x.email, address: x.address });
+    const diff = changedOnly(snap(c, c.mobiles), snap({ name: v.name, email: v.email || null, address: v.address || null }, m.numbers));
+    if (Object.keys(diff.after).length) await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Updated", summary: `Customer ${v.name} details corrected`, ...diff });
+  });
+  revalidatePath(`/customers/${c.id}`);
+  revalidatePath("/customers");
+  return { ok: true };
 }

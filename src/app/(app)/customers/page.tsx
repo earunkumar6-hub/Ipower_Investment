@@ -20,6 +20,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const customers = await db.customer.findMany({
     where,
     include: {
+      _count: { select: { mobiles: true } },
       policies: {
         select: { productType: true, renewals: { where: { status: { in: ["Due", "Overdue"] } }, orderBy: { dueDate: "asc" }, take: 1, select: { dueDate: true, status: true, premiumAmount: true } } },
       },
@@ -46,7 +47,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               return (
                 <TableRow key={c.id}>
                   <TableCell><Link href={`/customers/${c.id}`} className="text-brand-700 hover:underline">{c.name}</Link></TableCell>
-                  <TableCell>{maskMobile(c.mobile)}</TableCell>
+                  <TableCell>{maskMobile(c.mobile)}{c._count.mobiles > 1 && <span className="text-xs text-muted-foreground"> +{c._count.mobiles - 1}</span>}</TableCell>
                   <TableCell>{counts.map(([k, n]) => `${n} ${k}`).join(" · ") || "—"}</TableCell>
                   <TableCell>{next ? fmtDate(next.dueDate) : "—"}</TableCell>
                   <TableCell className="text-right">{next ? fmtINR(next.premiumAmount) : ""}</TableCell>

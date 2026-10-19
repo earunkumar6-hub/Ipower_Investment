@@ -118,8 +118,14 @@ async function main() {
   const customers: Record<string, { id: string; ownerId: string }> = {};
   let mobileSeq = 9840012000;
   for (const [name, ownerId] of [...NAMED, ...OTHERS.map((n, i) => [n, staff[i % 2]] as const)]) {
+    const mobile = String(mobileSeq++);
+    // Rajesh Kumar also has an office number (on WhatsApp).
+    const numbers = name === "Rajesh Kumar" ? [{ number: mobile, isWhatsApp: false }, { number: "9445012002", isWhatsApp: true }] : [{ number: mobile, isWhatsApp: true }];
     const c = await prisma.customer.create({
-      data: { tenantId, name, mobile: String(mobileSeq++), address: "Chennai", ownerId },
+      data: {
+        tenantId, name, mobile, address: "Chennai", ownerId, ...(name === "Rajesh Kumar" && { email: "rajesh.k@example.com", address: "Chennai 600017" }),
+        mobiles: { create: numbers.map((m, sort) => ({ tenantId, ...m, sort })) },
+      },
     });
     customers[name] = { id: c.id, ownerId };
   }
@@ -250,7 +256,7 @@ async function main() {
     return r;
   }
 
-  async function service(tx: Tx, date: Date, code: "EB" | "PAN" | "CERT", base: string, mode: PaymentMode, customerName: string, by: string) {
+  async function service(tx: Tx, date: Date, code: "EB" | "PAN" | "CERT", base: string, mode: PaymentMode, customerName: string, by: string, customerMobile?: string) {
     const type = { EB: eb, PAN: pan, CERT: cert }[code];
     const b = new D(base);
     const charge = code === "EB" ? new D(b.lt(1000) ? 10 : 20) : ZERO;
@@ -258,7 +264,7 @@ async function main() {
     const customerAmount = code === "EB" ? b.plus(charge) : new D(code === "PAN" ? 200 : 100);
     const t = await tx.serviceTransaction.create({
       data: {
-        tenantId, txnNo: svcNo(), txnDate: date, serviceTypeId: type.id, customerName, paidFromAccountId: type.walletAccountId,
+        tenantId, txnNo: svcNo(), txnDate: date, serviceTypeId: type.id, customerName, customerMobile, paidFromAccountId: type.walletAccountId,
         receivedAccountId: mode === "Cash" ? acc.cash : acc.sbi, baseAmount: b, serviceCharge: code === "EB" ? charge : customerAmount.minus(walletCost),
         walletCost, customerAmount, profit: customerAmount.minus(walletCost), paymentMode: mode,
         providerRef: code === "EB" ? `TNEB-${Math.floor(rand() * 90000) + 10000}` : null, createdById: by,
@@ -332,7 +338,8 @@ async function main() {
     await tx.commission.updateMany({ where: { receiptId: { in: [r1.id, r2.id] } }, data: { poDepositId: dep.id } });
     await postPoDeposit(tx, dep, { accountId: acc.cash, mode: "Cash", receiptCount: 2 });
 
-    await service(tx, yesterday, "EB", "760.00", "Cash", "Saravanan", users.arun);
+    // Rajesh Kumar's EB bill, matched to his customer record by mobile number.
+    await service(tx, yesterday, "EB", "760.00", "Cash", "Rajesh Kumar", users.arun, "9840012000");
     await service(tx, yesterday, "PAN", "200.00", "Cash", "Deepa", users.divya);
     await service(tx, yesterday, "CERT", "100.00", "UPI", "Kannan", users.arun);
     // Surplus cash banked (contra: cash out, bank in — never an expense)

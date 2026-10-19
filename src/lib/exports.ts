@@ -19,6 +19,7 @@ import {
 import { fmtINR, sum } from "@/lib/money";
 import { seesAll, type Permission } from "@/lib/permissions";
 import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
+import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
 import { quotationStatus } from "@/lib/quotation";
 import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
@@ -222,7 +223,7 @@ export const REPORTS: Record<string, Report> = {
     async build(user, sp) {
       const data = sp.id ? await loadCustomer360(user, sp.id) : null;
       if (!data) return null;
-      const { c, owner, renewals, receiptNo, active, yearlyPremium, unpaid, slipFor } = data;
+      const { c, owner, renewals, receiptNo, unpaid, slipFor, holdings, cards, numbers, oneTimeTotal } = data;
       return {
         file: `customer-${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${stamp()}.xlsx`,
         title: `Customer 360 – ${c.name}`,
@@ -232,23 +233,28 @@ export const REPORTS: Record<string, Report> = {
             columns: [{ header: "Item", width: 26 }, { header: "Detail", width: 50 }, { header: "Amount", type: "money" }],
             rows: [
               ["Name", c.name, null],
-              ["Mobile", maskMobile(c.mobile), null],
+              ["Mobile", numbers.map(maskMobile).join(", "), null],
               ["Email", c.email, null],
               ["Address", c.address, null],
               ["Owner", owner?.name, null],
               ["PAN", c.panMasked ?? "not collected", null],
               ["Aadhaar", c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : "not collected", null],
-              ["Active holdings", String(active.length), null],
-              ["Insurance premium / year", null, sum(yearlyPremium)],
+              ["Active holdings", `${cards.holdings} · ${cards.sources} source(s)`, null],
+              ["Total yearly premium (insurance)", null, cards.yearlyPremium],
+              ["Investments (post office + MF)", null, cards.investments],
+              ["Invested in one-time schemes", null, oneTimeTotal],
               ["Due in 30 days", `${unpaid.filter((r) => r.status === "Overdue").length} overdue`, sum(unpaid.map((r) => r.premiumAmount))],
             ],
           },
           {
             name: "Holdings",
-            columns: [{ header: "Product" }, { header: "Partner · plan", width: 32 }, { header: "Policy / folio / account", width: 22 }, { header: "Cover", type: "money" },
-              { header: "Premium / instalment", type: "money", width: 18 }, { header: "Frequency" }, { header: "Since", type: "date" }, { header: "Status" }],
-            rows: c.policies.map((p) => [HOLDING_KIND[p.productType], p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} · ${p.productName}` : p.productName,
-              p.policyNumber, p.sumAssured, p.premiumAmount, p.frequency === "OneTime" ? "One-time deposit" : p.frequency, p.startDate, p.status]),
+            columns: [{ header: "Product" }, { header: "Partner · plan / scheme", width: 32 }, { header: "Policy / folio / account", width: 22 }, { header: "Cover", type: "money" },
+              { header: "Invested / premium", type: "money", width: 18 }, { header: "Pay mode" }, { header: "Rate %" }, { header: "Commenced", type: "date" }, { header: "Tenure" },
+              { header: "Lock-in until", type: "date" }, { header: "Maturity", type: "date" }, { header: "Status" }],
+            rows: holdings.map((p) => [HOLDING_KIND[p.productType],
+              p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} · ${p.productName}${p.schemeName ? ` · ${p.schemeName}` : ""}` : p.schemeName ?? p.productName,
+              p.policyNumber, p.sumAssured, p.premiumAmount, PAY_MODE_LABEL[p.frequency], p.rateAtOpen?.toFixed(2), p.startDate, p.termMonths ? fmtTenure(p.termMonths) : null,
+              p.lockIn && p.lockIn > p.startDate ? p.lockIn : null, p.maturity, p.status]),
           },
           {
             name: "Renewals and instalments",

@@ -18,7 +18,7 @@ export async function PageHeader({ title, user, actions }: { title: string; user
           {tenant?.name} · {fmtDate(istToday())} · Signed in as {user.name} ({ROLE_LABEL[user.role]})
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <CallsBadge count={openCalls} />
         {actions}
       </div>

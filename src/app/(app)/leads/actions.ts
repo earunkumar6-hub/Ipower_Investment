@@ -8,6 +8,7 @@ import { fmtDate, istToday, parseIstDateTime } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
 import { canActOn } from "@/lib/leads";
+import { readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
 import { seesAll } from "@/lib/permissions";
 import { authorize, type SessionUser } from "@/lib/session";
@@ -31,20 +32,6 @@ function futureTime(date: string, time: string): Date | string {
 const optionalCall = (date: string, time: string): Date | string | null => (date || time ? futureTime(date, time) : null);
 
 // ── Lead details (add and edit) ──
-
-const mobileRe = /^[6-9]\d{9}$/;
-
-/** Mobile numbers come as repeated `mobile` fields; `whatsApp` holds the indexes ticked "Same as WhatsApp". */
-function readMobiles(form: FormData): { numbers: { number: string; isWhatsApp: boolean }[] } | { error: string } {
-  const raw = form.getAll("mobile").map((m) => String(m).trim());
-  const ticked = new Set(form.getAll("whatsApp").map(String));
-  const numbers = raw.map((number, i) => ({ number, isWhatsApp: ticked.has(String(i)) })).filter((m) => m.number);
-  if (numbers.length === 0) return { error: "Enter at least one mobile number" };
-  const bad = numbers.find((m) => !mobileRe.test(m.number));
-  if (bad) return { error: `${bad.number} is not a 10-digit mobile number` };
-  if (new Set(numbers.map((m) => m.number)).size !== numbers.length) return { error: "The same number is entered twice" };
-  return { numbers };
-}
 
 const detailsSchema = z.object({
   firstName: z.string().trim().min(1, "Enter the first name").max(60),
