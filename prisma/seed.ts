@@ -163,7 +163,7 @@ async function main() {
   await renewal(policies["karthik-care"], addDays(today, 3));
   await renewal(policies["vijay-sbi"], addDays(today, -38), "Overdue");
 
-  // Other customers: 17 RD, 22 insurance, 7 MF, 4 TD/KVP/NSC = 50 policies
+  // Other customers: 17 RD, 22 insurance, 7 MF, 4 TD/KVP/NSC, 4 SSA/PPF/SCSS/MIS = 54 policies
   const INSURERS = [
     ["SBI Life", "Smart Shield"], ["Star Health", "Family Health Optima"], ["Care Health", "Care Supreme"],
     ["LIC", "Jeevan Anand"], ["Star Health", "Senior Citizens Red Carpet"], ["SBI Life", "eWealth"],
@@ -200,6 +200,13 @@ async function main() {
   await addPolicy("kvp", nextCustomer(), "PoKvp", "Post Office", "KVP", "KVP 7781-09", "25000.00", "OneTime", addMonths(today, -6), { termMonths: 115 });
   await addPolicy("nsc", nextCustomer(), "PoNsc", "Post Office", "NSC", "NSC 4410-22", "20000.00", "OneTime", addMonths(today, -4), { termMonths: 60 });
   await addPolicy("td-old", nextCustomer(), "PoTd", "Post Office", "TD 2 yr", "TD 2240-150", "75000.00", "OneTime", addMonths(today, -10), { termMonths: 24 });
+  // SSA / PPF: yearly deposit for 15 years (one due soon, one overdue); SCSS / MIS: one maturing this month, one matured last week.
+  const ssa = await addPolicy("ssa", nextCustomer(), "PoSsa", "Post Office", "SSA", "SSA 5510-08", "12000.00", "Yearly", addMonths(addDays(today, 20), -36), { termMonths: 180 });
+  await renewal(ssa, addDays(today, 20));
+  const ppf = await addPolicy("ppf", nextCustomer(), "PoPpf", "Post Office", "PPF", "PPF 6620-14", "24000.00", "Yearly", addMonths(addDays(today, -12), -24), { termMonths: 180 });
+  await renewal(ppf, addDays(today, -12), "Overdue");
+  await addPolicy("scss", nextCustomer(), "PoScss", "Post Office", "SCSS", "SCSS 7730-02", "300000.00", "OneTime", addMonths(addDays(today, 18), -60), { termMonths: 60 });
+  await addPolicy("mis", nextCustomer(), "PoMis", "Post Office", "MIS", "MIS 8840-31", "150000.00", "OneTime", addMonths(addDays(today, -6), -60), { termMonths: 60 });
 
   // RD schedules: instalment due at month-end; past months paid; current month per scenario; next 2 months due.
   const rdCurrent: Record<string, string> = {}; // policyId → current-month RenewalItem id

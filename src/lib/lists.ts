@@ -11,7 +11,7 @@ import type { SessionUser } from "@/lib/session";
 
 export type Params = Record<string, string | undefined>;
 
-export const PRODUCT_SHORT: Record<ProductType, string> = { Insurance: "Insurance", MutualFund: "MF", PoRd: "RD", PoTd: "TD", PoKvp: "KVP", PoNsc: "NSC" };
+export const PRODUCT_SHORT: Record<ProductType, string> = { Insurance: "Insurance", MutualFund: "MF", PoRd: "RD", PoTd: "TD", PoKvp: "KVP", PoNsc: "NSC", PoMis: "MIS", PoScss: "SCSS", PoSsa: "SSA", PoPpf: "PPF" };
 
 export const MESSAGE_TEMPLATE: Record<string, string> = {
   kyc_consent_link: "KYC consent link",
@@ -60,17 +60,39 @@ export function customerFilter(user: SessionUser, sp: Params) {
 }
 
 export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"]] as const;
-export const RENEWAL_TYPES = [["all", "All products"], ["insurance", "Insurance"], ["rd", "Post office RD"]] as const;
+export const RENEWAL_PRODUCTS = [["all", "All products"], ["insurance", "Insurance"], ["po", "Post office"], ["mf", "Mutual fund"]] as const;
+/** Post office schemes, in the order the scheme filter lists them. */
+export const PO_SCHEMES = ["PoRd", "PoTd", "PoMis", "PoScss", "PoSsa", "PoPpf", "PoNsc", "PoKvp"] as const satisfies readonly ProductType[];
+/** One-time deposits: nothing falls due again, so Renewals reminds about their maturity instead. */
+export const MATURITY_SCHEMES: ProductType[] = ["PoTd", "PoMis", "PoScss", "PoNsc", "PoKvp"];
 
+/**
+ * Product → company → scheme. Company and scheme are the insurer/AMC and plan for insurance
+ * and mutual funds; for the post office the scheme is the product type (RD, TD, SSA…).
+ */
 export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
   const tab = RENEWAL_TABS.find(([k]) => k === sp.tab)?.[0] ?? "due";
-  const type = RENEWAL_TYPES.find(([k]) => k === sp.type)?.[0] ?? "all";
+  const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
+  const byCompany = product === "insurance" || product === "mf";
+  const company = byCompany ? sp.company || undefined : undefined;
+  const plan = byCompany ? sp.scheme || undefined : undefined;
+  const poScheme = product === "po" ? PO_SCHEMES.find((s) => s === sp.scheme) : undefined;
+  const scheme = plan ?? poScheme;
   const within = Math.min(Math.max(Number(sp.within) || 30, 1), 365);
   const policyWhere: Prisma.PolicyWhereInput = {
     ...ownerScope(user),
-    ...(type === "insurance" && { productType: "Insurance" }),
-    ...(type === "rd" && { productType: "PoRd" }),
+    ...(product === "insurance" && { productType: "Insurance" }),
+    ...(product === "mf" && { productType: "MutualFund" }),
+    ...(product === "po" && { productType: poScheme ?? { in: [...PO_SCHEMES] } }),
+    ...(company && { partner: company }),
+    ...(plan && { productName: plan }),
   };
+  // Active one-time deposits matching the filter; the maturity date is worked out by the caller.
+  const showMaturity = tab !== "paid" && (product === "all" || (product === "po" && (!poScheme || MATURITY_SCHEMES.includes(poScheme))));
+  const maturityWhere: Prisma.PolicyWhereInput | null = showMaturity
+    ? { tenantId: user.tenantId, AND: [policyWhere, { productType: { in: MATURITY_SCHEMES } }], status: "Active", termMonths: { not: null } }
+    : null;
+  const filterLabel = [RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan].filter(Boolean).join(" · ");
   const where: Prisma.RenewalItemWhereInput = {
     tenantId: user.tenantId,
     policy: policyWhere,
@@ -79,7 +101,7 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
     ...(tab === "paid" && { status: "Paid", paidOn: { gte: addDays(today, -30) } }),
   };
   const orderBy: Prisma.RenewalItemOrderByWithRelationInput = tab === "paid" ? { paidOn: "desc" } : { dueDate: "asc" };
-  return { tab, type, within, where, orderBy };
+  return { tab, product, company, scheme, within, where, orderBy, maturityWhere, filterLabel };
 }
 
 export const EXPENSE_TABS = [["all", "All"], ["approve", "Waiting for my approval"], ["repay", "To be repaid"]] as const;

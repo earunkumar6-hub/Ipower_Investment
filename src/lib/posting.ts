@@ -12,6 +12,10 @@ export const PRODUCT_CATEGORY: Record<ProductType, string> = {
   PoTd: "Post office",
   PoKvp: "Post office",
   PoNsc: "Post office",
+  PoMis: "Post office",
+  PoScss: "Post office",
+  PoSsa: "Post office",
+  PoPpf: "Post office",
 };
 
 const SCHEME: Partial<Record<ProductType, string>> = {
@@ -19,6 +23,10 @@ const SCHEME: Partial<Record<ProductType, string>> = {
   PoTd: "Post office TD",
   PoKvp: "KVP",
   PoNsc: "NSC",
+  PoMis: "Post office MIS",
+  PoScss: "SCSS",
+  PoSsa: "SSA",
+  PoPpf: "PPF",
 };
 
 export const schemeOf = (p: Pick<Policy, "productType" | "partner" | "productName">) =>

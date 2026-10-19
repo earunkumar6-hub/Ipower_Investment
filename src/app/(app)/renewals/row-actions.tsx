@@ -4,7 +4,18 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { sendRenewalReminder } from "./actions";
+import { markMatured, sendRenewalReminder } from "./actions";
+
+export function MaturityRowActions({ policyId }: { policyId: string }) {
+  const [pending, start] = useTransition();
+  return (
+    <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
+      const r = await markMatured(policyId);
+      if (r.ok) toast.success("Marked as matured");
+      else toast.error(r.error);
+    })}>Mark matured</Button>
+  );
+}
 
 export function RenewalRowActions({ renewalItemId, customerId }: { renewalItemId: string; customerId: string }) {
   const [pending, start] = useTransition();

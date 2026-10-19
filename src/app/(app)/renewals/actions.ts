@@ -2,11 +2,26 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { fmtDate } from "@/lib/dates";
+import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
+import { MATURITY_SCHEMES } from "@/lib/lists";
 import { fmtINR } from "@/lib/money";
+import { maturityDate } from "@/lib/renewals";
 import { authorize } from "@/lib/session";
+
+/** A one-time post office deposit has been paid out: it leaves the Overdue maturity list. */
+export async function markMatured(policyId: string): Promise<ActionResult> {
+  const user = await authorize("Renewal.View");
+  const policy = await db.policy.findFirst({ where: { id: policyId, tenantId: user.tenantId, status: "Active", productType: { in: MATURITY_SCHEMES } } });
+  if (!policy) return { ok: false, error: "This deposit is no longer active" };
+  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
+  const matures = maturityDate(policy);
+  if (!matures || matures > istToday()) return { ok: false, error: "This deposit has not matured yet" };
+  await db.policy.update({ where: { id: policy.id }, data: { status: "Matured" } });
+  revalidatePath("/renewals");
+  return { ok: true };
+}
 
 /** "Send now" (mocked): writes the WhatsApp reminder to the message log. */
 export async function sendRenewalReminder(renewalItemId: string): Promise<ActionResult> {

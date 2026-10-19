@@ -12,12 +12,12 @@ import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, maskMobile } from "@/lib/lead-lab
 import { ownerScope, userNames } from "@/lib/leads";
 import {
   customerFilter, dayBookDate, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
-  pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, RENEWAL_TYPES, renewalFilter, SLIP_STATUS,
+  pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
 import { hasPermission, seesAll, type Permission } from "@/lib/permissions";
 import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
-import { refreshOverdue } from "@/lib/renewals";
+import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
 
 // Excel export per list screen: same filters as the screen (lib/lists.ts), every matching row.
@@ -29,7 +29,6 @@ type Report = { permission: Permission; build: (user: SessionUser, sp: Params) =
 const stamp = () => isoDate(istToday());
 const label = <K extends string>(list: readonly (readonly [K, string])[], key: K) => list.find(([k]) => k === key)?.[1] ?? key;
 const nameIn = (users: { id: string; name: string }[]) => (id: string | null) => users.find((u) => u.id === id)?.name ?? "";
-const daysBetween = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 86_400_000);
 
 export const REPORTS: Record<string, Report> = {
   // The Admin / Owner dashboard as on screen: cards, action list, renewals and chart data (Owner extras for the Super Admin).
@@ -252,9 +251,7 @@ export const REPORTS: Record<string, Report> = {
     permission: "Renewal.View",
     async build(user, sp) {
       const today = istToday();
-      await refreshOverdue(user.tenantId, today);
-      const { tab, type, within, where, orderBy } = renewalFilter(user, sp, today);
-      const items = await db.renewalItem.findMany({ where, include: { policy: { include: { customer: { select: { name: true } } } } }, orderBy });
+      const { tab, within, filterLabel, rows: items } = await loadRenewals(user, sp, today);
       const receiptNos = new Map(
         (await db.receipt.findMany({ where: { id: { in: items.map((i) => i.paidReceiptId).filter((x): x is string => !!x) } }, select: { id: true, receiptNo: true } }))
           .map((r) => [r.id, r.receiptNo]),
@@ -263,7 +260,7 @@ export const REPORTS: Record<string, Report> = {
       const paid = tab === "paid";
       return {
         file: `renewals-${tab}-${stamp()}.xlsx`,
-        title: `Renewals – ${label(RENEWAL_TABS, tab)} (${scope}) – ${label(RENEWAL_TYPES, type)}`,
+        title: `Renewals – ${label(RENEWAL_TABS, tab)} (${scope}) – ${filterLabel}`,
         sheets: [{
           name: label(RENEWAL_TABS, tab),
           totals: true,
@@ -272,9 +269,10 @@ export const REPORTS: Record<string, Report> = {
             ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }] : [{ header: "Last reminder", type: "datetime" as const, width: 20 }])],
           rows: items.map((i) => {
             const p = i.policy;
-            const over = daysBetween(today, i.dueDate);
-            const status = i.status === "Overdue" ? `${over} days overdue` : i.status === "Paid" ? "Paid" : over === 0 ? "Due today" : `Due in ${-over} days`;
-            const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.dueDate, i.premiumAmount, status];
+            const [status] = renewalStatus(i, today);
+            // A maturity's amount is the deposit, not money to collect, so it stays out of the totals column.
+            const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
+              i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (deposit ${fmtINR(i.amount)})` : status];
             return paid ? [...base, i.paidOn, i.paidReceiptId ? receiptNos.get(i.paidReceiptId) : "owner paid"] : [...base, i.lastReminderAt];
           }),
         }],

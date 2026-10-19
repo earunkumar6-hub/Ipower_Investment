@@ -287,6 +287,10 @@ enum ProductType {
   PoTd
   PoKvp
   PoNsc
+  PoMis
+  PoScss
+  PoSsa
+  PoPpf
 }
 
 enum Frequency {

@@ -4,7 +4,7 @@ import { canActOn } from "@/lib/leads";
 import { refreshOverdue } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
 
-export const HOLDING_KIND = { Insurance: "Insurance", MutualFund: "Mutual fund", PoRd: "Post office RD", PoTd: "Post office TD", PoKvp: "KVP", PoNsc: "NSC" } as const;
+export const HOLDING_KIND = { Insurance: "Insurance", MutualFund: "Mutual fund", PoRd: "Post office RD", PoTd: "Post office TD", PoKvp: "KVP", PoNsc: "NSC", PoMis: "Post office MIS", PoScss: "SCSS", PoSsa: "SSA", PoPpf: "PPF" } as const;
 
 /** Customer 360 data for the screen and its exports; null when missing or not this user's customer. */
 export async function loadCustomer360(user: SessionUser, id: string) {
