@@ -61,6 +61,14 @@ export function customerFilter(user: SessionUser, sp: Params) {
 
 export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"]] as const;
 export const RENEWAL_PRODUCTS = [["all", "All products"], ["insurance", "Insurance"], ["po", "Post office"], ["mf", "Mutual fund"]] as const;
+export const PAID_TO = [["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const;
+/** Paid tab: has the money collected from the customer reached the company (insurer, AMC, post office)? */
+const PAID_TO_WHERE: Record<"pending" | "paid", Prisma.RenewalItemWhereInput> = {
+  // RD waits for the Day Book PO deposit; everything else for "Pay to company".
+  pending: { paidReceipt: { status: "Saved", ownerPaid: false, OR: [{ rdStatus: "Collected" }, { rdStatus: null, companyPaymentId: null }] } },
+  paid: { OR: [{ paidReceiptId: null }, { paidReceipt: { OR: [{ ownerPaid: true }, { rdStatus: { in: ["Deposited", "Verified"] } }, { companyPaymentId: { not: null } }] } }] },
+};
+
 /** Post office schemes, in the order the scheme filter lists them. */
 export const PO_SCHEMES = ["PoRd", "PoTd", "PoMis", "PoScss", "PoSsa", "PoPpf", "PoNsc", "PoKvp"] as const satisfies readonly ProductType[];
 /** One-time deposits: nothing falls due again, so Renewals reminds about their maturity instead. */
@@ -79,6 +87,7 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
   const poScheme = product === "po" ? PO_SCHEMES.find((s) => s === sp.scheme) : undefined;
   const scheme = plan ?? poScheme;
   const within = Math.min(Math.max(Number(sp.within) || 30, 1), 365);
+  const paidTo = tab === "paid" ? (PAID_TO.find(([k]) => k === sp.paidto)?.[0] ?? "all") : "all";
   const policyWhere: Prisma.PolicyWhereInput = {
     ...ownerScope(user),
     ...(product === "insurance" && { productType: "Insurance" }),
@@ -92,16 +101,19 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
   const maturityWhere: Prisma.PolicyWhereInput | null = showMaturity
     ? { tenantId: user.tenantId, AND: [policyWhere, { productType: { in: MATURITY_SCHEMES } }], status: "Active", termMonths: { not: null } }
     : null;
-  const filterLabel = [RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan].filter(Boolean).join(" · ");
+  const filterLabel = [RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan].filter(Boolean).join(" · ")
+    + (paidTo === "all" ? "" : ` · ${paidTo === "pending" ? "not yet paid" : "paid"} to Post office / insurer`);
   const where: Prisma.RenewalItemWhereInput = {
     tenantId: user.tenantId,
     policy: policyWhere,
     ...(tab === "due" && { status: "Due", dueDate: { lt: addDays(today, within) } }),
     ...(tab === "overdue" && { status: "Overdue" }),
-    ...(tab === "paid" && { status: "Paid", paidOn: { gte: addDays(today, -30) } }),
+    // Pending money is listed however old it is; otherwise the Paid tab covers the last 30 days.
+    ...(tab === "paid" && { status: "Paid", ...(paidTo !== "pending" && { paidOn: { gte: addDays(today, -30) } }) }),
+    ...(paidTo !== "all" && PAID_TO_WHERE[paidTo]),
   };
   const orderBy: Prisma.RenewalItemOrderByWithRelationInput = tab === "paid" ? { paidOn: "desc" } : { dueDate: "asc" };
-  return { tab, product, company, scheme, within, where, orderBy, maturityWhere, filterLabel };
+  return { tab, product, company, scheme, paidTo, within, where, orderBy, maturityWhere, filterLabel };
 }
 
 export const EXPENSE_TABS = [["all", "All"], ["approve", "Waiting for my approval"], ["repay", "To be repaid"]] as const;
@@ -119,6 +131,8 @@ export function expenseFilter(user: SessionUser, sp: Params) {
 }
 
 export const receiptTab = (sp: Params) => (sp.tab === "owner" ? "owner" : "customer");
+/** Receipts list: has the money reached the company? (see `DEPOSIT_WHERE`) */
+export const depositFilter = (sp: Params) => (sp.deposit === "pending" || sp.deposit === "paid" ? sp.deposit : "all");
 
 /** A past or today's date from ?date=YYYY-MM-DD; anything else is today. */
 export function dayBookDate(sp: Params, today: Date) {

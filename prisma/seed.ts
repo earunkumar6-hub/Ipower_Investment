@@ -329,7 +329,7 @@ async function main() {
     });
     await tx.receipt.updateMany({ where: { id: { in: [r1.id, r2.id] } }, data: { rdStatus: "Deposited" } });
     await tx.commission.updateMany({ where: { receiptId: { in: [r1.id, r2.id] } }, data: { poDepositId: dep.id } });
-    await postPoDeposit(tx, dep, { cashAccountId: acc.cash, receiptCount: 2 });
+    await postPoDeposit(tx, dep, { accountId: acc.cash, mode: "Cash", receiptCount: 2 });
 
     await service(tx, yesterday, "EB", "760.00", "Cash", "Saravanan", users.arun);
     await service(tx, yesterday, "PAN", "200.00", "Cash", "Deepa", users.divya);

@@ -34,7 +34,7 @@ export function OwnerPaidForm({ items }: { items: Option[] }) {
         <Input id="poReceiptNo" name="poReceiptNo" placeholder="7781 2318" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending} className="w-full bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save owner-paid slip"}</Button>
+      <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save owner-paid slip"}</Button>
     </form>
   );
 }

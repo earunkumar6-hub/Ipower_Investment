@@ -77,7 +77,7 @@ export function IssuePolicyForm({ proposalId, ready }: { proposalId: string; rea
         <Label htmlFor="policyNumber">Policy number (from the partner)</Label>
         <Input id="policyNumber" name="policyNumber" className="w-64 not-placeholder-shown:uppercase" disabled={!ready} placeholder={ready ? "e.g. STAR-P-700123" : "Needs consent and PAN first"} />
       </div>
-      <Button type="submit" disabled={!ready || pending} className="bg-blue-600 hover:bg-blue-700">
+      <Button type="submit" disabled={!ready || pending} className="bg-brand-600 hover:bg-brand-700">
         {pending ? "Issuing…" : "Save policy number"}
       </Button>
       {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}

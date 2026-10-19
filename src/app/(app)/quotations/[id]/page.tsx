@@ -27,7 +27,7 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <PageHeader title="Quotations" user={user} actions={
-        <Link href="/quotations/new" className={cn(buttonVariants(), "bg-blue-600 hover:bg-blue-700")}>New quotation</Link>
+        <Link href="/quotations/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New quotation</Link>
       } />
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1 space-y-4 rounded-xl border bg-white p-4">
@@ -88,7 +88,7 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
               <li key={i.id} className="flex items-center justify-between gap-2">
                 <span>Proposal · {i.insurer}</span>
                 {i.proposal ? (
-                  <Link href={`/proposals/${i.proposal.id}`} className="text-blue-700 hover:underline">{i.proposal.proposalNo}</Link>
+                  <Link href={`/proposals/${i.proposal.id}`} className="text-brand-700 hover:underline">{i.proposal.proposalNo}</Link>
                 ) : accepted ? (
                   <CreateProposalButton quotationItemId={i.id} />
                 ) : (

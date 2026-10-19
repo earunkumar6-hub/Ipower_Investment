@@ -11,7 +11,8 @@ import { CASH_SOURCES, UPI_ADJUSTMENT_REASONS } from "@/lib/daybook-labels";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { D, fmtINR, sum, ZERO } from "@/lib/money";
-import { hasPermission } from "@/lib/permissions";
+import { canActOn } from "@/lib/leads";
+import { hasPermission, seesAll } from "@/lib/permissions";
 import { postPoDeposit } from "@/lib/posting";
 import { authorize } from "@/lib/session";
 
@@ -117,7 +118,57 @@ export async function depositToPostOffice(_: ActionResult, form: FormData): Prom
       });
       await tx.receipt.updateMany({ where: { id: { in: receipts.map((r) => r.id) } }, data: { rdStatus: "Deposited" } });
       await tx.commission.updateMany({ where: { receiptId: { in: receipts.map((r) => r.id) } }, data: { poDepositId: deposit.id } });
-      await postPoDeposit(tx, deposit, { cashAccountId: cash.id, receiptCount: receipts.length });
+      await postPoDeposit(tx, deposit, { accountId: cash.id, mode: "Cash", receiptCount: receipts.length });
+      return { ok: true };
+    }),
+  );
+}
+
+const oneDepositSchema = z.object({
+  receiptId: z.string().min(1),
+  paidOn: isoDay,
+  accountId: z.string().min(1, "Pick the account it was paid from"),
+  reference: z.string().trim().min(2, "Enter the post office receipt / transaction ID").max(60),
+});
+
+/**
+ * One RD receipt deposited from its own page (owner's choice): a one-line PO deposit, so the Day Book,
+ * commission and cancel rules work as for the Day Book deposit. Skips the UPI vs ATM check, so that is noted.
+ */
+export async function depositOneRdReceipt(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("DayBook.Create");
+  const parsed = oneDepositSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const v = parsed.data;
+  if (checkDate(v.paidOn)) return fail(checkDate(v.paidOn)!);
+
+  return guarded(() =>
+    db.$transaction(async (tx): Promise<ActionResult> => {
+      await assertDayOpen(tx, user.tenantId, v.paidOn);
+      const r = await tx.receipt.findFirst({
+        where: { id: v.receiptId, tenantId: user.tenantId, status: "Saved", rdStatus: "Collected", ownerPaid: false },
+        include: { policy: { select: { ownerId: true } } },
+      });
+      if (!r) return fail("This receipt is no longer waiting for deposit; reload and try again");
+      if (!seesAll(user.role) && r.createdById !== user.id && !canActOn(user, r.policy!.ownerId)) return fail("This receipt belongs to another user");
+      if (r.receiptDate > v.paidOn) return fail(`${r.receiptNo} was collected on ${fmtDate(r.receiptDate)}, after the deposit date`);
+      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } } });
+      if (!account) return fail("Pick the cash or bank account it was paid from");
+      const balance = await balanceAt(tx, account.id, v.paidOn);
+      if (balance.lt(r.amount)) return fail(`${account.name} has only ${fmtINR(balance)}`);
+      const mode = account.type === "Cash" ? "Cash" as const : "Bank" as const;
+
+      const deposit = await tx.poDeposit.create({
+        data: {
+          tenantId: user.tenantId, poReceiptNo: v.reference, depositDate: v.paidOn, amount: r.amount, receiptsTotal: r.amount,
+          upiPortion: r.mode === "Cash" ? ZERO : r.amount, adjustmentReason: `Deposited from receipt ${r.receiptNo} (paid from ${account.name}; no UPI vs ATM check)`,
+          createdById: user.id, lines: { create: [{ receiptId: r.id, policyId: r.policyId!, amount: r.amount }] },
+        },
+      });
+      const updated = await tx.receipt.updateMany({ where: { id: r.id, rdStatus: "Collected" }, data: { rdStatus: "Deposited" } });
+      if (updated.count !== 1) throw new Error("Receipt changed while saving; try again");
+      await tx.commission.updateMany({ where: { receiptId: r.id }, data: { poDepositId: deposit.id } });
+      await postPoDeposit(tx, deposit, { accountId: account.id, mode, receiptCount: 1 });
       return { ok: true };
     }),
   );

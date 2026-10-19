@@ -1,5 +1,6 @@
 "use client";
 
+import { TriangleAlert } from "lucide-react";
 import { useActionState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
@@ -25,7 +26,7 @@ export function CancelReceiptForm({ receiptId, receiptNo }: { receiptId: string;
         <Input id="reason" name="reason" placeholder="e.g. Customer paid twice by mistake" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" variant="destructive" disabled={pending} className="w-full">{pending ? "Cancelling…" : "Cancel receipt"}</Button>
+      <Button type="submit" variant="destructive" disabled={pending} className="w-full"><TriangleAlert />{pending ? "Cancelling…" : "Cancel receipt"}</Button>
       <p className="text-xs text-muted-foreground">
         Admin and Super Admin only. The number is never reused, the Day Book gets a reversing entry today, and the instalment shows unpaid again.
       </p>

@@ -1,0 +1,302 @@
+{
+  "project": {
+    "code": "IPOWER-CRM-R2",
+    "name": "IPower Investments CRM – change round 2",
+    "purpose": "Bring the running app (built from fl_crm_demo.json + Changes.txt items 4–10) in line with the updated owner documents of 19 Oct 2026. Lists only what is still missing or conflicts; items already built are listed under already_done so they are not rebuilt.",
+    "sources": [
+      "Requirement_Analysis_2/FL_CRM Module Screens 1910.pdf (23 screens)",
+      "Requirement_Analysis_2/FL_CRM_Spec_Pipelines_Architecture_1.pdf (rules #1–27, modules table, messages)",
+      "Requirement_Analysis_2/FL_CRM_Use_Cases_by_Role_1.pdf (U-01..U-23, A-01..A-19, S-01..S-07)",
+      "app/docs/Changes.txt (round 1 list from the owner)"
+    ],
+    "baseline": "main @ 39ff618 plus uncommitted work of 19 Oct 2026 (paid to company, receipt deposit status, collected/deposited by, commission hidden)",
+    "generated": "2026-10-19"
+  },
+
+  "rules_for_builder": [
+    "Plan first: before each phase, list the files and migrations it touches and confirm in chat. Ask when a requirement is ambiguous; do not pick silently.",
+    "Answer open_decisions before building the items that depend on them (each item lists depends_on).",
+    "Targeted changes only; don't rewrite working modules. Keep the existing look (shadcn/ui, Tailwind) and IPower branding – screens in the PDF say 'ABC Financial Services' and 'FL_CRM' only as sample text.",
+    "Pinned: Next.js 15, React 19, Prisma 6.19.3 (not 7/8), TanStack Table v8, exceljs 4.4.0. Forms submit with submitKeepingValues (src/lib/form.ts).",
+    "Prisma enum changes: migrate dev --create-only, review SQL, then migrate deploy. Stop the dev server before prisma generate on Windows.",
+    "Day Book is immutable: every money move is a DayBookEntry via src/lib/posting.ts; corrections are reversals; closed days refuse writes (refuseOnClosedDay / guarded()).",
+    "Server actions return ActionResult {ok, error}; permissions via authorize()/canActOn/ownerScope; list pages and their Excel/PDF export share one loader (see src/lib/lists.ts, src/lib/renewals.ts).",
+    "Tests write to DATABASE_URL: run vitest only on a scratch DB (createdb flcrm_check → migrate deploy → db:seed → pnpm test → dropdb). Never touch .env or secrets without asking.",
+    "Each phase ends with: typecheck + lint clean, vitest green on scratch DB, a headless browser check of the new screens, app/CLAUDE.md business rules updated, then check in with the owner. Commit/push only when asked."
+  ],
+
+  "roles": {
+    "superadmin": "Owner – everything; only role that sees Profit and Loss; approves expenses above ₹5,000 and Admins' own; sets approval limits; confirms money returned to owner; can create Admins and Super Admins",
+    "admin": "Approves ₹2,001–₹5,000 (not own), closes Day Book, cancels receipts/invoices/owner-paid slips, adds users as User or Admin, edits Settings (fields, products, reminders, payment modes), confirms family groups, deletes any quotation",
+    "user": "Daily work: leads, follow-ups, quotations, renewals, receipts, E-Sevai, wallet upload, expenses, Day Book entries; cancels own expenses; deletes own quotations; can suggest family groups; raises tickets and closes own",
+    "note": "Three roles only – no Manager role. Aadhaar and PAN masked for every role."
+  },
+
+  "already_done": [
+    { "item": "Quotation PDF + send on WhatsApp/email (mocked to MessageLog); one proposal per quoted product", "where": "75f60a2" },
+    { "item": "Proposal OTP consent; Aadhaar/PAN locked until consent, stored masked; policy number → customer + policy + renewals", "where": "75f60a2" },
+    { "item": "Blocking call reminder pop-up on every screen until outcome or reschedule", "where": "75f60a2" },
+    { "item": "Receipts with PDF; cancel by Admin/Super Admin only with reason, reversing Day Book entry, number never reused", "where": "75f60a2" },
+    { "item": "Owner-paid RD: OWN slip with PO receipt no., pop-up on customer payment, auto close, Return to owner, Super Admin confirms → Settled", "where": "75f60a2 (RD only – see C40)" },
+    { "item": "PO deposit with one PO receipt number, UPI-vs-ATM reasons, RD Collected → Deposited", "where": "75f60a2" },
+    { "item": "E-Sevai: EB +₹10/+₹20, PAN ₹200 (₹100 cost), certificate ₹100 (₹12 cost), wallets, low-balance block, Admin recharge", "where": "75f60a2" },
+    { "item": "Expenses: ≤₹2,000 auto, ₹2,001–₹5,000 Admin, >₹5,000 Super Admin, own approval blocked, bill no. unique per vendor, cancel with reason + reversal", "where": "75f60a2 (limits hard-coded – see C45)" },
+    { "item": "Day Book: tabs by product / scheme / customer / cash in hand by source, ATM withdrawal as transfer, tally, verify, close", "where": "75f60a2" },
+    { "item": "P&L visible to Super Admin only; role dashboards; Customer 360; Renewals Due/Overdue/Paid with reminder 'Send now'", "where": "75f60a2" },
+    { "item": "Excel + PDF export of every list with letterhead", "where": "75f60a2 and later" },
+    { "item": "Changes 6, 7, 10: PO commission out of P&L; lead DOB/address/'mobile is on WhatsApp'; bill date + transaction date on receipts", "where": "f85fb96" },
+    { "item": "Changes 8, 9 (= v2 rules #11, #12 for one customer): several dues on one PAY- payment, late and advance instalments up to 12 months", "where": "4fdb19f" },
+    { "item": "Changes 4 (= v2 rule #26 display): all post office schemes RD/TD/MIS/SCSS/SSA/PPF/NSC/KVP; one-time schemes show a maturity reminder (start + term) and 'Mark matured'; Renewals filter product → company → scheme", "where": "39ff618" },
+    { "item": "Changes 5: paid on to the company (insurer/AMC/PO) with date + reference + Day Book money-out; receipt deposit status; 'Collected by' and '· by <user>' on deposits", "where": "uncommitted" },
+    { "item": "Commission hidden everywhere except P&L (owner decision 19 Oct); P&L removal is C39", "where": "uncommitted (see D01)" }
+  ],
+
+  "open_decisions": [
+    { "id": "D01", "topic": "P&L income and commission", "spec_says": "Commission module, rates, TDS and commission-received upload are removed from v2. P&L income = service charges (EB, PAN, certificates) + 'Other income (entered in Day Book)' − expenses.", "app_does": "Records commission on receipts and shows insurer/MF commission as P&L income (Super Admin only), per owner choice on 19 Oct.", "question": "Drop commission from P&L and add an 'Other income' Day Book entry instead, keep commission, or both?", "decision": "Owner 19 Oct 2026: remove commission from P&L (page, export, monthly P&L). Commission is then shown nowhere; recording it on receipts can stay in the database. P&L income = service charges + other income (see C39)." },
+    { "id": "D02", "topic": "Bill date vs transaction date", "spec_says": "Bill date = entry date (today); transaction date may be up to 10 days earlier (rule #19).", "app_does": "Change 10: any user may back-date the bill date to any day after the last closed day; transaction date is free.", "question": "Switch to the v2 rule (bill date locked to today, txn date ≤ 10 days back) or keep back-dating?", "decision": "Owner 19 Oct 2026: keep the receipt dates as built (Change 10) – do not apply the 10-day rule." },
+    { "id": "D03", "topic": "Lead status values", "spec_says": "Status = Interested / Not interested / Call back; stage moves automatically Lead → Quotation → Proposal → Partner / Customer.", "app_does": "LeadStatus enum New, CallScheduled, Interested, NotInterested, Quoted, Converted.", "question": "Confirm mapping for existing leads: New/CallScheduled → Call back, Quoted/Converted → keep status Interested and show stage separately?", "decision": "Owner 19 Oct 2026: no mapping of old lead data now – the client's old leads will be migrated (imported) after go-live. Use the new values directly; demo/seed leads are simply reseeded with them. The migration only needs to keep the schema valid for the current demo rows (any simple default is fine)." },
+    { "id": "D04", "topic": "Business type (lead source)", "spec_says": "Direct, Walk-in, Referral (referrer name required), Website, Social media.", "app_does": "LeadSource Website, WalkIn, Partner, Call, Referral.", "question": "Map Partner and Call to which new value (Direct?).", "decision": "Owner 19 Oct 2026: no mapping of old lead data now – the client's old leads will be migrated (imported) after go-live. Use the new values directly; demo/seed leads are simply reseeded with them. The migration only needs to keep the schema valid for the current demo rows (any simple default is fine)." },
+    { "id": "D05", "topic": "Owner-paid scope", "spec_says": "All products with bills (RD, LIC, PLI, SBI Life, Care, SBI General, Star Health) with PO receipt no. or insurer receipt/transaction no. – but one U-15 row still says 'RD only; PO receipt number required'.", "app_does": "RD only.", "question": "Confirm all billed products (assumed).", "decision": "Owner 19 Oct 2026: yes – owner-paid applies to every product with bills (RD, LIC, PLI, SBI Life, Care, SBI General, Star Health); not TD/KVP/NSC/SCSS/MF. The 'RD only' line in U-15 is outdated." },
+    { "id": "D06", "topic": "Payment modes and bank accounts", "spec_says": "Cash (with denomination), UPI (PhonePe, GPay), Bank (HDFC, IOB); configurable in Settings. Screens still show SBI ••1234.", "app_does": "PaymentMode enum Cash/UPI/Cheque/Bank/Card; accounts Cash + SBI current ••1234.", "question": "Are HDFC and IOB real bank accounts to add (with opening balances)? Do PhonePe/GPay land in a specific bank? Keep Cheque and Card?", "decision": "Owner 19 Oct 2026: add a Net banking payment mode – staff pick the bank name (list kept in Settings → Reminders and payment modes, e.g. HDFC, IOB, SBI) and enter the transaction ID (required). Existing modes (Cash with denomination, UPI PhonePe/GPay, Cheque, Card) stay unless the owner says otherwise. The bank name is the customer's bank (where they paid from) – reference only, printed on the receipt; the Day Book account is still the agency account picked as today." },
+    { "id": "D07", "topic": "Settings → Fields and rules depth", "spec_says": "Rename any field, add custom fields, set required/visible, edit dropdowns on every screen, no developer needed.", "app_does": "Fixed forms.", "question": "Scope for this round: labels + required/visible + dropdown values + custom fields on Lead, Customer, Policy (product) and Expense only, or every screen?", "decision": "Owner 19 Oct 2026: main screens only this round – Leads, Customers, Products (policy / add product) and Expenses. Other screens can be added later." },
+    { "id": "D08", "topic": "Real WhatsApp / email sending and scheduled jobs", "spec_says": "Automatic reminders and daily/weekly/monthly reports on WhatsApp and email (see C45); ticket alerts to developers.", "app_does": "All messages mocked into MessageLog; no scheduler.", "question": "Which WhatsApp provider and email (SMTP) account?", "decision": "Owner 19 Oct 2026: WhatsApp and SMS stay MOCKED – the client must first subscribe to a provider and hand over the account details/files. Build every message (reminders, reports, ticket alerts, consent links) through the existing MessageLog mock ('Sent messages' panel) behind one send function, so a real provider can be plugged in later without touching callers. Email: treat the same way (mock) unless the owner provides an SMTP account." },
+    { "id": "D09", "topic": "Bill numbers", "spec_says": "Each due shows as a bill BL-xxxx with allocation on the combined receipt.", "app_does": "Dues are RenewalItems without a number.", "question": "Add a BL- number to RenewalItem (assumed) rather than a new Bill table?", "decision": "Owner 19 Oct 2026: yes – every due (RenewalItem) gets a BL- number, shown on the combine-bills screen, receipts and renewals." },
+    { "id": "D10", "topic": "New logo", "spec_says": "Requirement_Analysis_2 contains 'Ipower Logo White back ground.png'.", "app_does": "public/logo.png from GRM/logo.", "question": "Replace the current logo everywhere (app, PDFs, Excel) or only where a white background is needed?", "decision": "Owner 19 Oct 2026: yes – replace public/logo.png everywhere (app header, login, receipt/quotation/report PDFs, Excel letterhead) with 'Requirement_Analysis_2/Ipower Logo White back ground.png'. Keep a copy of the old logo; check sizing on PDFs and Excel. DONE 19 Oct 2026 together with an app colour theme matching the logo (crimson + saffron)." },
+    { "id": "D11", "topic": "Customer merge by PAN + Aadhaar", "spec_says": "Same PAN + Aadhaar → merged automatically; one of them → Admin approves; matching by hashes.", "app_does": "Stores masked PAN and Aadhaar last 4 only, so exact matching is impossible.", "question": "Store hashes of full PAN/Aadhaar at consent (needs compliance OK – spec open decision 'full Aadhaar or last 4')?", "decision": "Owner 19 Oct 2026: don't build customer merge this round. Customers stay separate; C18 moved to excluded_for_now." },
+    { "id": "D12", "topic": "Paid to company feature", "spec_says": "Not mentioned in v2.", "app_does": "Built 19 Oct on owner request.", "question": "Keep (assumed).", "decision": "Owner 19 Oct 2026: keep paid to company (Renewals Paid tab, receipt deposit status, collected/deposited by)." },
+    { "id": "D13", "topic": "Spec's own open items", "spec_says": "EB charge for bills ₹1,000–₹1,999 and ₹30,000+; what each partner shares (API or file) and access needed.", "app_does": "EB gap refused with 'rate not configured'; no partner sync.", "question": "Still open – needed before partner sync can be planned." }
+  ],
+
+  "modules": [
+    {
+      "id": "M01", "name": "Leads and follow-ups",
+      "changes": [
+        { "id": "C01", "title": "Lead form fields", "status": "partial", "size": "M", "source": "Screen p2, rule #3, U-01",
+          "current": "Single name, one mobile, email, DOB, address, onWhatsApp tick, source, interest.",
+          "required": "First name*, last name, DOB*, gender* (Female/Male/Other), mobile numbers* with '+ Add number' and a 'Same as WhatsApp' tick per number, interested product, lead status*, business type*, 'Referred by (name)*' shown only for Referral, address, notes. No Aadhaar/PAN at this stage.",
+          "data": "Lead.firstName, lastName, gender, notes, referrerName; LeadMobile {leadId, number, isWhatsApp, sort} (or Json); backfill firstName from name.",
+          "acceptance": ["Required fields enforced server-side", "Duplicate check runs against every mobile of every lead", "Demo/seed leads reseeded with the new fields; old real data is imported after go-live (D03)", "Leads list shows Lead no., Name, Mobile, Business type, Interested product, Status, Next call, Owner; filters Status + Business type"],
+          "depends_on": ["D03", "D04"] },
+        { "id": "C02", "title": "Lead status + automatic stage", "status": "partial", "size": "M", "source": "rule #3, U-03, Use cases p11",
+          "required": "Status Interested / Not interested (reason required, closes lead) / Call back (opens a call reminder). Stage shown separately and moved by the system: Lead → Quotation → Proposal → Partner / Customer.",
+          "acceptance": ["New status values used directly; no mapping of old data (D03) – old leads imported after go-live", "Dashboard and lead filters use the new values"],
+          "depends_on": ["D03"] },
+        { "id": "C03", "title": "Call outcomes", "status": "partial", "size": "S", "source": "Screen p22, U-02",
+          "required": "Outcomes Interested, Not interested, Call back / No answer. Interested and No answer need a new call time; Not interested needs a reason. Reminder card shows last note, owner, due time and 'Create quotation'.",
+          "acceptance": ["Reminder cannot be closed without one of these outcomes"] },
+        { "id": "C04", "title": "Follow-ups screen", "status": "new", "size": "M", "source": "Screen p3",
+          "required": "Menu item 'Follow-ups'. Cards: Calls open (overdue count), Due later today, Rescheduled today, Closed today (Interested / Not interested). Tabs Open / Due later today / Rescheduled / Closed. Columns Due, Name, Mobile, For (Lead L-, Renewal policy no., Proposal P-), Last note, Owner, Status. 'Schedule call' button for leads, renewals and proposals.",
+          "data": "Call gets optional policyId / proposalId besides leadId.",
+          "acceptance": ["Users see own calls, Admin/Super Admin all", "Export works with the same filter"] },
+        { "id": "C05", "title": "Check-before-save pop-up", "status": "new", "size": "S", "source": "Screen p21, rule #10",
+          "required": "Before saving a lead, customer, product or quotation, show a 'Check before saving' dialog listing the entered fields with 'Yes, save' / 'Go back and edit'.",
+          "acceptance": ["Going back keeps every typed value"] }
+      ]
+    },
+    {
+      "id": "M02", "name": "Quotations and proposals",
+      "changes": [
+        { "id": "C06", "title": "Accept / reject each product", "status": "partial", "size": "M", "source": "Screen p4, rule #4, Changes.txt item 1",
+          "current": "Quotation status Draft/Accepted; one proposal per item.",
+          "required": "Per-item 'Selected' tick; 'Create proposal from selected (n)'; 'Mark not accepted'. Customer decision timeline: sent on WhatsApp → accepted → proposal ready. Recent quotations list with status Sent / Accepted / Converted / Not accepted.",
+          "data": "QuotationItem.decision (Pending/Selected/NotAccepted); QuotationStatus adds Sent, NotAccepted, Converted." },
+        { "id": "C07", "title": "Export quotation as image", "status": "new", "size": "S", "source": "Screen p4, rule #16, Changes.txt item 2",
+          "required": "'Export image' (PNG of the same letterhead layout as the PDF) beside 'Export PDF'." },
+        { "id": "C08", "title": "Attachments", "status": "new", "size": "M", "source": "rule #2, screens p4, p6–7",
+          "required": "Attach files (PDF/JPG/PNG) to quotations, proposals and customers; list with file name and date added; Customer 'Documents' section shows them.",
+          "data": "Attachment {tenantId, ownerType, ownerId, fileName, path, uploadedById, createdAt}; files under app/storage like expense bills." },
+        { "id": "C09", "title": "Delete quotation", "status": "new", "size": "S", "source": "rule #9, U-21, A-19",
+          "required": "Delete only while no proposal exists; reason required; User own only, Admin/Super Admin any; soft delete kept in audit log.",
+          "data": "Quotation.deletedAt, deletedById, deleteReason." },
+        { "id": "C10", "title": "Pay mode, term and start date on proposal", "status": "partial", "size": "M", "source": "Screen p5, rules #24–25, U-23",
+          "required": "Proposal holds pay mode (One-time/Monthly/Quarterly/Half-yearly/Yearly), term, start date, plan, premium; policy number 'leave blank until issued'. Blank → stays in Proposals, no bills. Entered → moves to Partners / Customers as Active and the renewal schedule (C24) is created. Proposals list: Consent, Status, Next action, 'Resend link'.",
+          "data": "Proposal.frequency, termMonths, startDate, premiumPayingTermMonths; Proposal.quotationId/quotationItemId nullable (for C16)." }
+      ]
+    },
+    {
+      "id": "M03", "name": "Settings → Products and schemes (build first – other modules read it)",
+      "changes": [
+        { "id": "C11", "title": "Product and scheme catalogue", "status": "new", "size": "L", "source": "Screen p20, rule #1, A-17, Changes.txt item 11",
+          "required": "Admin and Super Admin manage products: name, category, partner, invoice rule (see C24), pay modes, lock-in period, bills yes/no, bank details required (+ which bank fields: account holder, bank, branch, IFSC, account no. – stored encrypted), premature closure allowed (after lock-in), fields on the account (account/policy no. required, date of commencement, maturity auto from tenure, premium paying term, nominee), custom fields (text/number/date/dropdown, required). Schemes per product with tenure and interest rate; rate history with effective-from date and who changed it. Existing accounts keep the rate they were opened at. Seed the sample list on screen p20 (RD, TD 1/2/3/5, KVP, NSC, SSCS, LIC Endowment/Term, SBI Life Savings, SBI General Health) plus the 8 PO schemes already in the app.",
+          "data": "Product, Scheme, SchemeRate {rate, from, to, changedById}, ProductField / CustomField, Policy.schemeId, Policy.rateAtOpen, Policy.lockInUntil, Policy.customValues Json, Policy bank details (encrypted). Keep ProductType enum for posting/Day Book categories.",
+          "acceptance": ["Every change logged (C49)", "Customer and add-product forms read tenure, lock-in, rate and fields from here", "Rate change with a future date doesn't alter existing policies"] }
+      ]
+    },
+    {
+      "id": "M04", "name": "Partners / Customers",
+      "changes": [
+        { "id": "C12", "title": "Products invested table and header", "status": "partial", "size": "M", "source": "Screen p6, rule #5",
+          "required": "Header: name, all mobiles (WhatsApp marked), email, address, family name, masked Aadhaar/PAN, consent date; cards Holdings (n, sources), Total yearly premium, Investments (MF + post office), Next renewal. Table: Product, Scheme, Policy/account no., Invested/premium (with frequency), Rate, Commenced, Tenure, Lock-in until, Maturity, Status. Footer totals: one-time invested, regular premiums.",
+          "depends_on": ["C11"] },
+        { "id": "C13", "title": "Policy statuses and premature closure", "status": "new", "size": "M", "source": "rules #13–14, U-20, Use cases p11",
+          "required": "Statuses Active, Lapsed, Matured, Premature closed, Withdrawn. 'Premature closure' tick with date + reason on every product except mutual funds (only after lock-in if the product says so). Mutual funds: withdraw date → Withdrawn. Closing stops bills and reminders; 'Generate bill' hidden for Matured, Premature closed, Withdrawn. Auto Matured at maturity / after the last renewal.",
+          "data": "PolicyStatus adds PrematureClosed, Withdrawn; Policy.closedOn, closeReason, withdrawnOn." },
+        { "id": "C14", "title": "Mobiles and email on customers", "status": "partial", "size": "S", "source": "rule #8, screen p6",
+          "required": "Same '+ number' and 'Same as WhatsApp' as leads; copied from the lead when the customer is created." },
+        { "id": "C15", "title": "Family grouping", "status": "new", "size": "L", "source": "rule #7, U-18, A-18, screen p6, Changes.txt item 3",
+          "required": "Family {name, head} with members and relation. System suggests groups by same surname + address or shared mobile; Users can suggest/create, Admin confirms, edits or rejects. Family panel on the customer: member, relation, products count, next due, 'Add member'. Receipts can combine due bills of a whole family (C29).",
+          "data": "Family, FamilyMember {customerId, relation}, FamilySuggestion {status}." },
+        { "id": "C16", "title": "Add product directly", "status": "new", "size": "L", "source": "rule #5, U-15 (add product), screen p6, Changes.txt item 3",
+          "required": "On a customer: 'Add product directly' without a quotation – product, scheme/tenure, policy number, amount/premium, lock-in until (auto), date of commencement, maturity date (auto), pay mode, term, premium paying term, bank account (if product needs it), nominee, custom fields, attachments, check-before-save. Blank policy number → saved as a Proposal; with number → Active policy + renewal schedule. One-time products (TD etc.) get no bills and mature on start + term.",
+          "depends_on": ["C10", "C11"] },
+        { "id": "C17", "title": "Linked by mobile, documents, activity", "status": "partial", "size": "M", "source": "rule #22, screens p6–7",
+          "required": "Customer view lists E-Sevai entries and receipts linked by any of the customer's mobile numbers; Documents section (C08); Recent activity (reminders sent, partner sync, merges); Owner-paid slips for this customer with 'Record customer payment'; Renewals – all policies (paid on, receipt or OWN no., status); Receipts for this customer including OWN slips 'Closed automatically by RCPT-…'; 'Generate receipt' and 'New quotation' buttons." },
+        { "id": "C18", "title": "Customer merge", "status": "excluded", "size": "M", "source": "Spec modules table, screen p6",
+          "required": "Same PAN + Aadhaar → merge automatically and show a note; only one matches → Admin approves.",
+          "depends_on": ["D11"] }
+      ]
+    },
+    {
+      "id": "M05", "name": "Renewals",
+      "changes": [
+        { "id": "C19", "title": "From / To dates and quick picks", "status": "new", "size": "S", "source": "rule #27, U-22, screen p11",
+          "required": "From date, To date, 'Show renewals' and quick picks: today, this week, this month, next 30 days, next 3 months, last month. Replaces the fixed 30-day window; works with the existing product → company → scheme filter and the Paid-to filter, and in the export." },
+        { "id": "C20", "title": "Not renewed tab and summary cards", "status": "new", "size": "M", "source": "screen p11, U-07",
+          "required": "Tabs Due / Overdue / Paid / Not renewed (lapsed or matured – 'follow up or close'). Cards: Due this month (count, ₹), Paid, Not paid, Not renewed. Filters month, product, days overdue." },
+        { "id": "C21", "title": "Overdue columns", "status": "partial", "size": "S", "source": "screen p11",
+          "required": "Columns Customer, Product, Policy/account, Due date, Amount, Days overdue, Reminders sent ('3 (last 9 Oct)'), Send reminder." },
+        { "id": "C22", "title": "By customer view", "status": "new", "size": "S", "source": "screen p12",
+          "required": "Customer, policies, due this month, paid this year, overdue (owner-paid shown), 'Open customer'." },
+        { "id": "C23", "title": "Renewal Excel", "status": "partial", "size": "S", "source": "screen p11, messages table",
+          "required": "'Download renewal Excel': last month renewed or not + this month due (same file the 1st-of-month email sends)." },
+        { "id": "C24", "title": "Renewal schedule and invoice rules", "status": "partial", "size": "L", "source": "rules #13, #24, #26, screen p11 tables, Use cases p11",
+          "current": "src/lib/dues.ts continues each policy's due series within termMonths; one-time PO schemes show maturity rows.",
+          "required": "Schedule from pay mode, term (1–5 years) and start date; first payment at start, renewals after it (Yearly 3 yrs = 2 renewals, Monthly 1 yr = 11, Half-yearly 5 yrs = 9…). Invoice rule per product: RD per pay mode, last bill the cycle before maturity; TD/KVP/NSC/SCSS none; LIC/PLI/SBI Life until premium paying term ends; Care/SBI General/Star Health until withdraw/closed date; mutual funds none (Withdrawn on withdraw date). At maturity/last renewal the bill option is disabled and status shows Matured. 'View schedule' per policy shows rows # / Due date / Type / Amount / Status including expiry/maturity.",
+          "acceptance": ["Unit tests for each pay mode × term in the screen p11 table", "Advance/late bills never go past the invoice rule"],
+          "depends_on": ["C10", "C11", "C13"] }
+      ]
+    },
+    {
+      "id": "M06", "name": "Receipts and bills",
+      "changes": [
+        { "id": "C25", "title": "Cash denomination", "status": "new", "size": "M", "source": "rule #6, screens p8, p13",
+          "required": "Wherever cash is collected (receipts, payments, E-Sevai, direct bill): note/coin rows (₹500, ₹200, ₹100, ₹50, ₹20, ₹10, coins) with count and amount; total must equal the cash amount before save; printed on the receipt.",
+          "data": "Receipt/Payment/ServiceTransaction.denominations Json." },
+        { "id": "C26", "title": "Received by on every bill", "status": "new", "size": "S", "source": "rule #18, screen p8",
+          "required": "'Received by' (logged-in user, shown on the form) printed on every receipt/bill PDF." },
+        { "id": "C27", "title": "Payment modes", "status": "partial", "size": "M", "source": "rule #20, Settings p18",
+          "required": "Cash (with denomination), UPI – PhonePe / GPay, Net banking – bank name (from a Settings list: HDFC, IOB, SBI…) + transaction ID required, Cheque, Card; modes and bank names managed in Settings → Reminders and payment modes (add, switch off). Bank name = the customer's bank (reference only); it and the transaction ID are printed on the receipt and shown in the Day Book row. The receiving agency account is chosen as today.",
+          "depends_on": ["D06"] },
+        { "id": "C28", "title": "Bill date and transaction date", "status": "no_change", "size": "-", "source": "rule #19, U-16",
+          "required": "Keep as built in f85fb96: bill date may be back-dated to any day after the last closed day; transaction date stored and printed. The v2 '10 days earlier' rule is NOT applied (D02).",
+          "depends_on": ["D02"] },
+        { "id": "C29", "title": "Combine bills across a family", "status": "partial", "size": "M", "source": "rule #11, U-16, screen p8",
+          "current": "Several dues of one customer → one PAY- payment with one RCPT per due.",
+          "required": "Tick due bills of a customer or their family (bill no., product, due date with overdue/advance label, bill amount, allocated); amount received, mode, transaction date, bill date, received by, denomination; 'Generate one receipt'. Combined RD receipt: several RD bills on one receipt.",
+          "depends_on": ["C15", "D09"] },
+        { "id": "C30", "title": "Direct bill", "status": "new", "size": "M", "source": "rule #21, U-17, screen p8–9",
+          "required": "Bill for a customer or a non-customer (name + mobile), purpose, amount, payment mode, received by → receipt + Day Book entry; non-customer matched to a customer later by mobile.",
+          "data": "Receipt.customerId nullable + payerName, payerMobile, purpose (or a DirectBill model)." },
+        { "id": "C31", "title": "Receipts screen tabs", "status": "partial", "size": "S", "source": "screen p8",
+          "required": "Tabs Customer receipts / Owner-paid (n) / Post office RD; 'Share on WhatsApp' beside 'Download PDF'; cancelled rows show who cancelled, when and why." },
+        { "id": "C32", "title": "Owner-paid for all billed products", "status": "partial", "size": "M", "source": "Spec owner-paid row, U-15/U-16, screens p9, p23",
+          "current": "RD only, PO receipt no.",
+          "required": "Any product with bills (RD, LIC, PLI, SBI Life, Care, SBI General, Star Health); not TD/KVP/NSC/SCSS/MF. Reference no. required: PO receipt no. for RD, insurer receipt/transaction no. for insurance. Slip list: Slip, Policy/account, Customer, Bill, Amount, Reference no., Customer receipt, Status. Cards: Owner paid – customer owes, Collected – return to owner, Settled this month, Owner is owed now. Admin daily alert for money collected but not returned.",
+          "data": "OwnerPaidSlip.poReceiptNo → reference (rename), bill label.",
+          "depends_on": ["D05"] },
+        { "id": "C33", "title": "Verification on the agent portal", "status": "partial", "size": "M", "source": "screen p10, spec PO RD row",
+          "required": "List PO receipt no. / policy no., scheme, receipts, amount, checked by, status Pending / Verified / Mismatch (with note). RD verified by PO receipt number; TD/KVP/NSC by policy number. Completes Collected → Deposited → Verified." }
+      ]
+    },
+    {
+      "id": "M07", "name": "E-Sevai, expenses, Day Book, P&L",
+      "changes": [
+        { "id": "C34", "title": "E-Sevai entry fields", "status": "partial", "size": "S", "source": "rule #23, screen p13",
+          "required": "Service number*, mobile number*, name, gender, notes, collected by, cash denomination (C25); 'Mobile matches customer X: this entry will show in his single view'. Today's entries columns: time, service, reference, EB paid, certificate amount, PAN deducted, collected, mode, paid from." },
+        { "id": "C35", "title": "Wallet statement upload", "status": "new", "size": "L", "source": "U-10, screen p13",
+          "required": "Upload provider statement; system marks recharge or deduction and matches entries; each unmatched line asks how much the customer paid and cash or UPI; nothing saved until confirmed." },
+        { "id": "C36", "title": "Expense approval limits from Settings", "status": "partial", "size": "S", "source": "S-06, Settings p18",
+          "current": "AUTO_LIMIT 2000 / ADMIN_LIMIT 5000 constants in src/lib/expenses.ts.",
+          "required": "Read limits from Settings → Approval limits (Super Admin only edits, logged)." },
+        { "id": "C37", "title": "Upload expenses Excel", "status": "new", "size": "M", "source": "screen p14",
+          "required": "Import expenses from Excel with the same approval routing and duplicate-bill check; preview + confirm." },
+        { "id": "C38", "title": "Day Book share and upload", "status": "new", "size": "M", "source": "screen p15, U-12",
+          "required": "'Share on WhatsApp' the day summary (PDF); 'Upload collections' import; adjustments with reason." },
+        { "id": "C39", "title": "P&L without commission, with Other income", "status": "partial", "size": "M", "source": "screen p16",
+          "required": "Remove insurer/MF commission from P&L income, the P&L Excel/PDF export and the monthly P&L. Period picker (month/year); income lines Service charges – EB / PAN / Certificates, Other income; expenses by category; Download Excel/PDF; note listing pass-through money not counted (premiums, EB amounts collected for others, wallet recharges, transfers between own accounts). 'Other income' (approved by owner 19 Oct 2026): new Day Book entry type OtherIncome – money in to cash/bank with a reason, entered by Admin or Super Admin, refused on closed days, reversible like other entries; counted as P&L income.",
+          "depends_on": ["D01"] }
+      ]
+    },
+    {
+      "id": "M08", "name": "Users, Settings, Tickets",
+      "changes": [
+        { "id": "C40", "title": "Users & Roles screen", "status": "new", "size": "M", "source": "screen p17, A-13, S-03",
+          "required": "List Name, Mobile, Role, Last login, Status, Action; Add user (name, mobile, username, role); edit, deactivate/reactivate, reset password. Admin can create User or Admin only; Super Admin any role. Role matrix shown read-only." },
+        { "id": "C41", "title": "Settings → Fields and rules", "status": "new", "size": "L", "source": "screen p18, A-09, A-16",
+          "required": "Pick screen; per field: label, 'Shown as', type, required, visible, dropdown values; '+ Add field' (custom). Changes apply from now on; old records keep values; every change logged with who, when, old and new value.",
+          "depends_on": ["D07"] },
+        { "id": "C42", "title": "Settings → Approval limits", "status": "new", "size": "S", "source": "screen p18, S-06",
+          "required": "'No approval up to (₹)' and 'Admin approves up to (₹)'; Super Admin only." },
+        { "id": "C43", "title": "Settings → Reminders and payment modes", "status": "new", "size": "M", "source": "screen p18",
+          "required": "Edit timings: renewal reminder 1 month, 15, 7, 1 day before; after due every 2 weeks; daily lead email 8:00 pm; daily collections and expenses 9:00 pm; Admin renewal status Monday 9:00 am; monthly P&L and expense statement 1st. Payment modes list with type and active switch; add mode.",
+          "depends_on": ["D06"] },
+        { "id": "C44", "title": "Tickets", "status": "new", "size": "L", "source": "screen p19, spec Tickets row, Use cases p13",
+          "required": "Raise ticket: title, screen, type (problem / change request / question), priority P1–P4, details, screenshot. Cards: open (critical count), waiting for developer, waiting for you, closed this month. List sorted by priority: No. (TK-), title, screen, priority, raised by, assigned to, status, age. Statuses Open → In progress → Waiting for you → Fixed – please check → Closed; User closes own, Admin any. Alerts to developers: P1 WhatsApp + email at once, repeat every 2 h, fix same day; P2 every 4 h, 2 working days; P3 email daily, 1 week; P4 email weekly, next release; Admins copied when a target is missed.",
+          "depends_on": [], "note": "Developer alerts are mocked into MessageLog (D08)." }
+      ]
+    },
+    {
+      "id": "M09", "name": "Automation, dashboard, audit",
+      "changes": [
+        { "id": "C45", "title": "Scheduled messages and reports", "status": "new", "size": "L", "source": "spec messages table, screen p11",
+          "required": "Job runner (worker process in Docker) for: renewal reminder WhatsApp to customer 30, 15, 7, 1 day before due then every 2 weeks until paid (stops when paid, closed or matured); maturity reminder 30 and 7 days before and on the day; new-leads email every evening to Admins; dashboard status WhatsApp every morning to Admins/Super Admin; Day Book + expenses summary WhatsApp/PDF every evening; renewals paid/not paid email every Monday; renewal Excel email on the 1st; P&L WhatsApp + email (PDF + Excel) to Super Admin only on the 1st. Timings from C43.",
+          "acceptance": ["Every job writes to MessageLog (visible in Sent messages) – no real WhatsApp/SMS/email (D08)", "All sends go through one channel function so a real provider can replace the mock later", "No duplicate sends if the job reruns"],
+          "depends_on": ["C43"] },
+        { "id": "C46", "title": "Dashboard additions", "status": "partial", "size": "S", "source": "screen p1",
+          "required": "New leads today split by business type; Renewals due this week with premium total; Unpaid / not renewed with oldest days overdue; Today's collections cash/UPI; Cash in hand with Day Book status; bank balance after ATM/cheques; E-Sevai wallets; Waiting for approval with Admin/Super Admin split. 'Needs your action' rows: calls open (overdue name), owner advances to return, expenses waiting, Day Book status, partner sync to review (once C-partner exists)." },
+        { "id": "C47", "title": "Import on list screens", "status": "new", "size": "M", "source": "every screen header (Import / Export)",
+          "required": "Excel import with preview + confirm for Leads, Follow-ups, Proposals, Customers, E-Sevai, Expenses (C37); same validation as the forms." },
+        { "id": "C48", "title": "Renewal reminders 'Reminders stop when paid'", "status": "partial", "size": "S", "source": "U-06",
+          "required": "Manual 'Send reminder' records count + last date (feeds C21); paid, closed or matured policies get no more reminders." },
+        { "id": "C49", "title": "Audit log", "status": "new", "size": "M", "source": "spec Data and security, Settings notes",
+          "required": "AuditLog {tenantId, userId, entity, entityId, action, before Json, after Json, at} written for settings, product/rate changes, deletes, cancellations, role changes; viewer for Admin/Super Admin." }
+      ]
+    }
+  ],
+
+  "changes_txt_mapping": {
+    "1 each product accept/reject": "C06",
+    "2 quote pdf/image": "PDF done; image = C07",
+    "3 holdings, add product, grouping": "C12, C16, C15",
+    "4 postal TD/NSC reminder 1 month before": "display done in 39ff618; automatic WhatsApp = C45",
+    "5 paid / not paid to bank": "done (uncommitted)",
+    "6 PO commission out of P&L": "done in f85fb96; see D01",
+    "7 lead fields": "DOB/address/WhatsApp done in f85fb96; rest = C01",
+    "8 grouping payment": "done in 4fdb19f; family = C29",
+    "9 advance / multiple dues": "done in 4fdb19f",
+    "10 bill date + transaction date": "done in f85fb96; see D02",
+    "11 scheme-wise fields": "C11",
+    "Ifaplanet (PAN-based MF dashboard)": "not in v2 documents – see excluded_for_now"
+  },
+
+  "build_order": [
+    { "phase": 1, "name": "Decisions + foundations", "items": ["All owner decisions D01–D12 recorded; D13 (EB gap, partner data) waits on the client and blocks nothing", "C11", "C13", "C49"] },
+    { "phase": 2, "name": "Leads and follow-ups", "items": ["C01", "C02", "C03", "C04", "C05"] },
+    { "phase": 3, "name": "Quotations, proposals, add product", "items": ["C06", "C07", "C08", "C09", "C10", "C16"] },
+    { "phase": 4, "name": "Customers and families", "items": ["C12", "C14", "C15", "C17"] },
+    { "phase": 5, "name": "Renewals", "items": ["C24", "C19", "C20", "C21", "C22", "C23", "C48"] },
+    { "phase": 6, "name": "Receipts and bills", "items": ["C25", "C26", "C27", "C28", "C29", "C30", "C31", "C32", "C33"] },
+    { "phase": 7, "name": "E-Sevai, expenses, Day Book, P&L", "items": ["C34", "C35", "C36", "C37", "C38", "C39"] },
+    { "phase": 8, "name": "Users, Settings, Tickets", "items": ["C40", "C41", "C42", "C43", "C44"] },
+    { "phase": 9, "name": "Automation and dashboard", "items": ["C45", "C46", "C47"] }
+  ],
+
+  "excluded_for_now": [
+    "Real WhatsApp / SMS / email sending – mocked to MessageLog until the client subscribes to a provider and supplies the account details (D08)",
+    "Partner sync (MF CRM, SBI, Care, Star, life insurers by API or file) – needs D13 answers",
+    "Ifaplanet PAN-based mutual fund integration (Changes.txt) – not in v2 documents",
+    "Multi-agency: per-agency totals for Super Admin, database row security (tenantId already on every table)",
+    "Customer merge by PAN + Aadhaar (C18) – owner decision D11, not this round",
+    "Aadhaar/PAN encryption and view logging – depends on D11 and the compliance decision",
+    "Cloud deployment in an India region, Development → Staging → Production pipeline, 15-minute backups with monthly restore test",
+    "Website lead API and public consent page"
+  ],
+
+  "success_criteria": [
+    "Every open decision answered and recorded in app/CLAUDE.md",
+    "Each change C01–C49 meets its acceptance list, verified on a scratch DB and in the browser",
+    "Existing data (policies, receipts, Day Book) migrates without loss (old leads: imported after go-live, D03); Day Book balances unchanged after every migration",
+    "Role rules hold: Users never see P&L or approvals; Admin can't create Super Admins or approve own expenses",
+    "Playwright demo script (e2e/demo-script.spec.ts) updated for the new lead fields/statuses and passing"
+  ]
+}

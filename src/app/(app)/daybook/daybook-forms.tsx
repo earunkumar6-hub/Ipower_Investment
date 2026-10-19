@@ -152,7 +152,7 @@ export function PoDepositForm({ date, closed, receipts, atmToday, isAdmin }: { d
         )}
         <Input name="note" placeholder="Note (optional)" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
-        <Button type="submit" disabled={pending || selected.length === 0} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save deposit"}</Button>
+        <Button type="submit" disabled={pending || selected.length === 0} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save deposit"}</Button>
       </form>
     </Panel>
   );
@@ -188,7 +188,7 @@ export function VerifyCloseForm(p: { date: string; closed: boolean; admins: { id
       <form onSubmit={submitKeepingValues(close)}>
         <input type="hidden" name="date" value={p.date} />
         {p.canClose && (
-          <Button type="submit" disabled={closing || p.closed || !p.ready} className="w-full bg-blue-600 hover:bg-blue-700">
+          <Button type="submit" disabled={closing || p.closed || !p.ready} className="w-full bg-brand-600 hover:bg-brand-700">
             {p.closed ? "Closed" : closing ? "Closing…" : "Close Day Book"}
           </Button>
         )}

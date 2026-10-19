@@ -21,7 +21,7 @@ export function AcceptButton({ quotationId, disabled }: { quotationId: string; d
 export function CreateProposalButton({ quotationItemId }: { quotationItemId: string }) {
   const [pending, start] = useTransition();
   return (
-    <Button size="sm" className="bg-blue-600 hover:bg-blue-700" disabled={pending} onClick={() => start(async () => {
+    <Button size="sm" className="bg-brand-600 hover:bg-brand-700" disabled={pending} onClick={() => start(async () => {
       const r = await createProposal(quotationItemId); // redirects to the proposal on success
       if (!r.ok) toast.error(r.error);
     })}>

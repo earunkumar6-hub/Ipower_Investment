@@ -165,10 +165,6 @@ export async function ownerExtras(user: SessionUser) {
     };
   });
   return {
-    commissionGross: pnl.commissionPartner,
-    commissionTds: pnl.tdsCredit,
-    commissionReceived: pnl.commissionReceived,
-    commissionExpected: pnl.commissionExpected,
     profit: pnl.profit,
     income: pnl.income,
     expenses: pnl.expenseTotal,
@@ -189,32 +185,12 @@ function topSlices(xs: Slice[]): Slice[] {
   return [...sorted.slice(0, 5), { label: "Other", value: rest }];
 }
 
-/** Owner only: this month's income by business vertical and expenses by category (same numbers as P&L). */
+/** Owner only: this month's expenses by category (same numbers as P&L). Commission is shown only on P&L. */
 export async function ownerPies(user: SessionUser) {
-  const tenantId = user.tenantId;
   const range = monthRange(monthKey(istToday()));
-  const pnl = await profitAndLoss(tenantId, range);
-  // Partner statements are classified by the partner's policies (e.g. "HDFC MF stmt" → HDFC MF → mutual fund).
-  const [statements, partners] = await Promise.all([
-    db.commission.findMany({ where: { tenantId, sourceType: "Partner", status: { not: "Cancelled" }, earnedOn: { gte: range.from, lt: range.to } } }),
-    db.policy.findMany({ where: { tenantId, productType: { in: ["Insurance", "MutualFund"] } }, distinct: ["partner"], select: { partner: true, productType: true } }),
-  ]);
-  let insurance = 0, mf = 0, otherCommission = 0;
-  for (const c of statements) {
-    const p = partners.find((x) => c.sourceNo.startsWith(x.partner));
-    const g = Number(c.gross);
-    if (p?.productType === "MutualFund") mf += g;
-    else if (p) insurance += g;
-    else otherCommission += g;
-  }
+  const pnl = await profitAndLoss(user.tenantId, range);
   return {
     month: range.label,
-    income: topSlices([
-      { label: "Insurance commission", value: insurance },
-      { label: "Mutual fund commission", value: mf },
-      { label: "E-Sevai service charges", value: Number(pnl.serviceCharges) },
-      { label: "Other commission", value: otherCommission },
-    ]),
     expenses: topSlices(pnl.expenseLines.map((l) => ({ label: l.label, value: Number(l.amount) }))),
   };
 }

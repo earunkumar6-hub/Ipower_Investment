@@ -1,4 +1,4 @@
-import type { Expense, Policy, PoDeposit, Prisma, ProductType, Receipt, ServiceTransaction } from "@prisma/client";
+import type { CompanyPayment, Expense, Policy, PoDeposit, Prisma, ProductType, Receipt, ServiceTransaction } from "@prisma/client";
 import type { Tx } from "@/lib/db";
 import { post } from "@/lib/daybook";
 
@@ -123,8 +123,8 @@ export function postExpensePayment(tx: Tx, e: Expense, ctx: { vendorName: string
   });
 }
 
-/** Cash taken to the post office for the ticked RD receipts. */
-export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { cashAccountId: string; receiptCount: number }) {
+/** Money taken to the post office for RD receipts (cash from the Day Book; cash or bank from a receipt's page). */
+export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { accountId: string; mode: "Cash" | "Bank"; receiptCount: number }) {
   return post(tx, {
     tenantId: d.tenantId,
     entryDate: d.depositDate,
@@ -135,15 +135,41 @@ export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { cashAccountId: string
     lines: [
       {
         key: "out",
-        accountId: ctx.cashAccountId,
+        accountId: ctx.accountId,
         direction: "Out",
         amount: d.amount,
         entryType: "DepositToPo",
-        mode: "Cash",
+        mode: ctx.mode,
         isPassThrough: true,
-        particulars: `PO receipt ${d.poReceiptNo} · ${ctx.receiptCount} receipts`,
+        particulars: `PO receipt ${d.poReceiptNo} · ${ctx.receiptCount} ${ctx.receiptCount === 1 ? "receipt" : "receipts"}`,
         productCategory: "Post office",
         scheme: "Post office RD",
+      },
+    ],
+  });
+}
+
+/** Collected premiums paid on to the insurer / AMC / post office (SSA, PPF): money leaves the account. */
+export function postCompanyPayment(tx: Tx, p: CompanyPayment, ctx: { receiptCount: number; productCategory: string }) {
+  return post(tx, {
+    tenantId: p.tenantId,
+    entryDate: p.paidOn,
+    sourceType: "CompanyPayment",
+    sourceId: p.id,
+    sourceNo: p.reference,
+    createdById: p.createdById,
+    lines: [
+      {
+        key: "out",
+        accountId: p.accountId,
+        direction: "Out",
+        amount: p.amount,
+        entryType: "PaidToCompany",
+        mode: p.mode,
+        isPassThrough: true,
+        particulars: `Paid to ${p.company} · ref ${p.reference} · ${ctx.receiptCount} receipts`,
+        productCategory: ctx.productCategory,
+        scheme: p.company,
       },
     ],
   });

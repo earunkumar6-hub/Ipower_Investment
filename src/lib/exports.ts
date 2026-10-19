@@ -5,17 +5,18 @@ import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
+import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { esevaiEntries, walletSummary } from "@/lib/esevai-day";
 import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL, maskMobile } from "@/lib/lead-labels";
 import { ownerScope, userNames } from "@/lib/leads";
 import {
-  customerFilter, dayBookDate, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
+  customerFilter, dayBookDate, depositFilter, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
   pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
-import { hasPermission, seesAll, type Permission } from "@/lib/permissions";
+import { seesAll, type Permission } from "@/lib/permissions";
 import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
@@ -54,7 +55,6 @@ export const REPORTS: Record<string, Report> = {
       ];
       if (o) {
         cards.push(
-          ["Commission this month", null, o.commissionGross, `TDS ${fmtINR(o.commissionTds)} · received ${fmtINR(o.commissionReceived)} of ${fmtINR(o.commissionReceived.plus(o.commissionExpected))}`],
           [o.profit.isNegative() ? "Loss this month" : "Profit this month", null, o.profit, `Income ${fmtINR(o.income)} · expenses ${fmtINR(o.expenses)}`],
           ["Owner money", null, o.ownerOwed, `Customers owe ${fmtINR(o.customerOwes)} · to return ${fmtINR(o.toReturn)}`],
         );
@@ -73,7 +73,7 @@ export const REPORTS: Record<string, Report> = {
         },
         slices("Collections by staff", `Staff (${staff.month})`, staff.slices),
       ];
-      if (pies) sheets.push(slices("Income by vertical", `Vertical (${pies.month})`, pies.income), slices("Expenses by category", `Category (${pies.month})`, pies.expenses));
+      if (pies) sheets.push(slices("Expenses by category", `Category (${pies.month})`, pies.expenses));
       if (o) {
         sheets.push({
           name: "Collections last 7 days",
@@ -251,12 +251,8 @@ export const REPORTS: Record<string, Report> = {
     permission: "Renewal.View",
     async build(user, sp) {
       const today = istToday();
-      const { tab, within, filterLabel, rows: items } = await loadRenewals(user, sp, today);
-      const receiptNos = new Map(
-        (await db.receipt.findMany({ where: { id: { in: items.map((i) => i.paidReceiptId).filter((x): x is string => !!x) } }, select: { id: true, receiptNo: true } }))
-          .map((r) => [r.id, r.receiptNo]),
-      );
-      const scope = tab === "due" ? `due in the next ${within} days` : tab === "overdue" ? "overdue" : "paid in the last 30 days";
+      const { tab, within, paidTo, filterLabel, rows: items } = await loadRenewals(user, sp, today);
+      const scope = tab === "due" ? `due in the next ${within} days` : tab === "overdue" ? "overdue" : paidTo === "pending" ? "not yet paid to Post office / insurer" : "paid in the last 30 days";
       const paid = tab === "paid";
       return {
         file: `renewals-${tab}-${stamp()}.xlsx`,
@@ -266,14 +262,14 @@ export const REPORTS: Record<string, Report> = {
           totals: true,
           columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
             { header: "Amount", type: "money" }, { header: "Status", width: 20 },
-            ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }] : [{ header: "Last reminder", type: "datetime" as const, width: 20 }])],
+            ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }] : [{ header: "Last reminder", type: "datetime" as const, width: 20 }])],
           rows: items.map((i) => {
             const p = i.policy;
             const [status] = renewalStatus(i, today);
             // A maturity's amount is the deposit, not money to collect, so it stays out of the totals column.
             const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
               i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (deposit ${fmtINR(i.amount)})` : status];
-            return paid ? [...base, i.paidOn, i.paidReceiptId ? receiptNos.get(i.paidReceiptId) : "owner paid"] : [...base, i.lastReminderAt];
+            return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""] : [...base, i.lastReminderAt];
           }),
         }],
       };
@@ -282,18 +278,18 @@ export const REPORTS: Record<string, Report> = {
 
   receipts: {
     permission: "Receipt.View",
-    // Both tabs in one file: customer receipts, then owner-paid RD slips.
-    async build(user) {
-      const showCommission = hasPermission(user.role, "Commission.View");
-      const [receipts, slips, accounts] = await Promise.all([
+    // Both tabs in one file: customer receipts (with the screen's deposit filter), then owner-paid RD slips.
+    async build(user, sp) {
+      const deposit = depositFilter(sp);
+      const [receipts, slips, accounts, users] = await Promise.all([
         db.receipt.findMany({
-          where: { tenantId: user.tenantId, ...(seesAll(user.role) ? {} : { createdById: user.id }) },
+          where: { tenantId: user.tenantId, ...(seesAll(user.role) ? {} : { createdById: user.id }), ...(deposit !== "all" && DEPOSIT_WHERE[deposit]) },
           include: {
             customer: { select: { name: true } },
             policy: { select: { partner: true, productName: true, policyNumber: true } },
             payment: { select: { paymentNo: true } },
-            // Commission is only read for roles allowed to see it.
-            ...(showCommission && { commissions: { where: { status: { not: "Cancelled" } }, select: { gross: true } } }),
+            companyPayment: depositStatusSelect.companyPayment,
+            poDepositLine: depositStatusSelect.poDepositLine,
           },
           orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
         }),
@@ -303,23 +299,24 @@ export const REPORTS: Record<string, Report> = {
           orderBy: { createdAt: "desc" },
         }),
         db.account.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true } }),
+        userNames(user.tenantId),
       ]);
       const account = nameIn(accounts);
+      const nameOf = nameLookup(users);
       return {
         file: `receipts-${stamp()}.xlsx`,
-        title: "Receipts",
+        title: `Receipts${deposit === "all" ? "" : ` – deposit ${deposit}`}`,
         sheets: [{
           name: "Customer receipts",
           totals: true,
           columns: [{ header: "Receipt no." }, { header: "Payment no." }, { header: "Bill date", type: "date" }, { header: "Transaction date", type: "date" }, { header: "Entered", type: "datetime", width: 20 }, { header: "Customer", width: 24 },
             { header: "For", width: 32 }, { header: "Mode" }, { header: "Reference" }, { header: "Account" }, { header: "Amount", type: "money" },
-            ...(showCommission ? [{ header: "Commission", type: "money" as const }] : []), { header: "Status" }, { header: "RD status" }, { header: "Cancel reason", width: 24 }],
+            { header: "Collected by" }, { header: "Status" }, { header: "RD status" }, { header: "Deposit status", width: 48 }, { header: "Cancel reason", width: 24 }],
           rows: receipts.map((r) => {
-            const commission = "commissions" in r ? (r.commissions as { gross: Prisma.Decimal }[]) : [];
             const forText = (r.policy ? (r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`) : r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : "");
             return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
-              ...(showCommission ? [commission.length ? sum(commission.map((c) => c.gross)) : null] : []),
-              r.status, r.status !== "Cancelled" ? r.rdStatus : null, r.cancelReason];
+              nameOf(r.createdById), r.status, r.status !== "Cancelled" ? r.rdStatus : null,
+              r.policy && r.status !== "Cancelled" ? companyStatus(r, r.policy.partner, nameOf).text : null, r.cancelReason];
           }),
         }, {
           // Internal: not collections or income.

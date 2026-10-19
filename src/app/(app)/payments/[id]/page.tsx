@@ -46,7 +46,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <PageHeader title="Receipts" user={user} actions={
-        <Link href="/receipts/new" className={cn(buttonVariants(), "bg-blue-600 hover:bg-blue-700")}>New receipt</Link>
+        <Link href="/receipts/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New receipt</Link>
       } />
       <div className="flex items-start gap-4">
         <div className="max-w-3xl flex-1 rounded-xl border bg-white p-4">
@@ -67,7 +67,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
             <TableBody>
               {p.receipts.map((r) => (
                 <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
-                  <TableCell><Link href={`/receipts/${r.id}`} className="text-blue-700 hover:underline">{r.receiptNo}</Link></TableCell>
+                  <TableCell><Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link></TableCell>
                   <TableCell>{r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : "—"}</TableCell>
                   <TableCell>{dueLabel(r, items)}</TableCell>
                   <TableCell className="text-right">{fmtINR(r.amount)}</TableCell>

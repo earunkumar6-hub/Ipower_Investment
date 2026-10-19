@@ -81,7 +81,7 @@ export function LeadsTable({ rows, selectedId }: { rows: LeadRow[]; selectedId?:
       <TableBody>
         {table.getRowModel().rows.map((row) => (
           <TableRow key={row.id} onClick={() => select(row.original.id)}
-            className={cn("cursor-pointer", row.original.id === selectedId && "bg-blue-50 hover:bg-blue-50")}>
+            className={cn("cursor-pointer", row.original.id === selectedId && "bg-saffron-50 hover:bg-saffron-50")}>
             {row.getVisibleCells().map((cell) => (
               <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
             ))}

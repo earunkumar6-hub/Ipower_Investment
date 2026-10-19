@@ -20,6 +20,7 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
   Withdrawal: "ATM withdrawal",
   DepositToBank: "Deposit to bank",
   DepositToPo: "Deposit to post office",
+  PaidToCompany: "Paid to company",
   OwnerReturn: "Return to owner",
   Adjustment: "Adjustment",
 };

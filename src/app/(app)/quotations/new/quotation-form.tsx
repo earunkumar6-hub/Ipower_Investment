@@ -100,7 +100,7 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
       </Table>
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save quotation"}</Button>
+      <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save quotation"}</Button>
     </form>
   );
 }

@@ -63,7 +63,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           <h2 className="mr-4 pb-2 font-semibold">Expenses</h2>
           {TABS.filter(([k]) => k !== "approve" || hasPermission(user.role, "Expense.Approve")).map(([key, label]) => (
             <Link key={key} href={`/expenses?tab=${key}`}
-              className={cn("-mb-px border-b-2 px-3 pb-2 text-sm", tab === key ? "border-blue-600 font-medium text-blue-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
+              className={cn("-mb-px border-b-2 px-3 pb-2 text-sm", tab === key ? "border-brand-600 font-medium text-brand-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
               {label}
             </Link>
           ))}
@@ -89,7 +89,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                   </TableCell>
                   <TableCell>
                     {e.vendor.name} · {e.billNo}
-                    {e.billPhotoPath && <a href={`/api/expenses/${e.id}/bill`} target="_blank" className="ml-1 text-xs text-blue-700 hover:underline">bill</a>}
+                    {e.billPhotoPath && <a href={`/api/expenses/${e.id}/bill`} target="_blank" className="ml-1 text-xs text-brand-700 hover:underline">bill</a>}
                   </TableCell>
                   <TableCell>{e.paidBy === "Company" ? "Company" : `${e.paidBy}: ${e.paidByName}`}</TableCell>
                   <TableCell>{e.mode}</TableCell>

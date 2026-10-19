@@ -254,6 +254,7 @@ async function cancelReceiptUnguarded(_: ActionResult, form: FormData): Promise<
     if (r.status === "Cancelled") return { ok: false, error: "Already cancelled" };
     if (r.payment) return { ok: false, error: `Part of payment ${r.payment.paymentNo}; cancel the whole payment instead` };
     if (depositedAtPo(r)) return { ok: false, error: "Already deposited at the post office; it can't be cancelled here" };
+    if (r.companyPaymentId) return { ok: false, error: "Already paid to the company; it can't be cancelled here" };
     await reverseReceipt(tx, r, { tenantId: user.tenantId, userId: user.id, reason, today });
     return { ok: true };
   });
@@ -278,6 +279,10 @@ async function cancelPaymentUnguarded(_: ActionResult, form: FormData): Promise<
     const deposited = p.receipts.filter(depositedAtPo);
     if (deposited.length) {
       return { ok: false, error: `${deposited.map((r) => r.receiptNo).join(", ")} already deposited at the post office; the payment can't be cancelled here` };
+    }
+    const paidOn = p.receipts.filter((r) => r.companyPaymentId);
+    if (paidOn.length) {
+      return { ok: false, error: `${paidOn.map((r) => r.receiptNo).join(", ")} already paid to the company; the payment can't be cancelled here` };
     }
     for (const r of p.receipts.filter((x) => x.status === "Saved")) {
       await reverseReceipt(tx, r, { tenantId: user.tenantId, userId: user.id, reason, today });

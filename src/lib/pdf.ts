@@ -64,8 +64,8 @@ export const PDF_STYLE = `
   th { background: #f1f5f9; font-weight: 600; }
   .num { text-align: right; }
   .total td { font-weight: 700; border-top: 2px solid #0f172a; }
-  .header { display: flex; justify-content: space-between; border-bottom: 3px solid #1d4ed8; padding-bottom: 10px; }
+  .header { display: flex; justify-content: space-between; border-bottom: 3px solid #b01b21; padding-bottom: 10px; }
   .brand { display: flex; align-items: center; gap: 10px; }
   .logo { height: 60px; }
-  .advisor { font-weight: 600; color: #1d4ed8; margin-top: 2px; }
+  .advisor { font-weight: 600; color: #b01b21; margin-top: 2px; }
 `;

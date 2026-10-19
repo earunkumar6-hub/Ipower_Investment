@@ -45,7 +45,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               const next = c.policies.flatMap((p) => p.renewals).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
               return (
                 <TableRow key={c.id}>
-                  <TableCell><Link href={`/customers/${c.id}`} className="text-blue-700 hover:underline">{c.name}</Link></TableCell>
+                  <TableCell><Link href={`/customers/${c.id}`} className="text-brand-700 hover:underline">{c.name}</Link></TableCell>
                   <TableCell>{maskMobile(c.mobile)}</TableCell>
                   <TableCell>{counts.map(([k, n]) => `${n} ${k}`).join(" · ") || "—"}</TableCell>
                   <TableCell>{next ? fmtDate(next.dueDate) : "—"}</TableCell>

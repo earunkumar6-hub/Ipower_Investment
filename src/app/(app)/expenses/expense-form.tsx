@@ -93,8 +93,8 @@ export function ExpenseForm({ categories, today, userName }: { categories: strin
         </Field>
       </div>
       {state.error && <p className="rounded-lg bg-orange-50 p-2 text-sm text-orange-900">{state.error}</p>}
-      {hint && <p className="rounded-lg bg-blue-50 p-2 text-sm text-blue-900">{hint}{paidBy !== "Company" && " Stays “to be repaid” until the company pays it back."}</p>}
-      <Button type="submit" disabled={pending} className="w-full bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Submit"}</Button>
+      {hint && <p className="rounded-lg bg-saffron-50 p-2 text-sm text-saffron-900">{hint}{paidBy !== "Company" && " Stays “to be repaid” until the company pays it back."}</p>}
+      <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Submit"}</Button>
     </form>
   );
 }

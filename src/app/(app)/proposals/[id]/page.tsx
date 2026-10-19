@@ -38,7 +38,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">
               Proposal {p.proposalNo} · {p.customerName} · from{" "}
-              <Link href={`/quotations/${p.quotationId}`} className="text-blue-700 hover:underline">{p.quotation.quoteNo}</Link>
+              <Link href={`/quotations/${p.quotationId}`} className="text-brand-700 hover:underline">{p.quotation.quoteNo}</Link>
             </h2>
             <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
           </div>

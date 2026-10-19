@@ -10,6 +10,6 @@ export function StatCard({ title, value, sub, highlight, href, alert }: { title:
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </>
   );
-  const cls = cn("block rounded-xl border bg-white p-4", highlight && "border-blue-500 ring-1 ring-blue-500");
-  return href ? <Link href={href} className={cn(cls, "transition-colors hover:border-blue-400 hover:bg-blue-50/40")}>{body}</Link> : <div className={cls}>{body}</div>;
+  const cls = cn("block rounded-xl border bg-white p-4", highlight && "border-saffron-500 ring-1 ring-saffron-500");
+  return href ? <Link href={href} className={cn(cls, "transition-colors hover:border-saffron-400 hover:bg-saffron-50/40")}>{body}</Link> : <div className={cls}>{body}</div>;
 }

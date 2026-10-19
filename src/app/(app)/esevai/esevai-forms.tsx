@@ -107,7 +107,7 @@ export function ServiceEntryForm({ services }: { services: ServiceOption[] }) {
         </div>
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending || p === "no-rate"} className="w-full bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save entry"}</Button>
+      <Button type="submit" disabled={pending || p === "no-rate"} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save entry"}</Button>
     </form>
   );
 }
@@ -146,7 +146,7 @@ export function RechargeForm({ wallets }: { wallets: { id: string; name: string 
         <Label htmlFor="rechargeRef">Reference</Label>
         <Input id="rechargeRef" name="reference" className="w-32" placeholder="UTR" />
       </div>
-      <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Recharge"}</Button>
+      <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Recharge"}</Button>
       {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}
     </form>
   );

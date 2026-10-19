@@ -35,7 +35,7 @@ export default async function ProposalsPage() {
               const [label, tone] = PROPOSAL_STATUS[p.status];
               return (
                 <TableRow key={p.id}>
-                  <TableCell><Link href={`/proposals/${p.id}`} className="text-blue-700 hover:underline">{p.proposalNo}</Link></TableCell>
+                  <TableCell><Link href={`/proposals/${p.id}`} className="text-brand-700 hover:underline">{p.proposalNo}</Link></TableCell>
                   <TableCell>{p.customerName}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>

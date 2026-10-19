@@ -50,7 +50,7 @@ export async function xlsxResponse(filename: string, company: string, title: str
     const letterhead: [string, Partial<ExcelJS.Font>][] = [
       [company, { bold: true, size: 14 }],
       [TAGLINE, { italic: true, color: { argb: "FF64748B" } }],
-      [ADVISOR, { bold: true, color: { argb: "FF1D4ED8" } }],
+      [ADVISOR, { bold: true, color: { argb: "FFB01B21" } }],
     ];
     letterhead.forEach(([text, font], i) => {
       const cell = ws.getCell(i + 1, 1);

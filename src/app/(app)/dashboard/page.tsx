@@ -49,7 +49,7 @@ async function UserView({ user }: { user: SessionUser }) {
               {d.calls.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>{c.dueAt < new Date(now.getTime() - 86_400_000) ? fmtDate(c.dueAt) : fmtTime(c.dueAt)}</TableCell>
-                  <TableCell><Link href={`/leads?id=${c.leadId}`} className="text-blue-700 hover:underline">{c.lead.name}</Link></TableCell>
+                  <TableCell><Link href={`/leads?id=${c.leadId}`} className="text-brand-700 hover:underline">{c.lead.name}</Link></TableCell>
                   <TableCell>Lead {c.lead.leadNo}</TableCell>
                   <TableCell className="max-w-48 truncate">{c.note ?? "—"}</TableCell>
                   <TableCell>{c.dueAt <= now ? <StatusBadge tone="red">Overdue</StatusBadge> : <StatusBadge tone="slate">Scheduled</StatusBadge>}</TableCell>
@@ -62,7 +62,7 @@ async function UserView({ user }: { user: SessionUser }) {
         <RenewalsPanel title="My renewals due this week" renewals={d.renewals} />
       </div>
       <p className="mt-4 rounded-lg bg-slate-100 p-3 text-xs text-muted-foreground">
-        Commission, Profit and Loss, bank balances and approvals are not shown to staff.
+        Profit and Loss, bank balances and approvals are not shown to staff.
       </p>
     </>
   );
@@ -73,7 +73,7 @@ async function AdminView({ user }: { user: SessionUser }) {
   const [d, o, pies, staff] = await Promise.all([
     adminDashboard(user),
     owner ? ownerExtras(user) : null,
-    owner ? ownerPies(user) : null, // income / expense breakdowns are P&L figures: Owner only
+    owner ? ownerPies(user) : null, // expense breakdown is a P&L figure: Owner only
     collectionsByStaff(user),
   ]);
   const actions = actionItems(d.actions);
@@ -91,22 +91,16 @@ async function AdminView({ user }: { user: SessionUser }) {
         <StatCard title="Waiting for approval" value={`${d.waitingCount} expenses`} sub={`${fmtINR(d.waitingAdmin)} Admin · ${fmtINR(d.waitingSuperAdmin)} Super Admin`} href="/expenses?tab=approve" />
         {o && (
           <>
-            <StatCard title="Commission this month" value={fmtINR(o.commissionGross)} sub={`TDS ${fmtINR(o.commissionTds)} · received ${fmtINR(o.commissionReceived)} of ${fmtINR(o.commissionReceived.plus(o.commissionExpected))}`} href="/pnl" />
             <StatCard title="Profit this month" value={fmtINR(o.profit)} sub={`Income ${fmtINR(o.income)} · expenses ${fmtINR(o.expenses)}`} href="/pnl" alert={o.profit.isNegative()} />
             <StatCard title="Owner money" value={fmtINR(o.ownerOwed)} sub={`Customers owe ${fmtINR(o.customerOwes)} · to return ${fmtINR(o.toReturn)}`} href="/receipts?tab=owner" />
           </>
         )}
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-4">
+      <div className="mb-4 grid grid-cols-2 gap-4">
         {pies && (
-          <>
-            <Panel title={`Income by vertical – ${pies.month}`} more={{ href: "/pnl", label: "P&L" }}>
-              <DonutChart slices={pies.income} totalLabel="Income" />
-            </Panel>
-            <Panel title={`Expenses by category – ${pies.month}`} more={{ href: "/expenses", label: "Expenses" }}>
-              <DonutChart slices={pies.expenses} totalLabel="Expenses" />
-            </Panel>
-          </>
+          <Panel title={`Expenses by category – ${pies.month}`} more={{ href: "/expenses", label: "Expenses" }}>
+            <DonutChart slices={pies.expenses} totalLabel="Expenses" />
+          </Panel>
         )}
         <Panel title={`Collections by staff – ${staff.month}`} more={{ href: "/receipts", label: "Receipts" }}>
           <DonutChart slices={staff.slices} totalLabel="Collected" />
@@ -120,7 +114,7 @@ async function AdminView({ user }: { user: SessionUser }) {
             <TableBody>
               {actions.map((x) => (
                 <TableRow key={x.item + x.detail}>
-                  <TableCell><Link href={x.href} className="text-blue-700 hover:underline">{x.item}</Link></TableCell>
+                  <TableCell><Link href={x.href} className="text-brand-700 hover:underline">{x.item}</Link></TableCell>
                   <TableCell className="whitespace-normal">{x.detail}</TableCell>
                   <TableCell>{x.who}</TableCell>
                 </TableRow>
@@ -135,7 +129,7 @@ async function AdminView({ user }: { user: SessionUser }) {
         </Panel>
       )}
       <p className="mt-4 rounded-lg bg-slate-100 p-3 text-xs text-muted-foreground">
-        Profit and Loss is shown only to the Super Admin. Commission figures are visible to Admin and Super Admin.
+        Profit and Loss is shown only to the Super Admin.
       </p>
     </>
   );
@@ -149,7 +143,7 @@ function RenewalsPanel({ title, renewals }: { title: string; renewals: Awaited<R
         <TableBody>
           {renewals.map((r) => (
             <TableRow key={r.id}>
-              <TableCell><Link href={`/customers/${r.policy.customer.id}`} className="text-blue-700 hover:underline">{r.policy.customer.name}</Link></TableCell>
+              <TableCell><Link href={`/customers/${r.policy.customer.id}`} className="text-brand-700 hover:underline">{r.policy.customer.name}</Link></TableCell>
               <TableCell>{r.policy.productType === "PoRd" ? `RD ${r.policy.policyNumber}` : `${r.policy.partner} ${r.policy.productName}`}</TableCell>
               <TableCell>{fmtDate(r.dueDate)}</TableCell>
               <TableCell className="text-right">{fmtINR(r.premiumAmount)}</TableCell>
@@ -167,7 +161,7 @@ function Panel({ title, more, children }: { title: string; more?: { href: string
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-semibold">{title}</h2>
-        {more && <Link href={more.href} className="text-sm text-blue-700 hover:underline">{more.label}</Link>}
+        {more && <Link href={more.href} className="text-sm text-brand-700 hover:underline">{more.label}</Link>}
       </div>
       {children}
     </div>

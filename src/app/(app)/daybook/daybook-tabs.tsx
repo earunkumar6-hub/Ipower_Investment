@@ -18,7 +18,7 @@ type Props = {
 };
 
 const TONE: Record<string, Tone> = {
-  Collection: "blue", ServiceCollection: "blue", Withdrawal: "slate", DepositToBank: "slate", DepositToPo: "indigo",
+  Collection: "blue", ServiceCollection: "blue", Withdrawal: "slate", DepositToBank: "slate", DepositToPo: "indigo", PaidToCompany: "indigo",
   Expense: "orange", ExpenseRepayment: "orange", ServiceCost: "purple", WalletRecharge: "purple", OwnerReturn: "green", Adjustment: "red",
 };
 const inr = (v: string | null) => (v ? Number(v).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 }) : "");
@@ -33,7 +33,7 @@ export function DayBookTabs(p: Props) {
       <div className="mb-3 flex gap-1 border-b">
         {TABS.map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)}
-            className={cn("-mb-px border-b-2 px-3 pb-2 text-sm", tab === t ? "border-blue-600 font-medium text-blue-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
+            className={cn("-mb-px border-b-2 px-3 pb-2 text-sm", tab === t ? "border-brand-600 font-medium text-brand-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
             {t}
           </button>
         ))}

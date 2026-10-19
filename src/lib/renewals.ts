@@ -2,7 +2,8 @@ import type { Frequency, Policy, Prisma, RenewalStatus } from "@prisma/client";
 import type { Tone } from "@/components/status-badge";
 import { addDays, addMonths } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { ownerScope } from "@/lib/leads";
+import { companyStatus, depositStatusSelect, nameLookup, type CompanyStatus } from "@/lib/deposit-status";
+import { ownerScope, userNames } from "@/lib/leads";
 import { PO_SCHEMES, PRODUCT_SHORT, renewalFilter, type Params } from "@/lib/lists";
 import { sum, ZERO } from "@/lib/money";
 import type { SessionUser } from "@/lib/session";
@@ -30,6 +31,7 @@ export async function refreshOverdue(tenantId: string, today: Date) {
 export const maturityDate = (p: Pick<Policy, "startDate" | "termMonths">) => (p.termMonths ? addMonths(p.startDate, p.termMonths) : null);
 
 type RowPolicy = Policy & { customer: { id: string; name: string } };
+
 /** An instalment to collect, or the maturity of a one-time post office deposit (a reminder only). */
 export type RenewalRow = {
   id: string;
@@ -40,6 +42,9 @@ export type RenewalRow = {
   status: RenewalStatus;
   paidOn: Date | null;
   paidReceiptId: string | null;
+  paidReceiptNo: string | null;
+  collectedBy: string | null; // user who entered the receipt (Paid tab)
+  companyStatus: CompanyStatus | null; // Paid tab only
   lastReminderAt: Date | null;
 };
 
@@ -48,19 +53,23 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
   await refreshOverdue(user.tenantId, today);
   const f = renewalFilter(user, sp, today);
   const include = { customer: { select: { id: true, name: true } } };
-  const [items, deposits] = await Promise.all([
-    db.renewalItem.findMany({ where: f.where, include: { policy: { include } }, orderBy: f.orderBy, take }),
+  const [items, deposits, users] = await Promise.all([
+    db.renewalItem.findMany({ where: f.where, include: { policy: { include }, paidReceipt: { select: depositStatusSelect } }, orderBy: f.orderBy, take }),
     f.maturityWhere ? db.policy.findMany({ where: f.maturityWhere, include }) : Promise.resolve([]),
+    userNames(user.tenantId),
   ]);
+  const nameOf = nameLookup(users);
   const end = addDays(today, f.within);
   const maturities: RenewalRow[] = deposits.flatMap((p) => {
     const date = maturityDate(p)!;
     const show = f.tab === "due" ? date >= today && date < end : date < today;
-    return show ? [{ id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: f.tab === "due" ? "Due" as const : "Overdue" as const, paidOn: null, paidReceiptId: null, lastReminderAt: null }] : [];
+    return show ? [{ id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: f.tab === "due" ? "Due" as const : "Overdue" as const, paidOn: null, paidReceiptId: null, paidReceiptNo: null, collectedBy: null, companyStatus: null, lastReminderAt: null }] : [];
   });
   const instalments: RenewalRow[] = items.map((i) => ({
     id: i.id, kind: "instalment", policy: i.policy, date: i.dueDate, amount: i.premiumAmount, status: i.status,
-    paidOn: i.paidOn, paidReceiptId: i.paidReceiptId, lastReminderAt: i.lastReminderAt,
+    paidOn: i.paidOn, paidReceiptId: i.paidReceiptId, paidReceiptNo: i.paidReceipt?.receiptNo ?? null,
+    collectedBy: i.paidReceipt ? nameOf(i.paidReceipt.createdById) : null,
+    companyStatus: i.status === "Paid" ? companyStatus(i.paidReceipt, i.policy.partner, nameOf) : null, lastReminderAt: i.lastReminderAt,
   }));
   // Paid rows keep their paid-on order; maturities only appear on Due / Overdue.
   const rows = maturities.length ? [...instalments, ...maturities].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, take) : instalments;

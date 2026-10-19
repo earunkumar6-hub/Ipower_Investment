@@ -34,7 +34,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
+    <main className="flex min-h-screen items-center justify-center bg-saffron-50 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <Image src="/logo.png" alt="IPower Investments logo" width={96} height={96} priority className="mx-auto" />

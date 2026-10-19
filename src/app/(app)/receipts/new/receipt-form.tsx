@@ -21,7 +21,7 @@ type Slip = { id: string; slipNo: string; account: string; month: string; amount
 const MODES = ["Cash", "UPI", "Cheque"] as const;
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v) * 100) : 0);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
-const TAG_STYLE = { Overdue: "text-destructive", Due: "text-foreground", Advance: "text-blue-700" };
+const TAG_STYLE = { Overdue: "text-destructive", Due: "text-foreground", Advance: "text-brand-700" };
 
 export function ReceiptForm({ customer, policies, openSlips }: { customer: { id: string; name: string; mobile: string }; policies: PolicyOption[]; openSlips: Slip[] }) {
   const router = useRouter();
@@ -147,7 +147,7 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
           <div className="flex gap-2">
             {MODES.map((m) => (
               <button key={m} type="button" onClick={() => setMode(m)}
-                className={cn("h-8 flex-1 rounded-lg border text-sm", mode === m ? "border-blue-600 bg-blue-50 font-medium text-blue-700" : "hover:bg-slate-50")}>
+                className={cn("h-8 flex-1 rounded-lg border text-sm", mode === m ? "border-brand-600 bg-saffron-50 font-medium text-brand-700" : "hover:bg-slate-50")}>
                 {m}
               </button>
             ))}
@@ -168,7 +168,7 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
         {mode === "Cash" ? "Goes into cash in hand." : "Goes into SBI current ••1234."} The Day Book records it on the bill date. RD instalments are marked Collected until deposited at the post office.
       </p>
       {state.error && !popup && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save receipt"}</Button>
+      <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save receipt"}</Button>
 
       <Dialog open={popup} onOpenChange={setPopup}>
         <DialogContent className="sm:max-w-xl">
@@ -196,13 +196,13 @@ export function ReceiptForm({ customer, policies, openSlips }: { customer: { id:
             <span>Payment {inr(paise(amount))} · selected {inr(selected)}</span>
             <span className={cn(diff !== 0 && "text-destructive")}>Difference {inr(diff)}</span>
           </div>
-          <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
+          <p className="rounded-lg bg-saffron-50 p-3 text-xs text-saffron-900">
             On adjusting: a customer receipt is created and sent; the ticked slips close automatically against it (no separate owner invoice remains),
             and the money moves to &quot;Return to owner&quot;. It is not added to the post office deposit list.
           </p>
           {state.error && popup && <p className="text-sm text-destructive">{state.error}</p>}
           <div className="flex gap-2">
-            <Button type="button" disabled={pending || diff !== 0 || !ticked.length} className="bg-blue-600 hover:bg-blue-700" onClick={() => submit(ticked)}>
+            <Button type="button" disabled={pending || diff !== 0 || !ticked.length} className="bg-brand-600 hover:bg-brand-700" onClick={() => submit(ticked)}>
               Adjust and create receipt
             </Button>
             <Button type="button" variant="outline" disabled={pending} onClick={() => submit([])}>Record as a new payment instead</Button>

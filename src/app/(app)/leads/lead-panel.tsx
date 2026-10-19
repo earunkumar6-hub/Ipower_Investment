@@ -106,12 +106,12 @@ export function LeadPanel({ lead }: { lead: PanelLead }) {
           </div>
         )}
         {!closed && openCall && (
-          <p className="rounded-lg bg-blue-50 p-2 text-xs text-blue-900">
+          <p className="rounded-lg bg-saffron-50 p-2 text-xs text-saffron-900">
             At the follow-up time a call reminder pops up for {lead.ownerName} on every screen and stays open until an outcome is saved or the call is rescheduled.
           </p>
         )}
         {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-        <Button type="submit" disabled={pending} className="w-full bg-blue-600 hover:bg-blue-700">
+        <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">
           {pending ? "Saving…" : closed ? "Close lead" : openCall ? "Save / reschedule call" : "Save"}
         </Button>
       </form>

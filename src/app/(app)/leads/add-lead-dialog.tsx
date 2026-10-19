@@ -31,7 +31,7 @@ export function AddLeadDialog({ owners }: { owners: { id: string; name: string }
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="bg-blue-600 hover:bg-blue-700">Add lead</Button>
+      <Button onClick={() => setOpen(true)} className="bg-brand-600 hover:bg-brand-700">Add lead</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="text-lg font-semibold">Add lead</DialogTitle>
@@ -74,7 +74,7 @@ export function AddLeadDialog({ owners }: { owners: { id: string; name: string }
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">{pending ? "Saving…" : "Save lead"}</Button>
+              <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save lead"}</Button>
             </div>
           </form>
         </DialogContent>

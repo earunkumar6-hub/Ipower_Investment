@@ -4,6 +4,30 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Logo colours: crimson ring (#D22229) and saffron flame (#FAA618). Use brand-* for actions and links, saffron-* for highlights and notes. */
+@theme {
+  --color-brand-50: #fdf2f2;
+  --color-brand-100: #fbe3e3;
+  --color-brand-200: #f7c6c7;
+  --color-brand-300: #ef9a9c;
+  --color-brand-400: #e35c60;
+  --color-brand-500: #d9353a;
+  --color-brand-600: #d22229;
+  --color-brand-700: #b01b21;
+  --color-brand-800: #8e1519;
+  --color-brand-900: #6e1216;
+  --color-saffron-50: #fff8eb;
+  --color-saffron-100: #feecc7;
+  --color-saffron-200: #fdd88a;
+  --color-saffron-300: #fcc14d;
+  --color-saffron-400: #fbb12e;
+  --color-saffron-500: #faa618;
+  --color-saffron-600: #f5871e;
+  --color-saffron-700: #c2620e;
+  --color-saffron-800: #9a4a0c;
+  --color-saffron-900: #7a3b0d;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -55,7 +79,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: #d22229;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -66,7 +90,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #e35c60;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

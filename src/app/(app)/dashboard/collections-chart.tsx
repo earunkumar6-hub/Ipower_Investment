@@ -2,11 +2,11 @@
 
 import { Bar, BarChart, CartesianGrid, Rectangle, Tooltip, XAxis, YAxis, type BarShapeProps } from "recharts";
 
-// Categorical slots 1–2 of the validated reference palette (light surface #fcfcfb):
-// blue for cash, orange for UPI/bank. Checked with dataviz/scripts/validate_palette.js — all pass.
+// Logo colours: dark crimson for cash, saffron for UPI/bank. Their lightness differs a lot,
+// so the two series stay apart for colour-blind users too; both are named in the legend.
 const SERIES = [
-  { key: "cash", label: "Cash", color: "#2a78d6" },
-  { key: "upi", label: "UPI / bank", color: "#eb6834" },
+  { key: "cash", label: "Cash", color: "#b01b21" },
+  { key: "upi", label: "UPI / bank", color: "#faa618" },
 ] as const;
 const SURFACE = "#ffffff";
 const inr = (n: number) => n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });

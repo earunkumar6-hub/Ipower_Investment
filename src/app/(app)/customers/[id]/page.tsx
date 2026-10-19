@@ -31,7 +31,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         <>
           <ExportButton report="customer" user={user} params={{ id: c.id }} />
           <Link href={`/quotations/new?customerId=${c.id}`} className={buttonVariants({ variant: "outline" })}>New quotation</Link>
-          <Link href={`/receipts/new?customerId=${c.id}`} className={cn(buttonVariants(), "bg-blue-600 hover:bg-blue-700")}>Generate receipt</Link>
+          <Link href={`/receipts/new?customerId=${c.id}`} className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>Generate receipt</Link>
         </>
       } />
       <div className="mb-4 flex items-start justify-between rounded-xl border bg-white p-4">
@@ -83,7 +83,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                   <TableCell><StatusBadge tone={RENEWAL_TONE[r.status]}>{r.status}</StatusBadge></TableCell>
                   <TableCell className="text-sm">
                     {r.paidOn ? fmtDate(r.paidOn) : "—"}
-                    {r.paidReceiptId && <> · <Link href={`/receipts/${r.paidReceiptId}`} className="text-blue-700 hover:underline">{receiptNo.get(r.paidReceiptId)}</Link></>}
+                    {r.paidReceiptId && <> · <Link href={`/receipts/${r.paidReceiptId}`} className="text-brand-700 hover:underline">{receiptNo.get(r.paidReceiptId)}</Link></>}
                     {r.status === "Paid" && !r.paidReceiptId && <span className="text-muted-foreground"> · {slipFor.has(r.id) ? `owner paid · ${slipFor.get(r.id)}` : "before this system"}</span>}
                   </TableCell>
                 </TableRow>
@@ -99,7 +99,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               <TableBody>
                 {c.receipts.map((r) => (
                   <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
-                    <TableCell><Link href={`/receipts/${r.id}`} className="text-blue-700 hover:underline">{r.receiptNo}</Link></TableCell>
+                    <TableCell><Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link></TableCell>
                     <TableCell>{fmtDate(r.receiptDate)}</TableCell>
                     <TableCell>{r.policy?.policyNumber ?? r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
                     <TableCell className="text-right">{fmtINR(r.amount)} · {r.mode}</TableCell>

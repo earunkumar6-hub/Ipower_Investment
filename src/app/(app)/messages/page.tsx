@@ -22,7 +22,7 @@ export default async function MessagesPage() {
     <>
       <PageHeader title="Sent messages" user={user} actions={<ExportButton report="messages" user={user} />} />
       <div className="rounded-xl border bg-white p-4">
-        <p className="mb-3 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
+        <p className="mb-3 rounded-lg bg-saffron-50 p-2 text-sm text-saffron-900">
           Messaging is mocked in this demo: nothing leaves the laptop. Each WhatsApp, SMS or email the full build would send is listed here.
         </p>
         <Table>

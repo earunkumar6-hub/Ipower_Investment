@@ -90,12 +90,12 @@ export function CallReminder({ calls }: { calls: OpenCall[] }) {
               </DialogDescription>
               {call.note && <p className="mt-1 text-xs">Last note: {call.note}</p>}
             </div>
-            <a href={`tel:${call.mobile}`} className="flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-medium text-white hover:bg-blue-700">
+            <a href={`tel:${call.mobile}`} className="flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-medium text-white hover:bg-brand-700">
               <PhoneIcon className="size-4" /> Call now
             </a>
             <OutcomeForm key={call.id} call={call} onSaved={() => setIndex(0)} />
             {!forced && (
-              <Link href={`/quotations/new?leadId=${call.leadId}`} onClick={() => setManualOpen(false)} className="text-sm text-blue-700 hover:underline">
+              <Link href={`/quotations/new?leadId=${call.leadId}`} onClick={() => setManualOpen(false)} className="text-sm text-brand-700 hover:underline">
                 Create quotation for {call.name}
               </Link>
             )}
@@ -135,7 +135,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
         <div className="flex gap-2">
           {OUTCOMES.map(([value, label]) => (
             <label key={value} className={cn("flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 py-2 text-sm",
-              outcome === value && "border-blue-600 ring-1 ring-blue-600")}>
+              outcome === value && "border-brand-600 ring-1 ring-brand-600")}>
               <input type="radio" name="outcome" value={value} checked={outcome === value} onChange={() => setOutcome(value)} />
               {label}
             </label>
@@ -164,7 +164,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
         </div>
       )}
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending} className="bg-blue-600 hover:bg-blue-700">
+      <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">
         {pending ? "Saving…" : outcome === "NotInterested" ? "Save and close lead" : "Save and reschedule"}
       </Button>
     </form>

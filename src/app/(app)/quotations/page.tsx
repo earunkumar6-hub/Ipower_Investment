@@ -24,7 +24,7 @@ export default async function QuotationsPage() {
     <>
       <PageHeader title="Quotations" user={user} actions={<>
         <ExportButton report="quotations" user={user} />
-        <Link href="/quotations/new" className={cn(buttonVariants(), "bg-blue-600 hover:bg-blue-700")}>New quotation</Link>
+        <Link href="/quotations/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New quotation</Link>
       </>} />
       <div className="rounded-xl border bg-white p-4">
         <h2 className="mb-2 font-semibold">Recent quotations</h2>
@@ -40,7 +40,7 @@ export default async function QuotationsPage() {
               const converted = q.proposals.some((p) => p.status === "Issued");
               return (
                 <TableRow key={q.id}>
-                  <TableCell><Link href={`/quotations/${q.id}`} className="text-blue-700 hover:underline">{q.quoteNo}</Link></TableCell>
+                  <TableCell><Link href={`/quotations/${q.id}`} className="text-brand-700 hover:underline">{q.quoteNo}</Link></TableCell>
                   <TableCell>{q.customerName}</TableCell>
                   <TableCell>{q.items.map((i) => i.category).join(", ")}</TableCell>
                   <TableCell className="text-right">{fmtINR(q.total)}</TableCell>

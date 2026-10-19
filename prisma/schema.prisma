@@ -351,6 +351,7 @@ model RenewalItem {
   premiumAmount  Decimal       @db.Decimal(12, 2)
   status         RenewalStatus @default(Due)
   paidReceiptId  String?
+  paidReceipt    Receipt?      @relation(fields: [paidReceiptId], references: [id])
   paidOn         DateTime?     @db.Date
   lastReminderAt DateTime?
 
@@ -379,37 +380,40 @@ enum RdStatus {
 }
 
 model Receipt {
-  id            String        @id @default(cuid())
-  tenantId      String
-  receiptNo     String
-  fy            String // e.g. "2026-27"
-  receiptDate   DateTime      @db.Date // bill date: drives Day Book, FY, paid-on, commission date
-  txnDate       DateTime      @db.Date // when the customer actually paid (UPI/cheque date)
-  customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id])
-  policyId      String?
-  policy        Policy?       @relation(fields: [policyId], references: [id])
-  renewalItemId String?
-  amount        Decimal       @db.Decimal(12, 2)
-  mode          PaymentMode
-  accountId     String // account the money came into
-  reference     String? // UTR / cheque no.
-  notes         String?
-  isPassThrough Boolean       @default(true)
-  rdStatus      RdStatus? // RD instalments only
-  ownerPaid     Boolean       @default(false) // closes owner-paid slips; never deposited to PO
-  status        ReceiptStatus @default(Saved)
-  cancelReason  String?
-  cancelledById String?
-  cancelledAt   DateTime?
-  createdById   String
-  createdAt     DateTime      @default(now())
-  paymentId     String? // set when several dues were paid together
-  payment       Payment?      @relation(fields: [paymentId], references: [id])
+  id               String          @id @default(cuid())
+  tenantId         String
+  receiptNo        String
+  fy               String // e.g. "2026-27"
+  receiptDate      DateTime        @db.Date // bill date: drives Day Book, FY, paid-on, commission date
+  txnDate          DateTime        @db.Date // when the customer actually paid (UPI/cheque date)
+  customerId       String
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  policyId         String?
+  policy           Policy?         @relation(fields: [policyId], references: [id])
+  renewalItemId    String?
+  amount           Decimal         @db.Decimal(12, 2)
+  mode             PaymentMode
+  accountId        String // account the money came into
+  reference        String? // UTR / cheque no.
+  notes            String?
+  isPassThrough    Boolean         @default(true)
+  rdStatus         RdStatus? // RD instalments only
+  ownerPaid        Boolean         @default(false) // closes owner-paid slips; never deposited to PO
+  status           ReceiptStatus   @default(Saved)
+  cancelReason     String?
+  cancelledById    String?
+  cancelledAt      DateTime?
+  createdById      String
+  createdAt        DateTime        @default(now())
+  paymentId        String? // set when several dues were paid together
+  payment          Payment?        @relation(fields: [paymentId], references: [id])
+  companyPaymentId String? // set once the money is paid on to the insurer / AMC / post office (not RD: see PoDeposit)
+  companyPayment   CompanyPayment? @relation(fields: [companyPaymentId], references: [id])
 
   poDepositLine PoDepositLine?
   closedSlips   OwnerPaidSlip[]
   commissions   Commission[]
+  renewalItems  RenewalItem[]
 
   @@unique([tenantId, receiptNo, fy])
   @@index([tenantId, receiptDate])
@@ -469,6 +473,22 @@ model OwnerPaidSlip {
   createdAt         DateTime            @default(now())
 
   @@unique([tenantId, slipNo])
+}
+
+/// Collected premiums paid on to one company (insurer, AMC or post office for SSA/PPF) in one go.
+model CompanyPayment {
+  id          String      @id @default(cuid())
+  tenantId    String
+  company     String // Policy.partner of every receipt in it
+  paidOn      DateTime    @db.Date
+  accountId   String // account the money left
+  mode        PaymentMode
+  amount      Decimal     @db.Decimal(12, 2)
+  reference   String // company receipt / UTR / cheque no.
+  createdById String
+  createdAt   DateTime    @default(now())
+
+  receipts Receipt[]
 }
 
 model PoDeposit {
@@ -697,6 +717,7 @@ enum EntryType {
   Withdrawal // ATM / bank → cash (contra)
   DepositToBank // cash → bank (contra)
   DepositToPo
+  PaidToCompany
   OwnerReturn
   Adjustment
 }
@@ -706,6 +727,7 @@ enum SourceType {
   ServiceTransaction
   Expense
   PoDeposit
+  CompanyPayment
   OwnerPaidSlip
   Contra
   WalletRecharge

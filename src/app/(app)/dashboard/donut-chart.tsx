@@ -2,10 +2,9 @@
 
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
-// Categorical slots 1–6 of the validated reference palette, in fixed order (never cycled).
-// Validator: all checks pass; 3 slots are under 3:1 on the surface, so every slice is also
-// labelled in the legend with its name, value and share (no colour-only identity).
-const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+// Fixed order (never cycled), led by the logo's crimson and saffron. Some slots are under 3:1
+// on the surface, so every slice is also labelled in the legend with its name, value and share.
+const PALETTE = ["#b01b21", "#faa618", "#1baf7a", "#7a3b0d", "#e87ba4", "#008300"];
 const SURFACE = "#ffffff";
 const share = (v: number, total: number) => (v > 0 && v / total < 0.005 ? "<1%" : `${Math.round((v / total) * 100)}%`);
 const inr = (n: number) => n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });

@@ -13,16 +13,10 @@ async function owner() {
 }
 
 describe.runIf(seedFitsInMonth)("Dashboard pies (seeded month)", () => {
-  it("income by vertical and expenses by category match P&L", async () => {
+  it("expenses by category match P&L; no commission pie", async () => {
     const pies = await ownerPies(await owner());
-    const income = Object.fromEntries(pies.income.map((s) => [s.label, s.value]));
-    expect(income["Insurance commission"]).toBe(62300); // SBI Life + Star Health + Care Health statements
-    expect(income["Mutual fund commission"]).toBe(7700); // HDFC MF
-    expect(income["E-Sevai service charges"]).toBe(1138);
-    expect(income["Post office commission"]).toBeUndefined(); // not business income
-    expect(income["Other commission"]).toBeUndefined(); // zero slices are dropped
     expect(Object.fromEntries(pies.expenses.map((s) => [s.label, s.value]))).toEqual({ Rent: 25000, Utilities: 4280, Office: 450, Travel: 350 });
-    expect(pies.income.length).toBeLessThanOrEqual(6);
+    expect("income" in pies).toBe(false);
   });
 
   it("collections by staff add up to all receipts and E-Sevai collected this month", async () => {

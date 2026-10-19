@@ -23,7 +23,7 @@ export function ExpenseRowActions(p: { expenseId: string; expenseNo: string; can
   return (
     <div className="flex justify-end gap-1">
       {p.canApprove && (
-        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" disabled={pending} onClick={() => start(async () => {
+        <Button size="sm" className="bg-brand-600 hover:bg-brand-700" disabled={pending} onClick={() => start(async () => {
           const r = await approveExpense(p.expenseId);
           if (r.ok) toast.success(r.message ?? `${p.expenseNo} approved`);
           else toast.error(r.error);
