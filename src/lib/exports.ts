@@ -189,7 +189,7 @@ export const REPORTS: Record<string, Report> = {
   customers: {
     permission: "Policy.View",
     async build(user, sp) {
-      const { where, q } = customerFilter(user, sp);
+      const { where, q, filtered, holdingWhere, filterLabel } = customerFilter(user, sp);
       await refreshOverdue(user.tenantId, istToday());
       const customers = await db.customer.findMany({
         where,
@@ -200,17 +200,23 @@ export const REPORTS: Record<string, Report> = {
         },
         orderBy: { name: "asc" },
       });
+      const matching = filtered
+        ? await db.policy.findMany({ where: { tenantId: user.tenantId, customerId: { in: customers.map((c) => c.id) }, ...holdingWhere }, select: { customerId: true, policyNumber: true, productType: true, partner: true, productName: true } })
+        : [];
       return {
         file: `customers-${stamp()}.xlsx`,
-        title: `Partners / Customers${q ? ` – "${q}"` : ""}`,
+        title: `Partners / Customers${[filterLabel, q && `"${q}"`].filter(Boolean).map((x) => ` – ${x}`).join("")}`,
         sheets: [{
           name: "Customers",
-          columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Holdings", width: 24 }, { header: "Next due", type: "date" },
-            { header: "Amount", type: "money" }, { header: "Overdue" }],
+          columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Holdings", width: 24 },
+            ...(filtered ? [{ header: "Matching holdings", width: 40 }] : []), { header: "Next due", type: "date" as const },
+            { header: "Amount", type: "money" as const }, { header: "Overdue" }],
           rows: customers.map((c) => {
             const counts = Object.entries(c.policies.reduce<Record<string, number>>((m, p) => ({ ...m, [PRODUCT_SHORT[p.productType]]: (m[PRODUCT_SHORT[p.productType]] ?? 0) + 1 }), {}));
             const next = c.policies.flatMap((p) => p.renewals).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
-            return [c.name, maskMobile(c.mobile), counts.map(([k, n]) => `${n} ${k}`).join(" · "), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
+            const mine = matching.filter((p) => p.customerId === c.id)
+              .map((p) => `${p.policyNumber} · ${p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}`).join(", ");
+            return [c.name, maskMobile(c.mobile), counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
           }),
         }],
       };

@@ -142,3 +142,22 @@ describe("Customers from proposals", () => {
     expect([c.email, c.address, c.mobiles.map((m) => [m.number, m.isWhatsApp])]).toEqual(["lead@example.com", "Velachery", [["9876512340", false], ["9876512341", true]]]);
   });
 });
+
+describe("Customers list holdings filter", () => {
+  it("product → company → scheme and status narrow the list to customers holding it", async () => {
+    const { customerFilter } = await import("@/lib/lists");
+    const find = (sp: Record<string, string>) => prisma.customer.findMany({ where: customerFilter(users.arun as SessionUser, sp).where, include: { policies: true } });
+    const td = await find({ product: "po", scheme: "PoTd" });
+    expect(td.length).toBeGreaterThan(0);
+    expect(td.every((c) => c.policies.some((p) => p.productType === "PoTd"))).toBe(true);
+    expect(td.every((c) => c.ownerId === users.arun.id)).toBe(true); // staff see only their own customers
+    const star = await find({ product: "insurance", company: "Star Health" });
+    expect(star.every((c) => c.policies.some((p) => p.partner === "Star Health"))).toBe(true);
+    // a scheme only applies under its product: RD isn't a company plan
+    expect(customerFilter(users.arun as SessionUser, { product: "insurance", scheme: "PoRd" }).holdingWhere).toEqual({ productType: "Insurance", productName: "PoRd" });
+    expect(customerFilter(users.arun as SessionUser, { product: "po", scheme: "Jeevan Anand" }).holdingWhere).toEqual({ productType: { in: expect.arrayContaining(["PoRd", "PoTd"]) } });
+    const f = customerFilter(users.arun as SessionUser, { product: "po", scheme: "PoTd", status: "Active" });
+    expect([f.filtered, f.filterLabel]).toEqual([true, "Post office · TD · Active"]);
+    expect(customerFilter(users.arun as SessionUser, {}).filtered).toBe(false);
+  });
+});

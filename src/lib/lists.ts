@@ -49,14 +49,40 @@ export function leadFilter(user: SessionUser, sp: Params) {
   return { status, source, q, where };
 }
 
+export const HOLDING_STATUS = [["all", "All"], ["Active", "Active"], ["Matured", "Matured"], ["PrematureClosed", "Premature closed"], ["Withdrawn", "Withdrawn"], ["Lapsed", "Lapsed"]] as const;
+
+/**
+ * Customers list: search (name, any mobile, policy no.) and a holdings filter – product → company → scheme
+ * (same choices as Renewals) and the holding's status. `holdingWhere` marks which holdings matched.
+ */
 export function customerFilter(user: SessionUser, sp: Params) {
   const q = sp.q?.trim();
+  const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
+  const byCompany = product === "insurance" || product === "mf";
+  const company = byCompany ? sp.company || undefined : undefined;
+  const plan = byCompany ? sp.scheme || undefined : undefined;
+  const poScheme = product === "po" ? PO_SCHEMES.find((s) => s === sp.scheme) : undefined;
+  const status = HOLDING_STATUS.find(([k]) => k === sp.status)?.[0] ?? "all";
+  const holdingWhere: Prisma.PolicyWhereInput = {
+    ...(product === "insurance" && { productType: "Insurance" }),
+    ...(product === "mf" && { productType: "MutualFund" }),
+    ...(product === "po" && { productType: poScheme ?? { in: [...PO_SCHEMES] } }),
+    ...(company && { partner: company }),
+    ...(plan && { productName: plan }),
+    ...(status !== "all" && { status }),
+  };
+  const filtered = Object.keys(holdingWhere).length > 0;
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
     ...ownerScope(user),
     ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { policyNumber: { contains: q, mode: "insensitive" } } } }] }),
+    ...(filtered && { policies: { some: holdingWhere } }),
   };
-  return { q, where };
+  const filterLabel = [
+    product !== "all" && RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan,
+    status !== "all" && HOLDING_STATUS.find(([k]) => k === status)?.[1],
+  ].filter(Boolean).join(" · ");
+  return { q, product, company, scheme: plan ?? poScheme, status, where, holdingWhere, filtered, filterLabel };
 }
 
 export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"]] as const;
