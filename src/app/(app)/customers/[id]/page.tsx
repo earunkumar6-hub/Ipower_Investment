@@ -73,6 +73,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       <Section title="Products invested">
         <HoldingsTable rows={holdings.map((p) => ({
           id: p.id,
+          customerId: c.id,
           kind: KIND[p.productType],
           plan: p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} · ${p.productName}${p.schemeName ? ` · ${p.schemeName}` : ""}` : p.schemeName ?? p.productName,
           cover: p.sumAssured ? fmtINR(p.sumAssured) : null,
@@ -96,7 +97,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           Total invested in one-time schemes: <b>{fmtINR(oneTimeTotal)}</b>
           {regular.length > 0 && <> · Regular premiums: {regular.map((r) => `${fmtINR(r.amount)} ${PER_LABEL[r.frequency]}`).join(" · ")}</>}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">Schemes, tenures, lock-in periods and rates come from Settings → Products and schemes; each account keeps the rate it was opened at.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Schemes, tenures, lock-in periods and rates come from Settings → Products and schemes; each account keeps the rate it was opened at. Click a policy number for its full renewal schedule.</p>
       </Section>
 
       <div className="grid grid-cols-2 gap-4">

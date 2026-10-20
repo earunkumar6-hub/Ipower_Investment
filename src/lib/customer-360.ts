@@ -1,9 +1,10 @@
 import type { Frequency, Prisma } from "@prisma/client";
 import { decryptJson, maskAccount } from "@/lib/crypto";
-import { addDays, addMonths, istToday } from "@/lib/dates";
+import { addDays, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { sum, ZERO } from "@/lib/money";
+import { maturityOf } from "@/lib/policies";
 import { lockInUntil } from "@/lib/products";
 import { refreshOverdue } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
@@ -37,7 +38,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     include: {
       policies: {
         orderBy: [{ productType: "asc" }, { startDate: "asc" }],
-        include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true } }, scheme: { select: { name: true } } },
+        include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, invoiceRule: true } }, scheme: { select: { name: true } } },
       },
       mobiles: { orderBy: { sort: "asc" } },
       receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } } } },
@@ -61,7 +62,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     ...p,
     schemeName: p.scheme?.name ?? null,
     lockIn: lockInUntil(p.startDate, p.product?.lockInMonths),
-    maturity: p.termMonths ? addMonths(p.startDate, p.termMonths) : null,
+    maturity: maturityOf(p, p.product?.invoiceRule),
     amountLabel: PER_LABEL[p.frequency],
     details: [
       p.nominee && ["Nominee", p.nominee],

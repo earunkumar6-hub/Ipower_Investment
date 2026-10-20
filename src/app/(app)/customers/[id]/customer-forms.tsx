@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useActionState, useState } from "react";
 import { toast } from "sonner";
@@ -68,7 +69,7 @@ export function EditCustomerButton({ customer }: { customer: Details }) {
 }
 
 export type HoldingRow = {
-  id: string; kind: string; plan: string; cover: string | null; policyNumber: string; amount: string; per: string; rate: string; commenced: string;
+  id: string; customerId: string; kind: string; plan: string; cover: string | null; policyNumber: string; amount: string; per: string; rate: string; commenced: string;
   tenure: string; lockIn: string; maturity: string; status: [string, Tone]; closedNote: string | null; details: [string, string][];
   close: { label: string; isMf: boolean; today: string; startDate: string; lockInUntil: string | null } | null;
 };
@@ -93,7 +94,7 @@ export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
               <TableCell>{r.kind}</TableCell>
               <TableCell className="whitespace-normal">{r.plan}{r.cover && <div className="text-xs text-muted-foreground">cover {r.cover}</div>}</TableCell>
               <TableCell>
-                {r.policyNumber}
+                <Link href={`/customers/${r.customerId}/schedule/${r.id}`} className="hover:underline" title="View schedule">{r.policyNumber}</Link>
                 {r.details.length > 0 && (
                   <button type="button" onClick={() => toggle(r.id)} className="ml-1 inline-flex items-center text-xs text-brand-700 hover:underline" aria-expanded={open.includes(r.id)}>
                     {open.includes(r.id) ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}Details

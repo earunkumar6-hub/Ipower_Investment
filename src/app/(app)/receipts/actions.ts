@@ -15,6 +15,7 @@ import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { postOwnerReturn, postReceipt } from "@/lib/posting";
 import { ADVANCE_MONTHS, lockPolicyDues, payableDues, type Due } from "@/lib/dues";
+import { billEnd } from "@/lib/policies";
 import { authorize } from "@/lib/session";
 
 const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0");
@@ -159,12 +160,12 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       // Dues: the server picks the oldest `count` payable instalments of each policy and prices them.
       const lines: { policy: Policy; due: Due }[] = [];
       for (const { policyId, count } of v.dues) {
-        const policy = await tx.policy.findFirst({ where: { id: policyId, customerId: customer.id, status: "Active" } });
+        const policy = await tx.policy.findFirst({ where: { id: policyId, customerId: customer.id, status: "Active" }, include: { product: { select: { invoiceRule: true } } } });
         if (!policy) return { ok: false, error: "A policy picked is not active for this customer; reload and try again" };
         if (lines.some((l) => l.policy.id === policy.id)) return { ok: false, error: "Pick the dues again" };
         await lockPolicyDues(tx, policy.id);
         const stored = await tx.renewalItem.findMany({ where: { policyId: policy.id } });
-        const payable = payableDues(policy, stored, today);
+        const payable = payableDues({ ...policy, billUntil: billEnd(policy, policy.product?.invoiceRule) }, stored, today);
         if (count > payable.length) {
           return { ok: false, error: `${policy.policyNumber}: only ${payable.length} instalment(s) can be paid now (up to ${ADVANCE_MONTHS} months ahead)` };
         }

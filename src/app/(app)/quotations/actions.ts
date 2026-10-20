@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { audit } from "@/lib/audit";
-import { addDays, istToday } from "@/lib/dates";
+import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
@@ -105,7 +105,7 @@ async function ownQuotation(user: SessionUser, quotationId: string) {
 type QuotedItem = { id: string; insurer: string; productName: string; sumInsured: Prisma.Decimal | null; total: Prisma.Decimal; payMode: Frequency };
 type QuoteParty = { id: string; customerId: string | null; customerName: string; mobile: string; ownerId: string };
 
-/** One proposal for a quoted product, linked to the catalogue product when the plan matches; sends the (mocked) consent link. */
+/** One proposal for a quoted product, linked to the catalogue product when the plan matches. No OTP consent step (owner, 20 Oct 2026). */
 async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: QuotedItem) {
   const product = await tx.product.findFirst({
     where: { tenantId: user.tenantId, partner: item.insurer, name: item.productName },
@@ -116,22 +116,9 @@ async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: Quote
     data: {
       tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), quotationId: q.id, quotationItemId: item.id,
       customerId: q.customerId, customerName: q.customerName, mobile: q.mobile, insurer: item.insurer, productName: item.productName,
-      sumInsured: item.sumInsured, premium: item.total, status: "ConsentPending", ownerId: q.ownerId,
+      sumInsured: item.sumInsured, premium: item.total, status: "Draft", ownerId: q.ownerId,
       productType: product?.productType ?? "Insurance", productId: product?.id, schemeId: onlyScheme?.id, frequency: item.payMode, termMonths: onlyScheme?.tenureMonths,
     },
-  });
-  await tx.consent.create({
-    data: {
-      tenantId: user.tenantId, proposalId: p.id, customerId: q.customerId, mobile: q.mobile,
-      purpose: "Aadhaar and PAN for insurance proposal", textVersion: "KYC-v1", expiresOn: addDays(new Date(), 2),
-    },
-  });
-  const body = `IPower Investments - R. Murali needs your consent to collect Aadhaar and PAN for your ${item.insurer} ${item.productName} proposal ${p.proposalNo}. Open the link and enter the OTP: https://consent.example/${p.id.slice(-8)}`;
-  await tx.messageLog.createMany({
-    data: (["SMS", "WhatsApp"] as const).map((channel) => ({
-      tenantId: user.tenantId, channel, to: q.mobile, template: "kyc_consent_link", body,
-      relatedType: "Proposal", relatedId: p.id, createdById: user.id,
-    })),
   });
   return p;
 }

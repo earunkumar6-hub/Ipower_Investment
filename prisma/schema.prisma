@@ -573,6 +573,7 @@ model RenewalItem {
   paidReceipt    Receipt?      @relation(fields: [paidReceiptId], references: [id])
   paidOn         DateTime?     @db.Date
   lastReminderAt DateTime?
+  reminderCount  Int           @default(0)
 
   @@index([tenantId, status, dueDate])
 }

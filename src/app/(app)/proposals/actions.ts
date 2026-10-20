@@ -13,42 +13,22 @@ import { authorize, type SessionUser } from "@/lib/session";
 async function loadProposal(tx: Tx, user: SessionUser, proposalId: string) {
   const p = await tx.proposal.findFirst({
     where: { id: proposalId, tenantId: user.tenantId },
-    include: { consents: { orderBy: { createdAt: "desc" }, take: 1 }, quotation: true },
+    include: { quotation: true },
   });
   if (!p) return { error: "Proposal not found" } as const;
   if (!canActOn(user, p.ownerId)) return { error: "This proposal belongs to another user" } as const;
-  return { p, consent: p.consents[0] ?? null } as const;
-}
-
-/** Demo stand-in for the customer opening the consent link and entering the OTP. */
-export async function simulateCustomerOtp(proposalId: string): Promise<ActionResult> {
-  const user = await authorize("Proposal.Create");
-  const res = await db.$transaction(async (tx) => {
-    const r = await loadProposal(tx, user, proposalId);
-    if ("error" in r) return { ok: false, error: r.error };
-    const { p, consent } = r;
-    if (!consent || consent.status !== "Sent") return { ok: false, error: "No consent request is waiting" };
-    if (consent.expiresOn < new Date()) {
-      await tx.consent.update({ where: { id: consent.id }, data: { status: "Expired" } });
-      return { ok: false, error: "The consent link expired; resend it" };
-    }
-    await tx.consent.update({ where: { id: consent.id }, data: { status: "Given", otpVerifiedOn: new Date(), ipAddress: "simulated (demo)" } });
-    await tx.proposal.update({ where: { id: p.id }, data: { status: "ConsentGiven" } });
-    return { ok: true };
-  });
-  revalidatePath(`/proposals/${proposalId}`);
-  return res;
+  return { p } as const;
 }
 
 const kycSchema = z.object({
-  pan: z.string().trim().toUpperCase().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "PAN looks like ABCDE1234F"),
+  pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "PAN looks like ABCDE1234F")])),
   aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(/^\d{12}$/, "Aadhaar has 12 digits")])),
 });
 
 /** ABCDE1234M → ABCxxxxx4M (demo stores the masked value only; no encryption). */
 const maskPan = (pan: string) => `${pan.slice(0, 3)}xxxxx${pan.slice(-2)}`;
 
-/** Aadhaar/PAN are rejected unless the customer's consent is Given. */
+/** Aadhaar / PAN: optional, stored masked, editable until the policy is issued (no OTP consent step – owner, 20 Oct 2026). */
 export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("PII.Edit");
   const proposalId = String(form.get("proposalId"));
@@ -56,12 +36,12 @@ export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionRe
   const res = await db.$transaction(async (tx) => {
     const r = await loadProposal(tx, user, proposalId);
     if ("error" in r) return { ok: false, error: r.error };
-    if (r.consent?.status !== "Given") return { ok: false, error: "Locked: the customer has not given OTP consent yet" };
     if (r.p.status === "Issued") return { ok: false, error: "Policy already issued" };
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+    if (!parsed.data.pan && !parsed.data.aadhaar) return { ok: false, error: "Enter the Aadhaar or PAN to save (both are optional)" };
     await tx.proposal.update({
       where: { id: r.p.id },
-      data: { panMasked: maskPan(parsed.data.pan), aadhaarLast4: parsed.data.aadhaar ? parsed.data.aadhaar.slice(-4) : r.p.aadhaarLast4 },
+      data: { panMasked: parsed.data.pan ? maskPan(parsed.data.pan) : r.p.panMasked, aadhaarLast4: parsed.data.aadhaar ? parsed.data.aadhaar.slice(-4) : r.p.aadhaarLast4 },
     });
     return { ok: true };
   });
@@ -110,8 +90,8 @@ const issueSchema = z.object({
 
 /**
  * The policy number turns the proposal into a customer policy with its renewal schedule (pay mode, term and
- * start date from the proposal). Proposals from a quotation need the customer's OTP consent and PAN first;
- * products added directly on an existing customer don't.
+ * start date from the proposal). Only the pay mode and start date are needed first; OTP consent, Aadhaar / PAN and
+ * KYC documents are not required (owner, 20 Oct 2026).
  */
 export async function issuePolicy(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Policy.Create");
@@ -123,11 +103,8 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
     const res = await db.$transaction(async (tx) => {
       const r = await loadProposal(tx, user, proposalId);
       if ("error" in r) return { ok: false, error: r.error };
-      const { p, consent } = r;
+      const { p } = r;
       if (p.status === "Issued") return { ok: false, error: "Policy already issued" };
-      const direct = !p.quotationId;
-      if (!direct && consent?.status !== "Given") return { ok: false, error: "Customer consent is required before submitting" };
-      if (!direct && !p.panMasked) return { ok: false, error: "Enter the customer's PAN first" };
       if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
 
       // One person, many policies: reuse the customer by id, else by any of their mobile numbers.
@@ -144,8 +121,9 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
             },
           },
         }));
-      if (p.panMasked) {
-        await tx.customer.update({ where: { id: customer.id }, data: { panMasked: p.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 } });
+      // Aadhaar / PAN are optional; copy whichever was entered.
+      if (p.panMasked || p.aadhaarLast4) {
+        await tx.customer.update({ where: { id: customer.id }, data: { panMasked: p.panMasked ?? customer.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 } });
       }
 
       const product = p.productId ? await tx.product.findUnique({ where: { id: p.productId } }) : null;

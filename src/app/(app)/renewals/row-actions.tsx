@@ -1,23 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { markMatured, sendRenewalReminder } from "./actions";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { markMatured, markNotRenewed, sendMaturityReminder, sendRenewalReminder } from "./actions";
 
-export function MaturityRowActions({ policyId }: { policyId: string }) {
+/** Maturity reminder row: send the (mock) WhatsApp; once a one-time deposit has matured, mark it matured. */
+export function MaturityRowActions({ policyId, matured }: { policyId: string; matured: boolean }) {
   const [pending, start] = useTransition();
   return (
-    <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
-      const r = await markMatured(policyId);
-      if (r.ok) toast.success("Marked as matured");
-      else toast.error(r.error);
-    })}>Mark matured</Button>
+    <div className="flex justify-end gap-1">
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
+        const r = await sendMaturityReminder(policyId);
+        if (r.ok) toast.success("Maturity reminder logged in Sent messages (mock WhatsApp)"); else toast.error(r.error);
+      })}>Send maturity reminder</Button>
+      {matured && (
+        <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(async () => {
+          const r = await markMatured(policyId);
+          if (r.ok) toast.success("Marked as matured"); else toast.error(r.error);
+        })}>Mark matured</Button>
+      )}
+    </div>
   );
 }
 
-export function RenewalRowActions({ renewalItemId, customerId }: { renewalItemId: string; customerId: string }) {
+export function RenewalRowActions({ renewalItemId, customerId, overdue }: { renewalItemId: string; customerId: string; overdue: boolean }) {
   const [pending, start] = useTransition();
   return (
     <div className="flex justify-end gap-1">
@@ -27,6 +38,40 @@ export function RenewalRowActions({ renewalItemId, customerId }: { renewalItemId
         else toast.error(r.error);
       })}>Send reminder</Button>
       <Link href={`/receipts/new?customerId=${customerId}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Take payment</Link>
+      {overdue && <NotRenewedButton renewalItemId={renewalItemId} />}
     </div>
+  );
+}
+
+/** The customer won't renew: the policy moves to the Not renewed tab and reminders stop. */
+function NotRenewedButton({ renewalItemId }: { renewalItemId: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [pending, start] = useTransition();
+  return (
+    <>
+      <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setOpen(true)}>Not renewed</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogTitle className="text-lg font-semibold">Not renewed</DialogTitle>
+          <div className="space-y-1.5">
+            <Label htmlFor={`nr-${renewalItemId}`}>Reason</Label>
+            <Input id={`nr-${renewalItemId}`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Moved to another insurer" />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <p className="text-xs text-muted-foreground">The policy shows as Lapsed on the Not renewed tab; its unpaid instalments lapse and no more reminders go out.</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Back</Button>
+            <Button type="button" disabled={pending} onClick={() => start(async () => {
+              const r = await markNotRenewed(renewalItemId, reason);
+              if (!r.ok) return setError(r.error ?? "Could not save");
+              toast.success("Marked not renewed");
+              setOpen(false);
+            })}>{pending ? "Saving…" : "Mark not renewed"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

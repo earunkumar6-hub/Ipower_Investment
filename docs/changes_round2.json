@@ -198,6 +198,14 @@
       "spec_says": "EB charge for bills ₹1,000–₹1,999 and ₹30,000+; what each partner shares (API or file) and access needed.",
       "app_does": "EB gap refused with 'rate not configured'; no partner sync.",
       "question": "Still open – needed before partner sync can be planned."
+    },
+    {
+      "id": "D14",
+      "topic": "OTP consent and KYC",
+      "spec_says": "Aadhaar and PAN saved only after the customer approves by OTP; KYC documents before submitting to the partner.",
+      "app_does": "Built with an OTP consent step (simulated) that locked Aadhaar / PAN and blocked the policy number.",
+      "question": "Keep the consent step?",
+      "decision": "Owner 20 Oct 2026: remove the OTP consent step; Aadhaar, PAN and KYC documents are optional. Only pay mode + start date are needed before the policy number. (Compliance note from the spec – Aadhaar storage after consent – is overridden by the owner.)"
     }
   ],
   "modules": [
@@ -334,7 +342,7 @@
           "source": "Screen p5, rules #24–25, U-23",
           "required": "Proposal holds pay mode (One-time/Monthly/Quarterly/Half-yearly/Yearly), term, start date, plan, premium; policy number 'leave blank until issued'. Blank → stays in Proposals, no bills. Entered → moves to Partners / Customers as Active and the renewal schedule (C24) is created. Proposals list: Consent, Status, Next action, 'Resend link'.",
           "data": "Proposal.frequency, termMonths, startDate, premiumPayingTermMonths; Proposal.quotationId/quotationItemId nullable (for C16).",
-          "done": "2026-10-19 phase 3 (uncommitted): Proposal pay mode, term, start date, premium paying term (+ scheme); policy created from them with its schedule; direct proposals skip consent."
+          "done": "2026-10-19 phase 3 (uncommitted): Proposal pay mode, term, start date, premium paying term (+ scheme); policy created from them with its schedule; direct proposals skip consent. · 20 Oct 2026: consent step removed, Aadhaar / PAN / KYC optional (D14)."
         }
       ]
     },
@@ -446,47 +454,52 @@
         {
           "id": "C19",
           "title": "From / To dates and quick picks",
-          "status": "new",
+          "status": "done",
           "size": "S",
           "source": "rule #27, U-22, screen p11",
-          "required": "From date, To date, 'Show renewals' and quick picks: today, this week, this month, next 30 days, next 3 months, last month. Replaces the fixed 30-day window; works with the existing product → company → scheme filter and the Paid-to filter, and in the export."
+          "required": "From date, To date, 'Show renewals' and quick picks: today, this week, this month, next 30 days, next 3 months, last month. Replaces the fixed 30-day window; works with the existing product → company → scheme filter and the Paid-to filter, and in the export.",
+          "done": "2026-10-20 phase 5 (uncommitted): From / To dates + quick picks (today, this week, this month, next 30 days, next 3 months, last month); tab defaults; works with product filter and exports."
         },
         {
           "id": "C20",
           "title": "Not renewed tab and summary cards",
-          "status": "new",
+          "status": "done",
           "size": "M",
           "source": "screen p11, U-07",
-          "required": "Tabs Due / Overdue / Paid / Not renewed (lapsed or matured – 'follow up or close'). Cards: Due this month (count, ₹), Paid, Not paid, Not renewed. Filters month, product, days overdue."
+          "required": "Tabs Due / Overdue / Paid / Not renewed (lapsed or matured – 'follow up or close'). Cards: Due this month (count, ₹), Paid, Not paid, Not renewed. Filters month, product, days overdue.",
+          "done": "2026-10-20 phase 5 (uncommitted): Tabs Due / Overdue / Paid / Not renewed / By customer; cards Due this month, Paid, Not paid, Not renewed. \"Not renewed\" action (reason, logged) lapses an overdue policy."
         },
         {
           "id": "C21",
           "title": "Overdue columns",
-          "status": "partial",
+          "status": "done",
           "size": "S",
           "source": "screen p11",
-          "required": "Columns Customer, Product, Policy/account, Due date, Amount, Days overdue, Reminders sent ('3 (last 9 Oct)'), Send reminder."
+          "required": "Columns Customer, Product, Policy/account, Due date, Amount, Days overdue, Reminders sent ('3 (last 9 Oct)'), Send reminder.",
+          "done": "2026-10-20 phase 5 (uncommitted): Days overdue and Reminders sent (count + last date) columns; RenewalItem.reminderCount."
         },
         {
           "id": "C22",
           "title": "By customer view",
-          "status": "new",
+          "status": "done",
           "size": "S",
           "source": "screen p12",
-          "required": "Customer, policies, due this month, paid this year, overdue (owner-paid shown), 'Open customer'."
+          "required": "Customer, policies, due this month, paid this year, overdue (owner-paid shown), 'Open customer'.",
+          "done": "2026-10-20 phase 5 (uncommitted): By customer tab: policies, due this month, paid this FY, overdue + owner-paid owed."
         },
         {
           "id": "C23",
           "title": "Renewal Excel",
-          "status": "partial",
+          "status": "done",
           "size": "S",
           "source": "screen p11, messages table",
-          "required": "'Download renewal Excel': last month renewed or not + this month due (same file the 1st-of-month email sends)."
+          "required": "'Download renewal Excel': last month renewed or not + this month due (same file the 1st-of-month email sends).",
+          "done": "2026-10-20 phase 5 (uncommitted): \"Download renewal Excel\": last month renewed or not + this month due (report renewal-month)."
         },
         {
           "id": "C24",
           "title": "Renewal schedule and invoice rules",
-          "status": "partial",
+          "status": "done",
           "size": "L",
           "source": "rules #13, #24, #26, screen p11 tables, Use cases p11",
           "current": "src/lib/dues.ts continues each policy's due series within termMonths; one-time PO schemes show maturity rows.",
@@ -499,7 +512,8 @@
             "C10",
             "C11",
             "C13"
-          ]
+          ],
+          "done": "2026-10-20 phase 5 (uncommitted): Bill rules per product (billEnd / fullSchedule in policies.ts) for stored renewals, advance dues and the \"View schedule\" page; billed policies become Matured automatically after maturity when nothing is unpaid; health renews until closed (no maturity)."
         }
       ]
     },
@@ -751,10 +765,11 @@
         {
           "id": "C48",
           "title": "Renewal reminders 'Reminders stop when paid'",
-          "status": "partial",
+          "status": "done",
           "size": "S",
           "source": "U-06",
-          "required": "Manual 'Send reminder' records count + last date (feeds C21); paid, closed or matured policies get no more reminders."
+          "required": "Manual 'Send reminder' records count + last date (feeds C21); paid, closed or matured policies get no more reminders.",
+          "done": "2026-10-20 phase 5 (uncommitted): Reminders refused for non-active policies; count recorded. Owner 20 Oct 2026: maturity reminders a month before for every scheme with a maturity (mock \"Send maturity reminder\")."
         },
         {
           "id": "C49",

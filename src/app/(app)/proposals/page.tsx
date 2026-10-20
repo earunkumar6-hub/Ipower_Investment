@@ -7,13 +7,12 @@ import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
-import { CONSENT_TONE, proposalNext, proposalStatusLabel } from "./labels";
+import { proposalNext, proposalStatusLabel } from "./labels";
 
 export default async function ProposalsPage() {
   const user = await requirePermission("Proposal.View");
   const proposals = await db.proposal.findMany({
     where: { tenantId: user.tenantId, ...ownerScope(user) },
-    include: { consents: { orderBy: { createdAt: "desc" }, take: 1 } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -26,12 +25,11 @@ export default async function ProposalsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>No.</TableHead><TableHead>Customer</TableHead><TableHead>Partner</TableHead>
-              <TableHead className="text-right">Premium</TableHead><TableHead>Consent</TableHead><TableHead>Status</TableHead><TableHead>Next</TableHead>
+              <TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead><TableHead>Next</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {proposals.map((p) => {
-              const consent = p.consents[0]?.status;
               const [label, tone] = proposalStatusLabel(p);
               return (
                 <TableRow key={p.id}>
@@ -39,14 +37,13 @@ export default async function ProposalsPage() {
                   <TableCell>{p.customerName}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
-                  <TableCell>{consent ? <StatusBadge tone={CONSENT_TONE[consent]}>{consent}</StatusBadge> : p.quotationId ? "—" : <span className="text-xs text-muted-foreground">Not needed</span>}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                   <TableCell className="text-muted-foreground">{proposalNext(p)}</TableCell>
                 </TableRow>
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

@@ -19,7 +19,7 @@ vi.mock("@/lib/session", async () => {
 });
 
 const { createProposalsFromSelected, markNotAccepted, deleteQuotation } = await import("@/app/(app)/quotations/actions");
-const { savePolicyDetails, issuePolicy } = await import("@/app/(app)/proposals/actions");
+const { savePolicyDetails, issuePolicy, saveKyc } = await import("@/app/(app)/proposals/actions");
 const { addProductDirect } = await import("@/app/(app)/customers/actions");
 const { uploadAttachment, removeAttachment } = await import("@/app/(app)/attachments/actions");
 const { decryptJson } = await import("@/lib/crypto");
@@ -124,18 +124,23 @@ describe("Quotation decision", () => {
 });
 
 describe("Proposal policy details", () => {
-  it("a quotation proposal needs consent, PAN and the policy details before the policy number", async () => {
+  it("no OTP consent: a quotation proposal only needs its policy details; Aadhaar / PAN are optional", async () => {
     as(users.arun);
     const p = await prisma.proposal.findFirstOrThrow({ where: { quotationItemId: quote.itemIds[0] } });
-    expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: "CARE-T-1" }))).error).toMatch(/consent/);
+    expect(p.status).toBe("Draft");
+    expect(await prisma.consent.count({ where: { proposalId: p.id } })).toBe(0);
+    expect(await prisma.messageLog.count({ where: { relatedId: p.id, template: "kyc_consent_link" } })).toBe(0);
+    // the pay mode came from the quotation; the start date is still missing
+    expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: "CARE-T-1" }))).error).toMatch(/pay mode and start date/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "1", premiumPayingTerm: "2", startDate: today }))).error).toMatch(/longer than the term/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today }))).ok).toBe(true);
-    // Simulate consent + PAN, then issue: Yearly × 3 years → renewals in years 2 and 3 (12-month horizon stores the first)
-    await prisma.consent.updateMany({ where: { proposalId: p.id }, data: { status: "Given" } });
-    await prisma.proposal.update({ where: { id: p.id }, data: { status: "ConsentGiven", panMasked: "ABCxxxxx4M" } });
+    // Aadhaar / PAN can be saved any time, one without the other
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "" }))).error).toMatch(/both are optional/);
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "1234 5678 9012" }))).ok).toBe(true);
+    // Yearly × 3 years → renewals in years 2 and 3 (the 12-month horizon stores the first); no PAN needed
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: `CARE-T-${Date.now() % 100000}` }))).ok).toBe(true);
-    const policy = await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id }, include: { renewals: true } });
-    expect([policy.frequency, policy.termMonths, policy.productId !== null, policy.renewals.length]).toEqual(["Yearly", 36, true, 1]);
+    const policy = await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id }, include: { renewals: true, customer: true } });
+    expect([policy.frequency, policy.termMonths, policy.productId !== null, policy.renewals.length, policy.customer.aadhaarLast4]).toEqual(["Yearly", 36, true, 1, "9012"]);
   });
 });
 
@@ -160,7 +165,7 @@ describe("Add product directly", () => {
     expect((await addProductDirect({ ok: false }, form({ ...withBranch, ...bank }))).error).toMatch(/6–18 digits/);
   });
 
-  it("blank policy number → proposal (no consent step); its policy keeps the opening rate, encrypted bank details and no bills", async () => {
+  it("blank policy number → proposal; its policy keeps the opening rate, encrypted bank details and no bills", async () => {
     const p = await td();
     const five = p.schemes.find((s) => s.name === "TD 5 years")!;
     const branch = p.customFields.find((f) => f.label === "Post office branch")!;
@@ -175,7 +180,6 @@ describe("Add product directly", () => {
     expect(prop.bankDetailsEnc).not.toContain("123456789012");
     expect(decryptJson<Record<string, string>>(prop.bankDetailsEnc!)).toMatchObject({ ifsc: "SBIN0001234", accountNo: "123456789012" });
 
-    // no consent / PAN needed for a direct proposal
     const no = `TD-T-${Date.now() % 100000}`;
     expect((await issuePolicy({ ok: false }, form({ proposalId: prop.id, policyNumber: no }))).ok).toBe(true);
     const policy = await prisma.policy.findUniqueOrThrow({ where: { tenantId_policyNumber: { tenantId: users.arun.tenantId, policyNumber: no } }, include: { renewals: true } });

@@ -1,7 +1,6 @@
 "use client";
 
-import { LockIcon } from "lucide-react";
-import { useActionState, useTransition } from "react";
+import { useActionState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
@@ -9,20 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { submitKeepingValues } from "@/lib/form";
-import { issuePolicy, savePolicyDetails, saveKyc, simulateCustomerOtp } from "../actions";
-
-export function SimulateOtpButton({ proposalId }: { proposalId: string }) {
-  const [pending, start] = useTransition();
-  return (
-    <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
-      const r = await simulateCustomerOtp(proposalId);
-      if (r.ok) toast.success("Customer approved by OTP");
-      else toast.error(r.error);
-    })}>
-      {pending ? "Verifying…" : "Simulate customer OTP"}
-    </Button>
-  );
-}
+import { issuePolicy, savePolicyDetails, saveKyc } from "../actions";
 
 export function KycForm({ proposalId, unlocked, panMasked, aadhaarLast4 }: { proposalId: string; unlocked: boolean; panMasked: string | null; aadhaarLast4: string | null }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
@@ -37,25 +23,18 @@ export function KycForm({ proposalId, unlocked, panMasked, aadhaarLast4 }: { pro
       <div className="space-y-1.5">
         <Label htmlFor="aadhaar">Aadhaar</Label>
         <Input id="aadhaar" name="aadhaar" readOnly={!unlocked} inputMode="numeric" maxLength={14}
-          placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : unlocked ? "12 digits" : "Locked until consent"} />
+          placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : unlocked ? "12 digits (optional)" : "Not entered"} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="pan">PAN</Label>
         <Input id="pan" name="pan" readOnly={!unlocked} maxLength={10} className="not-placeholder-shown:uppercase"
-          placeholder={panMasked ?? (unlocked ? "ABCDE1234F" : "Locked until consent")} />
+          placeholder={panMasked ?? (unlocked ? "ABCDE1234F (optional)" : "Not entered")} />
       </div>
-      {unlocked ? (
-        <p className="rounded-lg bg-green-50 p-2 text-xs text-green-900">
-          Unlocked because the customer approved by OTP. Only masked values are stored and shown.
-        </p>
-      ) : (
-        <p className="flex gap-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
-          <LockIcon className="size-4 shrink-0" />
-          {panMasked ? "Saved and masked." : "Locked for every role until the customer approves by OTP."}
-        </p>
-      )}
+      <p className="rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
+        Optional. Only masked values are stored and shown (PAN ABCxxxxx4M, Aadhaar last 4 digits).{!unlocked && " The policy is issued; they can't be changed here."}
+      </p>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      {(unlocked || !panMasked) && (
+      {unlocked && (
         <Button type="submit" variant="outline" disabled={pending} className="w-full">
           {pending ? "Saving…" : "Save Aadhaar / PAN"}
         </Button>

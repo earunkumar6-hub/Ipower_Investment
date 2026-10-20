@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { payableDues } from "@/lib/dues";
+import { billEnd } from "@/lib/policies";
 import { maskMobile } from "@/lib/lead-labels";
 import { canActOn, ownerScope } from "@/lib/leads";
 import { requirePermission } from "@/lib/session";
@@ -22,7 +23,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
         include: {
           policies: {
             where: { status: "Active" },
-            include: { renewals: true },
+            include: { renewals: true, product: { select: { invoiceRule: true } } },
             orderBy: { productType: "asc" },
           },
           ownerPaidSlips: { where: { status: "CustomerOwes" }, include: { policy: { select: { policyNumber: true } } }, orderBy: { month: "asc" } },
@@ -33,7 +34,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
   if (customer && canActOn(user, customer.ownerId)) {
     const today = istToday();
     const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    const withDues = customer.policies.map((p) => ({ p, dues: payableDues(p, p.renewals, today) }));
+    const withDues = customer.policies.map((p) => ({ p, dues: payableDues({ ...p, billUntil: billEnd(p, p.product?.invoiceRule) }, p.renewals, today) }));
     const firstDue = (x: (typeof withDues)[number]) => x.dues[0]?.dueDate.getTime() ?? Infinity;
     const policies: PolicyOption[] = withDues.sort((a, b) => firstDue(a) - firstDue(b)).map(({ p, dues }) => ({
       id: p.id,

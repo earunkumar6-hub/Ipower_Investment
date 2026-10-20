@@ -74,14 +74,9 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(arun.getByText("Not accepted").first()).toBeVisible();
   });
 
-  test("3. Proposal: PAN locked until OTP, then masked; policy number creates customer + renewal", async () => {
+  test("3. Proposal: optional PAN stored masked; policy number creates customer + renewal (no OTP consent)", async () => {
     await arun.getByRole("link", { name: /^P-\d+$/ }).first().click();
     await arun.waitForURL(/\/proposals\/c/);
-    await arun.getByRole("button", { name: "Save Aadhaar / PAN" }).click();
-    await expect(arun.getByText("Locked: the customer has not given OTP consent yet")).toBeVisible();
-
-    await arun.getByRole("button", { name: "Simulate customer OTP" }).click();
-    await expect(arun.getByText("Consent given")).toBeVisible();
     await arun.getByLabel("PAN").fill("ABCDE1234M");
     await arun.getByRole("button", { name: "Save Aadhaar / PAN" }).click();
     await expect(arun.getByText("ABCxxxxx4M").first()).toBeVisible();

@@ -15,6 +15,7 @@ export const PRODUCT_SHORT: Record<ProductType, string> = { Insurance: "Insuranc
 
 export const MESSAGE_TEMPLATE: Record<string, string> = {
   kyc_consent_link: "KYC consent link",
+  maturity_reminder: "Maturity reminder",
   receipt: "Receipt",
   renewal_reminder: "Renewal reminder",
   low_wallet_balance: "Low wallet balance",
@@ -85,7 +86,54 @@ export function customerFilter(user: SessionUser, sp: Params) {
   return { q, product, company, scheme: plan ?? poScheme, status, where, holdingWhere, filtered, filterLabel };
 }
 
-export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"]] as const;
+export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"], ["notrenewed", "Not renewed"], ["customers", "By customer"]] as const;
+export type RenewalTab = (typeof RENEWAL_TABS)[number][0];
+
+/** Quick picks for the Renewals date range. */
+export const RANGE_PICKS = [["today", "Today"], ["week", "This week"], ["month", "This month"], ["next30", "Next 30 days"], ["next3m", "Next 3 months"], ["lastmonth", "Last month"]] as const;
+
+const monthStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+const monthEndOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+const isoDay = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : undefined);
+
+/** Inclusive date range for a quick pick (weeks run Monday–Sunday). */
+export function pickRange(key: string, today: Date): { from: Date; to: Date } | null {
+  switch (key) {
+    case "today": return { from: today, to: today };
+    case "week": { const mon = addDays(today, -((today.getUTCDay() + 6) % 7)); return { from: mon, to: addDays(mon, 6) }; }
+    case "month": return { from: monthStart(today), to: monthEndOf(today) };
+    case "next30": return { from: today, to: addDays(today, 29) };
+    case "next3m": return { from: today, to: addDays(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 3, today.getUTCDate())), -1) };
+    case "lastmonth": { const last = monthStart(addDays(monthStart(today), -1)); return { from: last, to: monthEndOf(last) }; }
+    default: return null;
+  }
+}
+
+/**
+ * The Renewals date range: From / To, else a quick pick, else the old `within` days, else the tab's default
+ * (Due: next 30 days · Paid: last 30 days · Not renewed: this month · Overdue / By customer: no limit).
+ */
+export function renewalRange(tab: RenewalTab, sp: Params, today: Date): { from: Date; to: Date; pick: string } | null {
+  const from = isoDay(sp.from), to = isoDay(sp.to);
+  if (from || to) return { from: from ?? new Date(Date.UTC(2000, 0, 1)), to: to ?? new Date(Date.UTC(2100, 0, 1)), pick: "custom" };
+  const pick = RANGE_PICKS.find(([k]) => k === sp.range)?.[0];
+  if (pick) return { ...pickRange(pick, today)!, pick };
+  if (sp.within) {
+    const days = Math.min(Math.max(Number(sp.within) || 30, 1), 365);
+    return { from: today, to: addDays(today, days - 1), pick: "within" };
+  }
+  if (tab === "due") return { ...pickRange("next30", today)!, pick: "next30" };
+  if (tab === "paid") return { from: addDays(today, -29), to: today, pick: "last30" };
+  if (tab === "notrenewed") return { ...pickRange("month", today)!, pick: "month" };
+  return null;
+}
+
+/** "1 Oct – 31 Oct 2026" */
+export const rangeLabel = (r: { from: Date; to: Date } | null) => {
+  if (!r) return "any date";
+  const f = (d: Date, year: boolean) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", ...(year && { year: "numeric" }), timeZone: "UTC" });
+  return r.from.getTime() === r.to.getTime() ? f(r.from, true) : `${f(r.from, r.from.getUTCFullYear() !== r.to.getUTCFullYear())} – ${f(r.to, true)}`;
+};
 export const RENEWAL_PRODUCTS = [["all", "All products"], ["insurance", "Insurance"], ["po", "Post office"], ["mf", "Mutual fund"]] as const;
 export const PAID_TO = [["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const;
 /** Paid tab: has the money collected from the customer reached the company (insurer, AMC, post office)? */
@@ -105,14 +153,14 @@ export const MATURITY_SCHEMES: ProductType[] = ["PoTd", "PoMis", "PoScss", "PoNs
  * and mutual funds; for the post office the scheme is the product type (RD, TD, SSA…).
  */
 export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
-  const tab = RENEWAL_TABS.find(([k]) => k === sp.tab)?.[0] ?? "due";
+  const tab: RenewalTab = RENEWAL_TABS.find(([k]) => k === sp.tab)?.[0] ?? "due";
   const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
   const byCompany = product === "insurance" || product === "mf";
   const company = byCompany ? sp.company || undefined : undefined;
   const plan = byCompany ? sp.scheme || undefined : undefined;
   const poScheme = product === "po" ? PO_SCHEMES.find((s) => s === sp.scheme) : undefined;
   const scheme = plan ?? poScheme;
-  const within = Math.min(Math.max(Number(sp.within) || 30, 1), 365);
+  const range = renewalRange(tab, sp, today);
   const paidTo = tab === "paid" ? (PAID_TO.find(([k]) => k === sp.paidto)?.[0] ?? "all") : "all";
   const policyWhere: Prisma.PolicyWhereInput = {
     ...ownerScope(user),
@@ -122,24 +170,28 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
     ...(company && { partner: company }),
     ...(plan && { productName: plan }),
   };
-  // Active one-time deposits matching the filter; the maturity date is worked out by the caller.
-  const showMaturity = tab !== "paid" && (product === "all" || (product === "po" && (!poScheme || MATURITY_SCHEMES.includes(poScheme))));
-  const maturityWhere: Prisma.PolicyWhereInput | null = showMaturity
-    ? { tenantId: user.tenantId, AND: [policyWhere, { productType: { in: MATURITY_SCHEMES } }], status: "Active", termMonths: { not: null } }
+  // Maturity reminders (owner, 20 Oct 2026: every scheme with a maturity, from a month before – the Due tab's
+  // default range). Health renews until closed and mutual funds are open-ended, so they have none. After
+  // maturity only one-time deposits stay listed (Overdue, until "Mark matured"); billed policies mature by themselves.
+  const maturityWhere: Prisma.PolicyWhereInput | null = tab === "due" || tab === "overdue"
+    ? {
+        tenantId: user.tenantId, AND: [policyWhere, tab === "overdue" ? { productType: { in: MATURITY_SCHEMES } } : { productType: { not: "MutualFund" } }],
+        status: "Active", termMonths: { not: null }, NOT: { product: { invoiceRule: "UntilClosed" } },
+      }
     : null;
-  const filterLabel = [RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan].filter(Boolean).join(" · ")
+  const filterLabel = [RENEWAL_PRODUCTS.find(([k]) => k === product)?.[1], company, poScheme ? PRODUCT_SHORT[poScheme] : plan, range && rangeLabel(range)].filter(Boolean).join(" · ")
     + (paidTo === "all" ? "" : ` · ${paidTo === "pending" ? "not yet paid" : "paid"} to Post office / insurer`);
   const where: Prisma.RenewalItemWhereInput = {
     tenantId: user.tenantId,
     policy: policyWhere,
-    ...(tab === "due" && { status: "Due", dueDate: { lt: addDays(today, within) } }),
-    ...(tab === "overdue" && { status: "Overdue" }),
-    // Pending money is listed however old it is; otherwise the Paid tab covers the last 30 days.
-    ...(tab === "paid" && { status: "Paid", ...(paidTo !== "pending" && { paidOn: { gte: addDays(today, -30) } }) }),
+    ...(tab === "due" && { status: "Due", ...(range && { dueDate: { gte: range.from, lte: range.to } }) }),
+    ...(tab === "overdue" && { status: "Overdue", ...(range && { dueDate: { gte: range.from, lte: range.to } }) }),
+    // Pending money is listed however old it is; otherwise the Paid tab covers the date range (default last 30 days).
+    ...(tab === "paid" && { status: "Paid", ...(paidTo !== "pending" && range && { paidOn: { gte: range.from, lte: range.to } }) }),
     ...(paidTo !== "all" && PAID_TO_WHERE[paidTo]),
   };
   const orderBy: Prisma.RenewalItemOrderByWithRelationInput = tab === "paid" ? { paidOn: "desc" } : { dueDate: "asc" };
-  return { tab, product, company, scheme, paidTo, within, where, orderBy, maturityWhere, filterLabel };
+  return { tab, product, company, scheme, paidTo, range, policyWhere, where, orderBy, maturityWhere, filterLabel };
 }
 
 export const EXPENSE_TABS = [["all", "All"], ["approve", "Waiting for my approval"], ["repay", "To be repaid"]] as const;

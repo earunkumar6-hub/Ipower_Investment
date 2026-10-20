@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { refuseOnClosedDay } from "@/lib/action-guard";
+import { audit } from "@/lib/audit";
 import { assertDayOpen, balanceAt } from "@/lib/daybook";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -80,7 +81,7 @@ export async function markMatured(policyId: string): Promise<ActionResult> {
   if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
   const matures = maturityDate(policy);
   if (!matures || matures > istToday()) return { ok: false, error: "This deposit has not matured yet" };
-  await db.policy.update({ where: { id: policy.id }, data: { status: "Matured" } });
+  await db.policy.update({ where: { id: policy.id }, data: { status: "Matured", closedOn: matures } });
   revalidatePath("/renewals");
   return { ok: true };
 }
@@ -93,6 +94,8 @@ export async function sendRenewalReminder(renewalItemId: string): Promise<Action
     include: { policy: { include: { customer: true } } },
   });
   if (!item) return { ok: false, error: "This renewal is no longer due" };
+  // Reminders stop once a policy is closed early, withdrawn, matured or not renewed.
+  if (item.policy.status !== "Active") return { ok: false, error: "This policy is no longer active; no reminder is sent" };
   if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
   const { policy } = item;
   const what = policy.productType === "PoRd" ? `RD ${policy.policyNumber} instalment` : `${policy.partner} ${policy.productName} (${policy.policyNumber}) renewal`;
@@ -104,8 +107,54 @@ export async function sendRenewalReminder(renewalItemId: string): Promise<Action
         relatedType: "RenewalItem", relatedId: item.id, createdById: user.id,
       },
     }),
-    db.renewalItem.update({ where: { id: item.id }, data: { lastReminderAt: new Date() } }),
+    db.renewalItem.update({ where: { id: item.id }, data: { lastReminderAt: new Date(), reminderCount: { increment: 1 } } }),
   ]);
+  revalidatePath("/renewals");
+  return { ok: true };
+}
+
+/**
+ * "Not renewed": the customer won't pay this overdue renewal. The policy becomes Lapsed (Not renewed tab), its
+ * unpaid instalments Lapsed, and reminders stop. Logged with the reason.
+ */
+export async function markNotRenewed(renewalItemId: string, reason: string): Promise<ActionResult> {
+  const user = await authorize("Renewal.View");
+  const why = reason.trim();
+  if (why.length < 3) return { ok: false, error: "Enter why it was not renewed" };
+  const item = await db.renewalItem.findFirst({ where: { id: renewalItemId, tenantId: user.tenantId, status: "Overdue" }, include: { policy: { include: { customer: { select: { name: true } } } } } });
+  if (!item) return { ok: false, error: "Only an overdue renewal can be marked not renewed" };
+  if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  if (item.policy.status !== "Active") return { ok: false, error: "This policy is no longer active" };
+  const today = istToday();
+  await db.$transaction(async (tx) => {
+    await tx.policy.update({ where: { id: item.policyId }, data: { status: "Lapsed", closedOn: today, closeReason: why } });
+    const lapsed = await tx.renewalItem.updateMany({ where: { policyId: item.policyId, status: { in: ["Due", "Overdue"] } }, data: { status: "Lapsed" } });
+    await audit(tx, user, {
+      entity: "Policy", entityId: item.policyId, action: "Not renewed",
+      summary: `${item.policy.customer.name} · ${item.policy.partner} ${item.policy.productName} ${item.policy.policyNumber} not renewed · ${lapsed.count} unpaid instalment(s) lapsed`,
+      before: { status: "Active" }, after: { status: "Lapsed", date: fmtDate(today) }, reason: why,
+    });
+  });
+  revalidatePath("/renewals");
+  return { ok: true };
+}
+
+/** "Send maturity reminder" (mocked): tells the customer their scheme matures soon. */
+export async function sendMaturityReminder(policyId: string): Promise<ActionResult> {
+  const user = await authorize("Renewal.View");
+  const policy = await db.policy.findFirst({ where: { id: policyId, tenantId: user.tenantId, status: "Active" }, include: { customer: true } });
+  if (!policy) return { ok: false, error: "This policy is no longer active" };
+  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  const matures = maturityDate(policy);
+  if (!matures) return { ok: false, error: "This policy has no maturity date" };
+  const what = policy.productType === "Insurance" || policy.productType === "MutualFund" ? `${policy.partner} ${policy.productName} (${policy.policyNumber})` : `${policy.productName} ${policy.policyNumber}`;
+  await db.messageLog.create({
+    data: {
+      tenantId: user.tenantId, channel: "WhatsApp", to: policy.customer.mobile, template: "maturity_reminder",
+      body: `Dear ${policy.customer.name}, your ${what} ${matures < istToday() ? "matured" : "matures"} on ${fmtDate(matures)}. Please visit our office to plan the maturity amount. – IPower Investments - R. Murali`,
+      relatedType: "Policy", relatedId: policy.id, createdById: user.id,
+    },
+  });
   revalidatePath("/renewals");
   return { ok: true };
 }

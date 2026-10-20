@@ -1,25 +1,32 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
+type Pairs = readonly (readonly [string, string])[];
 type Props = {
-  tab: string; within?: string; product: string; company?: string; scheme?: string; paidTo: string;
-  products: readonly (readonly [string, string])[]; paidToOptions: readonly (readonly [string, string])[];
-  companies: string[]; schemes: [string, string][];
+  tab: string; product: string; company?: string; scheme?: string; paidTo: string;
+  range: { pick: string; from: string; to: string } | null; showRange: boolean;
+  products: Pairs; paidToOptions: Pairs; rangePicks: Pairs; companies: string[]; schemes: [string, string][];
 };
 
-/** Product → company → scheme. Picking a broader filter clears the narrower ones; the tab is kept. */
-export function RenewalFilters({ tab, within, product, company, scheme, paidTo, products, paidToOptions, companies, schemes }: Props) {
+/** Product → company → scheme, and the date range (quick pick or From / To). A broader pick clears the narrower ones; the tab is kept. */
+export function RenewalFilters({ tab, product, company, scheme, paidTo, range, showRange, products, paidToOptions, rangePicks, companies, schemes }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const custom = range?.pick === "custom";
 
-  function go(next: { product: string; company?: string; scheme?: string }, paidto = paidTo) {
+  function go(next: { product?: string; company?: string; scheme?: string; paidto?: string; range?: string; from?: string; to?: string }) {
+    const base = { product, company, scheme, paidto: paidTo, ...(range && (custom ? { from: range.from, to: range.to } : range.pick !== "within" ? { range: range.pick } : {})) };
+    const merged: Record<string, string | undefined> = { ...base, ...next };
+    if ("product" in next) { merged.company = next.company; merged.scheme = next.scheme; }
+    if ("range" in next) { merged.from = undefined; merged.to = undefined; }
+    if ("from" in next) merged.range = undefined;
     const params = new URLSearchParams({ tab });
-    if (within) params.set("within", within);
-    for (const [k, v] of Object.entries(next)) if (v && !(k === "product" && v === "all")) params.set(k, v);
-    if (paidto !== "all") params.set("paidto", paidto);
+    for (const [k, v] of Object.entries(merged)) if (v && v !== "all") params.set(k, v);
     router.push(`${pathname}?${params}`);
   }
 
@@ -50,10 +57,27 @@ export function RenewalFilters({ tab, within, product, company, scheme, paidTo, 
           </NativeSelect>
         </div>
       )}
+      {showRange && (
+        <>
+          <div className="space-y-1">
+            <Label htmlFor="range" className="text-xs">View</Label>
+            <NativeSelect id="range" size="sm" value={custom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => go({ range: e.target.value || undefined })}>
+              <NativeSelectOption value="">{tab === "overdue" ? "Any date" : "Default"}</NativeSelectOption>
+              {rangePicks.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
+              {custom && <NativeSelectOption value="custom">Custom dates</NativeSelectOption>}
+            </NativeSelect>
+          </div>
+          <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); go({ from: String(fd.get("from") ?? ""), to: String(fd.get("to") ?? "") }); }}>
+            <div className="space-y-1"><Label htmlFor="from" className="text-xs">From date</Label><Input id="from" name="from" type="date" defaultValue={range?.from ?? ""} className="h-7 w-36" /></div>
+            <div className="space-y-1"><Label htmlFor="to" className="text-xs">To date</Label><Input id="to" name="to" type="date" defaultValue={range?.to ?? ""} className="h-7 w-36" /></div>
+            <Button type="submit" size="sm" variant="outline">Show renewals</Button>
+          </form>
+        </>
+      )}
       {tab === "paid" && (
         <div className="space-y-1">
           <Label htmlFor="paidto" className="text-xs">Paid to Post office / Insurer</Label>
-          <NativeSelect id="paidto" size="sm" value={paidTo} onChange={(e) => go({ product, company, scheme }, e.target.value)}>
+          <NativeSelect id="paidto" size="sm" value={paidTo} onChange={(e) => go({ paidto: e.target.value })}>
             {paidToOptions.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </div>

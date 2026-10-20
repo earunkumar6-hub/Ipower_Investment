@@ -3,7 +3,7 @@ import { proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels"
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
-import { db } from "@/lib/db";
+import { db, prisma } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
 import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { esevaiEntries, walletSummary } from "@/lib/esevai-day";
@@ -13,7 +13,7 @@ import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, maskMobile, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { ownerScope, userNames } from "@/lib/leads";
 import {
-  customerFilter, dayBookDate, depositFilter, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
+  customerFilter, dayBookDate, rangeLabel, depositFilter, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
   pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
@@ -165,7 +165,6 @@ export const REPORTS: Record<string, Report> = {
     async build(user) {
       const proposals = await db.proposal.findMany({
         where: { tenantId: user.tenantId, ...ownerScope(user) },
-        include: { consents: { orderBy: { createdAt: "desc" }, take: 1 } },
         orderBy: { createdAt: "desc" },
       });
       return {
@@ -175,10 +174,9 @@ export const REPORTS: Record<string, Report> = {
           name: "Proposals",
           totals: true,
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Partner", width: 32 },
-            { header: "Premium", type: "money" }, { header: "Consent" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
+            { header: "Premium", type: "money" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
           rows: proposals.map((p) => {
-            const consent = p.consents[0]?.status;
-            return [p.proposalNo, p.createdAt, p.customerName, `${p.insurer} – ${p.productName}`, p.premium, consent ?? (p.quotationId ? null : "Not needed"),
+            return [p.proposalNo, p.createdAt, p.customerName, `${p.insurer} – ${p.productName}`, p.premium,
               proposalStatusLabel(p)[0], p.policyNumber, proposalNext(p)];
           }),
         }],
@@ -288,27 +286,81 @@ export const REPORTS: Record<string, Report> = {
     permission: "Renewal.View",
     async build(user, sp) {
       const today = istToday();
-      const { tab, within, paidTo, filterLabel, rows: items } = await loadRenewals(user, sp, today);
-      const scope = tab === "due" ? `due in the next ${within} days` : tab === "overdue" ? "overdue" : paidTo === "pending" ? "not yet paid to Post office / insurer" : "paid in the last 30 days";
+      const { tab, paidTo, filterLabel, rows: items, customers } = await loadRenewals(user, sp, today);
+      const name = label(RENEWAL_TABS, tab);
+      const title = `Renewals – ${name}${paidTo === "pending" ? " (not yet paid to Post office / insurer)" : ""} – ${filterLabel}`;
+      if (tab === "customers") {
+        return {
+          file: `renewals-by-customer-${stamp()}.xlsx`, title,
+          sheets: [{
+            name, totals: true,
+            columns: [{ header: "Customer", width: 24 }, { header: "Policies", width: 40 }, { header: "Due this month", type: "money" }, { header: "Paid this year", type: "money" },
+              { header: "Overdue", type: "money" }, { header: "Owner-paid owed", type: "money" }],
+            rows: customers.map((c) => [c.customer.name, c.policies.join(", "), c.dueThisMonth, c.paidThisYear, c.overdue, c.ownerPaidOwed]),
+          }],
+        };
+      }
       const paid = tab === "paid";
+      const closed = tab === "notrenewed";
       return {
-        file: `renewals-${tab}-${stamp()}.xlsx`,
-        title: `Renewals – ${label(RENEWAL_TABS, tab)} (${scope}) – ${filterLabel}`,
+        file: `renewals-${tab}-${stamp()}.xlsx`, title,
         sheets: [{
-          name: label(RENEWAL_TABS, tab),
-          totals: true,
-          columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
-            { header: "Amount", type: "money" }, { header: "Status", width: 20 },
-            ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }] : [{ header: "Last reminder", type: "datetime" as const, width: 20 }])],
+          name,
+          totals: !closed,
+          columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: closed ? "Date" : "Due", type: "date" },
+            { header: closed ? "Premium" : "Amount", type: "money" }, { header: "Status", width: 22 },
+            ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }]
+              : closed ? [{ header: "Reason", width: 30 }] : [{ header: "Reminders sent" }, { header: "Last reminder", type: "datetime" as const, width: 20 }])],
           rows: items.map((i) => {
             const p = i.policy;
             const [status] = renewalStatus(i, today);
-            // A maturity's amount is the deposit, not money to collect, so it stays out of the totals column.
+            // A maturity's amount is the deposit / instalment, not money to collect, so it stays out of the totals column.
             const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
-              i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (deposit ${fmtINR(i.amount)})` : status];
-            return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""] : [...base, i.lastReminderAt];
+              i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (${fmtINR(i.amount)})` : status];
+            return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""]
+              : closed ? [...base, p.closeReason] : [...base, i.reminderCount || null, i.lastReminderAt];
           }),
         }],
+      };
+    },
+  },
+
+  // The monthly renewal Excel: last month renewed or not, and this month's dues (the 1st-of-month email sends the same file).
+  "renewal-month": {
+    permission: "Renewal.View",
+    async build(user) {
+      const today = istToday();
+      const lastMonth = await loadRenewals(user, { tab: "due", range: "lastmonth" }, today);
+      const [last, now] = await Promise.all([
+        prisma.renewalItem.findMany({
+          where: { tenantId: user.tenantId, policy: ownerScope(user), dueDate: { gte: lastMonth.range!.from, lte: lastMonth.range!.to }, status: { in: ["Due", "Overdue", "Paid", "Lapsed"] } },
+          include: { policy: { include: { customer: { select: { name: true } } } }, paidReceipt: { select: { receiptNo: true } } }, orderBy: { dueDate: "asc" },
+        }),
+        loadRenewals(user, { tab: "due", range: "month" }, today).then(async (r) => {
+          const overdue = await loadRenewals(user, { tab: "overdue", range: "month" }, today);
+          return [...overdue.rows, ...r.rows].filter((x) => x.kind === "instalment");
+        }),
+      ]);
+      const product = (p: { productType: string; partner: string; productName: string }) => (p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`);
+      return {
+        file: `renewals-month-${isoDate(today).slice(0, 7)}.xlsx`,
+        title: `Renewals – ${rangeLabel(lastMonth.range)} renewed or not; due this month`,
+        sheets: [
+          {
+            name: "Last month",
+            columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
+              { header: "Amount", type: "money" }, { header: "Renewed?", width: 14 }, { header: "Paid on", type: "date" }, { header: "Receipt" }],
+            rows: last.map((i) => [i.policy.customer.name, product(i.policy), i.policy.policyNumber, i.dueDate, i.premiumAmount,
+              i.status === "Paid" ? "Renewed" : i.status === "Lapsed" ? "Not renewed (lapsed)" : "Not renewed", i.paidOn, i.paidReceipt?.receiptNo ?? (i.status === "Paid" ? "owner paid" : null)]),
+          },
+          {
+            name: "This month due",
+            totals: true,
+            columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
+              { header: "Amount", type: "money" }, { header: "Status", width: 18 }, { header: "Reminders sent" }],
+            rows: now.map((i) => [i.policy.customer.name, product(i.policy), i.policy.policyNumber, i.date, i.amount, renewalStatus(i, today)[0], i.reminderCount || null]),
+          },
+        ],
       };
     },
   },

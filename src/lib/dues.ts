@@ -16,7 +16,8 @@ const isMonthEnd = (d: Date) => monthEnd(d).getTime() === d.getTime();
 export const seriesDate = (anchor: Date, months: number, monthEndSeries: boolean) =>
   monthEndSeries ? monthEnd(addMonths(anchor, months)) : addMonths(anchor, months);
 
-export type DuePolicy = { startDate: Date; frequency: Frequency; termMonths: number | null; premiumAmount: Prisma.Decimal };
+/** `billUntil`: bills fall due strictly before it (from the product's bill rule, see billEnd in policies.ts); default start + term. */
+export type DuePolicy = { startDate: Date; frequency: Frequency; termMonths: number | null; premiumAmount: Prisma.Decimal; billUntil?: Date | null };
 export type StoredDue = { id: string; dueDate: Date; premiumAmount: Prisma.Decimal; status: RenewalStatus };
 /** `itemId` null = advance instalment, created when paid. */
 export type Due = { itemId: string | null; dueDate: Date; amount: Prisma.Decimal };
@@ -34,11 +35,11 @@ export function payableDues(policy: DuePolicy, stored: StoredDue[], today: Date)
   const anchor = all[0]?.dueDate ?? policy.startDate;
   const monthEndSeries = all.length > 0 && all.every((r) => isMonthEnd(r.dueDate));
   const last = all.at(-1)?.dueDate;
-  const termEnd = policy.termMonths ? addMonths(policy.startDate, policy.termMonths) : null;
+  const end = policy.billUntil !== undefined ? policy.billUntil : policy.termMonths ? addMonths(policy.startDate, policy.termMonths) : null;
   const advance: Due[] = [];
   for (let k = 1; ; k++) {
     const d = seriesDate(anchor, k * step, monthEndSeries);
-    if (d > limit || (termEnd && d > termEnd)) break;
+    if (d > limit || (end && d >= end)) break;
     if (last ? d > last : d >= today) advance.push({ itemId: null, dueDate: d, amount: policy.premiumAmount });
   }
   return [...open, ...advance];

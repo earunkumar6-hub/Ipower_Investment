@@ -33,7 +33,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.messageLog.deleteMany({ where: { createdAt: { gte: started }, relatedId: itemId } });
-  await prisma.renewalItem.update({ where: { id: itemId }, data: { lastReminderAt: null } });
+  await prisma.renewalItem.update({ where: { id: itemId }, data: { lastReminderAt: null, reminderCount: 0 } });
   await prisma.$disconnect();
 });
 
