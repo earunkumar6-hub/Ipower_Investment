@@ -51,7 +51,7 @@ export async function payToCompany(_: ActionResult, form: FormData): Promise<Act
       if (companies.length > 1) return fail(`Tick receipts for one company at a time (${companies.join(", ")})`);
       const late = receipts.find((x) => x.receiptDate > v.paidOn);
       if (late) return fail(`${late.receiptNo} was collected on ${fmtDate(late.receiptDate)}, after the paid date`);
-      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } } });
+      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
       if (!account) return fail("Pick the cash or bank account it was paid from");
       const amount = sum(receipts.map((x) => x.amount));
       const balance = await balanceAt(tx, account.id, v.paidOn);

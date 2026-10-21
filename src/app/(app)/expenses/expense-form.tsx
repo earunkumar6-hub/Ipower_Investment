@@ -20,7 +20,7 @@ function routingHint(amount: string) {
   return `${inr(n)} needs Super Admin approval (above ₹5,000).`;
 }
 
-export function ExpenseForm({ categories, today, userName }: { categories: string[]; today: string; userName: string }) {
+export function ExpenseForm({ categories, accounts, today, userName }: { categories: string[]; accounts: { id: string; label: string }[]; today: string; userName: string }) {
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<"Company" | "Employee" | "Owner">("Company");
   const [formKey, setFormKey] = useState(0);
@@ -42,8 +42,9 @@ export function ExpenseForm({ categories, today, userName }: { categories: strin
       <h2 className="font-semibold">Add expense</h2>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Purpose" error={err.category}>
-          <NativeSelect id="category" name="category" className="w-full" defaultValue="Stationery">
+          <NativeSelect id="category" name="category" className="w-full" defaultValue={categories[0]}>
             {categories.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
+            <NativeSelectOption value="Other">Other</NativeSelectOption>
           </NativeSelect>
         </Field>
         <Field label="Description" error={err.description}>
@@ -75,9 +76,8 @@ export function ExpenseForm({ categories, today, userName }: { categories: strin
         </Field>
         {paidBy === "Company" ? (
           <Field label="From account" error={err.fromAccount}>
-            <NativeSelect id="fromAccount" name="fromAccount" className="w-full" defaultValue="cash">
-              <NativeSelectOption value="cash">Cash</NativeSelectOption>
-              <NativeSelectOption value="bank">SBI ••1234</NativeSelectOption>
+            <NativeSelect id="fromAccount" name="fromAccount" className="w-full" defaultValue={accounts[0]?.id}>
+              {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.label}</NativeSelectOption>)}
             </NativeSelect>
           </Field>
         ) : (
@@ -91,6 +91,11 @@ export function ExpenseForm({ categories, today, userName }: { categories: strin
         <Field label="Bill photo or PDF (optional)" error={err.bill}>
           <Input id="bill" name="bill" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="text-xs" />
         </Field>
+        <div className="col-span-3">
+          <Field label="Notes (required)" error={err.notes}>
+            <Input id="notes" name="notes" required placeholder="Why it was needed, who asked for it…" aria-invalid={!!err.notes} />
+          </Field>
+        </div>
       </div>
       {state.error && <p className="rounded-lg bg-orange-50 p-2 text-sm text-orange-900">{state.error}</p>}
       {hint && <p className="rounded-lg bg-saffron-50 p-2 text-sm text-saffron-900">{hint}{paidBy !== "Company" && " Stays “to be repaid” until the company pays it back."}</p>}

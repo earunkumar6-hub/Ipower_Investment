@@ -35,13 +35,14 @@ const productSchema = z.object({
   bankDetailsRequired: z.boolean(),
   bankFields: z.array(z.enum(keysOf(BANK_FIELDS))),
   prematureClosure: z.boolean(),
+  closeDuringLockIn: z.boolean(),
   fields: z.array(z.enum(keysOf(ACCOUNT_FIELDS))),
   requiredFields: z.array(z.enum(keysOf(ACCOUNT_FIELDS))),
   active: z.boolean(),
 });
 
 /** What the change log shows for a product: readable values only. */
-const productSnapshot = (p: Pick<Product, "name" | "productType" | "partner" | "invoiceRule" | "payModes" | "lockInMonths" | "bankDetailsRequired" | "bankFields" | "prematureClosure" | "fields" | "requiredFields" | "active">) => ({
+const productSnapshot = (p: Pick<Product, "name" | "productType" | "partner" | "invoiceRule" | "payModes" | "lockInMonths" | "bankDetailsRequired" | "bankFields" | "prematureClosure" | "closeDuringLockIn" | "fields" | "requiredFields" | "active">) => ({
   name: p.name,
   type: PRODUCT_TYPE_LABEL[p.productType],
   partner: p.partner,
@@ -49,7 +50,7 @@ const productSnapshot = (p: Pick<Product, "name" | "productType" | "partner" | "
   payModes: p.payModes.map((m) => PAY_MODE_LABEL[m]).join(", "),
   lockIn: p.lockInMonths ? fmtTenure(p.lockInMonths) : "none",
   bankDetails: p.bankDetailsRequired ? p.bankFields.map((f) => BANK_FIELDS[f as keyof typeof BANK_FIELDS]).join(", ") : "not needed",
-  prematureClosure: p.prematureClosure ? "allowed" : "not allowed",
+  prematureClosure: p.prematureClosure ? (p.closeDuringLockIn ? "allowed, also during lock-in" : "allowed after lock-in") : "not allowed",
   fields: p.fields.map((f) => `${ACCOUNT_FIELDS[f as keyof typeof ACCOUNT_FIELDS]}${p.requiredFields.includes(f) ? " *" : ""}`).join(", "),
   active: p.active ? "yes" : "no",
 });
@@ -67,6 +68,7 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     bankDetailsRequired: form.get("bankDetailsRequired") === "on",
     bankFields: form.getAll("bankFields"),
     prematureClosure: form.get("prematureClosure") === "on",
+    closeDuringLockIn: form.get("closeDuringLockIn") === "on",
     fields: form.getAll("fields"),
     requiredFields: form.getAll("requiredFields"),
     active: form.get("active") === "on",
@@ -80,7 +82,8 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     return fail("Products with no bills are one-time deposits; pick One-time only, or choose a bill rule");
   }
   // Mutual funds are never closed early: they are withdrawn (withdraw date).
-  const data = { ...v, id: undefined, bankFields: v.bankDetailsRequired ? v.bankFields : [], prematureClosure: v.productType === "MutualFund" ? false : v.prematureClosure };
+  const data = { ...v, id: undefined, bankFields: v.bankDetailsRequired ? v.bankFields : [], prematureClosure: v.productType === "MutualFund" ? false : v.prematureClosure,
+    closeDuringLockIn: v.productType !== "MutualFund" && v.prematureClosure && v.closeDuringLockIn };
 
   try {
     return await db.$transaction(async (tx) => {

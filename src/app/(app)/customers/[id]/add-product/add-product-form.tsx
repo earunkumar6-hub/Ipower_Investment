@@ -76,7 +76,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
       ["Interest rate", rate ? `${rate}%` : ""],
       ["Premium paying term", get("premiumPayingTerm") && `${get("premiumPayingTerm")} years`],
       ["Nominee", get("nominee")],
-      ...(product.bankDetailsRequired ? [["Bank", [get("bank_bank"), get("bank_branch"), get("bank_ifsc"), get("bank_accountNo") && `A/c ••${get("bank_accountNo").slice(-4)}`].filter(Boolean).join(" · ")] as SummaryRow] : []),
+      ...(product.bankDetailsRequired ? [["Bank", [get("bank_bank"), get("bank_branch"), get("bank_ifsc"), get("bank_micr") && `MICR ${get("bank_micr")}`, get("bank_accountType"), get("bank_accountNo") && `A/c ••${get("bank_accountNo").slice(-4)}`].filter(Boolean).join(" · ")] as SummaryRow] : []),
       ...product.customFields.map((f): SummaryRow => [f.label, get(`cf_${f.id}`)]),
     ];
   });
@@ -156,7 +156,15 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
               <div className="grid grid-cols-3 gap-3">
                 {(product.bankFields as BankField[]).map((k) => (
                   <Field key={k} label={BANK_FIELDS[k]} name={`bank_${k}`} required error={err[`bank_${k}`]}>
-                    <Input id={`bank_${k}`} name={`bank_${k}`} inputMode={k === "accountNo" ? "numeric" : undefined} className={k === "ifsc" ? "uppercase" : undefined} />
+                    {k === "accountType" ? (
+                      <NativeSelect id="bank_accountType" name="bank_accountType" defaultValue="" className="w-full">
+                        <NativeSelectOption value="">Pick…</NativeSelectOption>
+                        <NativeSelectOption value="Savings">Savings</NativeSelectOption>
+                        <NativeSelectOption value="Current">Current</NativeSelectOption>
+                      </NativeSelect>
+                    ) : (
+                      <Input id={`bank_${k}`} name={`bank_${k}`} inputMode={k === "accountNo" || k === "micr" ? "numeric" : undefined} maxLength={k === "micr" ? 9 : undefined} className={k === "ifsc" ? "uppercase" : undefined} />
+                    )}
                   </Field>
                 ))}
               </div>

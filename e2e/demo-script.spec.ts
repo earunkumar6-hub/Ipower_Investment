@@ -123,6 +123,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
       await arun.locator("#amount").fill(amount);
       await arun.locator("#vendor").fill("Sri Stationers");
       await arun.locator("#billNo").fill("B-1045");
+      await arun.locator("#notes").fill("Monthly stationery for the counter");
       await arun.getByRole("button", { name: "Submit" }).click();
     };
     await fill("3200", "Printer paper, pens, files");

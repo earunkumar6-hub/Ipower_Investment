@@ -42,4 +42,5 @@ export function expenseStatusLabel(e: Pick<Expense, "status" | "approvalLevel" |
   return ["Cancelled", "slate"];
 }
 
-export const EXPENSE_CATEGORIES = ["Stationery", "Rent", "Utilities", "Travel", "Repairs", "Equipment", "Office", "Salary", "Marketing", "Other"];
+/** Starting expense purposes (Settings → Expense purposes; the migration adds the same for existing agencies). "Other" is always offered too. */
+export const DEFAULT_EXPENSE_PURPOSES = ["Stationery", "Rent", "Utilities", "Travel", "Repairs", "Equipment", "Office", "Staff salary", "Marketing", "Pooja", "Customer incentives", "Bank charges"];

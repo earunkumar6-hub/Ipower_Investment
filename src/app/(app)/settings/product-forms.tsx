@@ -37,7 +37,7 @@ function Check({ name, value, label, defaultChecked }: { name: string; value?: s
 
 export type ProductValues = {
   id?: string; name: string; productType: ProductType; partner: string; invoiceRule: InvoiceRule; payModes: Frequency[];
-  lockInMonths: number | null; bankDetailsRequired: boolean; bankFields: string[]; prematureClosure: boolean;
+  lockInMonths: number | null; bankDetailsRequired: boolean; bankFields: string[]; prematureClosure: boolean; closeDuringLockIn: boolean;
   fields: string[]; requiredFields: string[]; active: boolean;
 };
 
@@ -100,7 +100,10 @@ export function ProductForm({ product }: { product: ProductValues }) {
           )}
           {type === "MutualFund"
             ? <p className="text-xs text-muted-foreground">Mutual funds are withdrawn with a withdraw date, not closed early.</p>
-            : <Check name="prematureClosure" label="Premature closure allowed (after lock-in)" defaultChecked={product.prematureClosure} />}
+            : <>
+                <Check name="prematureClosure" label="Premature closure allowed" defaultChecked={product.prematureClosure} />
+                <Check name="closeDuringLockIn" label="Can be closed during the lock-in period" defaultChecked={product.closeDuringLockIn} />
+              </>}
         </div>
         <div className="space-y-1.5">
           <div className="text-sm font-medium">Status</div>

@@ -106,6 +106,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         accountId: receivingAccountId(v.mode, accounts),
         reference: pay.ok.reference,
         bankName: pay.ok.bankName,
+        netType: pay.ok.netType,
         createdById: user.id,
       };
       const whatsApp = (body: string, relatedType: string, relatedId: string) =>
@@ -183,7 +184,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         ? await tx.payment.create({
             data: {
               tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), receiptDate: common.receiptDate, txnDate: common.txnDate,
-              customerId: customer.id, amount, mode: v.mode, reference: common.reference, bankName: common.bankName, denominations: pay.ok.denominations,
+              customerId: customer.id, amount, mode: v.mode, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
               notes: v.notes || null, createdById: user.id,
             },
           })

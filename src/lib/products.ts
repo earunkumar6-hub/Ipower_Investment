@@ -39,7 +39,9 @@ export const BANK_FIELDS = {
   bank: "Bank",
   branch: "Branch",
   ifsc: "IFSC",
+  micr: "MICR code",
   accountNo: "Account number",
+  accountType: "Account type",
 } as const;
 export type BankField = keyof typeof BANK_FIELDS;
 

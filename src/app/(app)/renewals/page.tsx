@@ -30,7 +30,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
   const { tab, product, company, scheme, paidTo, range, rows, customers, total } = r;
   const [options, cards] = await Promise.all([renewalFilterOptions(user, product, company), renewalCards(user.tenantId, r.policyWhere, today)]);
   const canPay = tab === "paid" && hasPermission(user.role, "DayBook.Create");
-  const accounts = canPay ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, select: { id: true, name: true }, orderBy: { type: "asc" } }) : [];
+  const accounts = canPay ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] }) : [];
   // Tabs keep the product filter; each tab has its own default date range.
   const filter = { ...(product !== "all" && { product }), ...(company && { company }), ...(scheme && { scheme }) };
   const rangeParams = range?.pick === "custom" ? { from: isoDate(range.from), to: isoDate(range.to) } : range && range.pick !== "within" && sp.range ? { range: range.pick } : sp.within ? { within: sp.within } : {};

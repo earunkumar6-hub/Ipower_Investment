@@ -26,7 +26,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
   const nameOf = (id: string | null) => d.admins.find((a) => a.id === id)?.name ?? "—";
   const canAddIncome = hasPermission(user.role, "DayBook.Close");
   const incomeAccounts = canAddIncome
-    ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, select: { id: true, name: true }, orderBy: { type: "asc" } })
+    ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] })
     : [];
 
   return (

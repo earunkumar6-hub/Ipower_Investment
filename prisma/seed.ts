@@ -10,6 +10,7 @@ import { D, ZERO } from "@/lib/money";
 import { postExpensePayment, postPoDeposit, postReceipt, postServiceTransaction } from "@/lib/posting";
 import { linkPolicies, seedProducts } from "./seed-products";
 import { defaultPayOptions } from "@/lib/payment-options";
+import { DEFAULT_EXPENSE_PURPOSES } from "@/lib/expenses";
 
 const PASSWORD = "demo1234";
 const today = istToday();
@@ -27,7 +28,8 @@ const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
 // Target opening balances for today (fl_crm_demo.json → seed_data.accounts).
 const ACCOUNTS = [
   { key: "cash", type: "Cash", name: "Cash", opening: "12000.00" },
-  { key: "sbi", type: "Bank", name: "SBI current ••1234", last4: "1234", opening: "150000.00" },
+  { key: "sbi", type: "Bank", name: "SBI current ••1234", last4: "1234", opening: "150000.00",
+    bank: { bankName: "SBI", branch: "Walajapet", ifsc: "SBIN0000963", micr: "632002011", accountKind: "Current" } },
   { key: "eb", type: "Wallet", name: "EB wallet", opening: "10110.00", low: "3000.00" },
   { key: "pan", type: "Wallet", name: "PAN wallet", opening: "2000.00", low: "500.00" },
   { key: "cert", type: "Wallet", name: "Certificate wallet", opening: "1296.00", low: "200.00" },
@@ -46,6 +48,7 @@ async function main() {
   const tenant = await prisma.tenant.create({ data: { name: "IPower Investments" } });
   const tenantId = tenant.id;
   await prisma.paymentOption.createMany({ data: defaultPayOptions(tenantId) });
+  await prisma.dropdownOption.createMany({ data: DEFAULT_EXPENSE_PURPOSES.map((value, i) => ({ tenantId, list: "expensePurpose", value, sort: i + 1 })) });
 
   // ── Users ──
   const hash = await hashPassword(PASSWORD);
@@ -74,6 +77,7 @@ async function main() {
       data: {
         tenantId, type: a.type, name: a.name, last4: "last4" in a ? a.last4 : null,
         openingBalance: a.opening, openingDate: today, lowBalanceThreshold: "low" in a ? a.low : null,
+        isDefault: a.type !== "Wallet", ...("bank" in a ? a.bank : {}), // account number not stored: the seed may run without DATA_ENCRYPTION_KEY
       },
     });
     acc[a.key] = row.id;
@@ -285,12 +289,12 @@ async function main() {
   async function expense(tx: Tx, date: Date, e: {
     category: string; description: string; amount: string; vendor: string; billNo: string; mode: PaymentMode;
     status: "Saved" | "Waiting" | "Approved"; level?: "None" | "Admin" | "SuperAdmin"; by: string; approvedBy?: string;
-    paidBy?: "Company" | "Employee"; paidByName?: string; fromAccount?: AccountKey;
+    paidBy?: "Company" | "Employee"; paidByName?: string; fromAccount?: AccountKey; notes?: string;
   }) {
     const paidBy = e.paidBy ?? "Company";
     const row = await tx.expense.create({
       data: {
-        tenantId, expenseNo: expNo(), expenseDate: date, category: e.category, description: e.description, amount: e.amount,
+        tenantId, expenseNo: expNo(), expenseDate: date, category: e.category, description: e.description, notes: e.notes ?? e.description, amount: e.amount,
         vendorId: await vendor(tx, e.vendor), billNo: e.billNo, paidBy, paidByName: e.paidByName, mode: e.mode,
         fromAccountId: paidBy === "Company" ? acc[e.fromAccount ?? "cash"] : null,
         repaymentStatus: paidBy === "Company" ? "NotNeeded" : "ToBeRepaid",

@@ -483,10 +483,10 @@ export const REPORTS: Record<string, Report> = {
         sheets: [{
           name: "Expenses",
           totals: true,
-          columns: [{ header: "No." }, { header: "Date", type: "date" }, { header: "Category" }, { header: "Purpose", width: 30 }, { header: "Vendor", width: 22 },
+          columns: [{ header: "No." }, { header: "Date", type: "date" }, { header: "Category" }, { header: "Purpose", width: 30 }, { header: "Notes", width: 30 }, { header: "Vendor", width: 22 },
             { header: "Bill no." }, { header: "Paid by", width: 22 }, { header: "Mode" }, { header: "Amount", type: "money" }, { header: "Status", width: 30 },
             { header: "Entered by" }, { header: "Approved / rejected by" }, { header: "Reason", width: 24 }],
-          rows: rows.map((e) => [e.expenseNo, e.expenseDate, e.category, e.description, e.vendor.name, e.billNo,
+          rows: rows.map((e) => [e.expenseNo, e.expenseDate, e.category, e.description, e.notes ?? "", e.vendor.name, e.billNo,
             e.paidBy === "Company" ? "Company" : `${e.paidBy}: ${e.paidByName}`, e.mode, e.amount, expenseStatusLabel(e, paidIds.has(e.id))[0],
             person(e.createdById), e.status !== "Cancelled" ? person(e.approvedById) : "", e.rejectReason ?? e.cancelReason]),
         }],

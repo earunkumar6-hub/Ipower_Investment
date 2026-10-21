@@ -153,7 +153,7 @@ export async function depositOneRdReceipt(_: ActionResult, form: FormData): Prom
       if (!r) return fail("This receipt is no longer waiting for deposit; reload and try again");
       if (!seesAll(user.role) && r.createdById !== user.id && !canActOn(user, r.policy!.ownerId)) return fail("This receipt belongs to another user");
       if (r.receiptDate > v.paidOn) return fail(`${r.receiptNo} was collected on ${fmtDate(r.receiptDate)}, after the deposit date`);
-      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } } });
+      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
       if (!account) return fail("Pick the cash or bank account it was paid from");
       const balance = await balanceAt(tx, account.id, v.paidOn);
       if (balance.lt(r.amount)) return fail(`${account.name} has only ${fmtINR(balance)}`);
@@ -291,7 +291,7 @@ export async function recordOtherIncome(_: ActionResult, form: FormData): Promis
   if (checkDate(date)) return fail(checkDate(date)!);
   return guarded(() =>
     db.$transaction(async (tx) => {
-      const account = await tx.account.findFirst({ where: { id: accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } } });
+      const account = await tx.account.findFirst({ where: { id: accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
       if (!account) return fail("Pick the cash or bank account the money came into");
       const sourceId = randomUUID();
       await post(tx, {

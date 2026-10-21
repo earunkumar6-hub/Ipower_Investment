@@ -5,7 +5,9 @@ import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canApprove, canCancel, EXPENSE_CATEGORIES, expenseStatusLabel } from "@/lib/expenses";
+import { accountLabel, moneyAccounts } from "@/lib/accounts";
+import { dropdownValues } from "@/lib/dropdowns";
+import { canApprove, canCancel, expenseStatusLabel } from "@/lib/expenses";
 import { fmtINR } from "@/lib/money";
 import { EXPENSE_TABS as TABS, expenseFilter } from "@/lib/lists";
 import { hasPermission } from "@/lib/permissions";
@@ -17,7 +19,7 @@ import { ExpenseRowActions } from "./row-actions";
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await requirePermission("Expense.View");
   const { tab, where } = expenseFilter(user, await searchParams);
-  const [expenses, users] = await Promise.all([
+  const [expenses, users, purposes, accounts] = await Promise.all([
     db.expense.findMany({
       where,
       include: { vendor: true },
@@ -25,6 +27,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       take: 100,
     }),
     db.user.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true } }),
+    dropdownValues(db, user.tenantId, "expensePurpose"),
+    moneyAccounts(db, user.tenantId),
   ]);
   const rows = tab === "approve" ? expenses.filter((e) => canApprove(user, e)) : expenses;
   // Paid = a live (not reversed) Day Book entry exists for the expense.
@@ -41,7 +45,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Expenses" user={user} actions={<ExportButton report="expenses" user={user} params={{ tab }} />} />
       <div className="mb-4 flex items-start gap-4">
-        <ExpenseForm categories={EXPENSE_CATEGORIES} today={isoDate(istToday())} userName={user.name} />
+        <ExpenseForm categories={purposes} accounts={accounts.map((a) => ({ id: a.id, label: a.type === "Cash" ? "Office cash" : accountLabel(a) }))} today={isoDate(istToday())} userName={user.name} />
         <div className="w-96 shrink-0 rounded-xl border bg-white p-4 text-sm">
           <h2 className="mb-2 font-semibold">Approval rules</h2>
           <Table>
@@ -85,6 +89,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                   <TableCell>{fmtDate(e.expenseDate)}</TableCell>
                   <TableCell className="whitespace-normal">
                     <span className="text-muted-foreground">{e.category} · </span>{e.description}
+                    {e.notes && <div className="text-xs">Notes: {e.notes}</div>}
                     <div className="text-xs text-muted-foreground">by {nameOf(e.createdById)}{e.approvedById && e.status !== "Cancelled" && ` · ${e.status === "Rejected" ? "rejected" : "approved"} by ${nameOf(e.approvedById)}`}{note && ` · ${note}`}</div>
                   </TableCell>
                   <TableCell>

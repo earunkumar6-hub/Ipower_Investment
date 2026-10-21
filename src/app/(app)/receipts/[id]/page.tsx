@@ -33,7 +33,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const deposit = r.policy && !cancelled ? companyStatus(r, r.policy.partner, nameLookup(users)) : null;
   const isRd = rdDepositable(r);
   const canDeposit = !!deposit && (deposit.payable || isRd) && hasPermission(user.role, "DayBook.Create");
-  const accounts = canDeposit ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, select: { id: true, name: true }, orderBy: { type: "asc" } }) : [];
+  const accounts = canDeposit ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] }) : [];
 
   const rows: [string, React.ReactNode][] = [
     ["Customer", `${r.customer.name} · ${r.customer.mobile}`],

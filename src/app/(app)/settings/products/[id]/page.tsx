@@ -37,7 +37,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <ProductForm product={{
           id: product.id, name: product.name, productType: product.productType, partner: product.partner, invoiceRule: product.invoiceRule,
           payModes: product.payModes, lockInMonths: product.lockInMonths, bankDetailsRequired: product.bankDetailsRequired, bankFields: product.bankFields,
-          prematureClosure: product.prematureClosure, fields: product.fields, requiredFields: product.requiredFields, active: product.active,
+          prematureClosure: product.prematureClosure, closeDuringLockIn: product.closeDuringLockIn, fields: product.fields, requiredFields: product.requiredFields, active: product.active,
         }} />
       </div>
 

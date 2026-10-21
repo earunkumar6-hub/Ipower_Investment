@@ -13,7 +13,7 @@ export default async function NewProductPage() {
         <h2 className="mb-3 font-semibold">Add product</h2>
         <ProductForm product={{
           name: "", productType: "Insurance", partner: "", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly"], lockInMonths: null,
-          bankDetailsRequired: false, bankFields: [], prematureClosure: true, fields: ["policyNumber", "commencement", "maturity", "nominee"],
+          bankDetailsRequired: false, bankFields: [], prematureClosure: true, closeDuringLockIn: false, fields: ["policyNumber", "commencement", "maturity", "nominee"],
           requiredFields: ["policyNumber", "commencement"], active: true,
         }} />
         <p className="mt-3 text-xs text-muted-foreground">Schemes, interest rates and custom fields are added after the product is saved.</p>

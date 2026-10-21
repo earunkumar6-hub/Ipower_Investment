@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-// Settings has more tabs coming (fields and rules, approval limits, reminders and payment modes – phase 8).
+// More tabs may follow (fields and rules, approval limits, reminders).
 const TABS = [
   ["products", "Products and schemes", "/settings"],
+  ["accounts", "Bank accounts and wallets", "/settings/accounts"],
+  ["payment-modes", "Payment modes", "/settings/payment-modes"],
+  ["expense-purposes", "Expense purposes", "/settings/expense-purposes"],
+  ["daybook", "Day Book", "/settings/daybook"],
   ["log", "Change log", "/settings/log"],
 ] as const;
 

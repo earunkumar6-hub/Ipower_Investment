@@ -19,10 +19,11 @@ enum Role {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  users     User[]
+  id                String   @id @default(cuid())
+  name              String
+  dayCloseGraceDays Int      @default(3) // a day can be closed this many days later; after that only the Super Admin
+  createdAt         DateTime @default(now())
+  users             User[]
 }
 
 // Better Auth user + FL_CRM fields
@@ -485,6 +486,7 @@ model Product {
   bankDetailsRequired Boolean     @default(false)
   bankFields          String[] // keys of BANK_FIELDS
   prematureClosure    Boolean     @default(true) // allowed (after lock-in)
+  closeDuringLockIn   Boolean     @default(false) // may also be closed inside the lock-in period
   fields              String[] // keys of ACCOUNT_FIELDS shown on the policy
   requiredFields      String[]
   active              Boolean     @default(true)
@@ -621,6 +623,7 @@ model Receipt {
   accountId        String // account the money came into
   reference        String? // UTR / cheque no. / net banking transaction ID / card approval no.
   bankName         String? // net banking: the customer's bank (reference only)
+  netType          String? // net banking: NEFT / IMPS / RTGS
   denominations    Json? // cash: { "500": 4, "200": 2, …, "coins": "12.50" }; on the Payment when several dues are paid together
   notes            String?
   isPassThrough    Boolean         @default(true)
@@ -659,6 +662,7 @@ model Payment {
   mode          PaymentMode
   reference     String?
   bankName      String?
+  netType       String? // net banking: NEFT / IMPS / RTGS
   denominations Json?
   notes         String?
   status        ReceiptStatus @default(Saved)
@@ -867,15 +871,36 @@ enum AccountType {
   Wallet
 }
 
+enum BankAccountKind {
+  Savings
+  Current
+}
+
+enum WalletKind {
+  CSC
+  ESevai
+  Other
+}
+
 model Account {
-  id                  String      @id @default(cuid())
+  id                  String           @id @default(cuid())
   tenantId            String
   type                AccountType
   name                String
   last4               String?
-  openingBalance      Decimal     @db.Decimal(14, 2)
-  openingDate         DateTime    @db.Date // balance is as at start of this date
-  lowBalanceThreshold Decimal?    @db.Decimal(12, 2)
+  openingBalance      Decimal          @db.Decimal(14, 2)
+  openingDate         DateTime         @db.Date // balance is as at start of this date
+  lowBalanceThreshold Decimal?         @db.Decimal(12, 2)
+  active              Boolean          @default(true) // inactive: hidden from new entries, still shown on old ones
+  isDefault           Boolean          @default(false) // the bank account used until a screen lets staff pick one
+  // Bank details (Settings → Bank accounts and wallets); the account number is AES-GCM encrypted.
+  bankName            String?
+  branch              String?
+  accountNoEnc        String?
+  ifsc                String?
+  micr                String?
+  accountKind         BankAccountKind?
+  walletKind          WalletKind? // null for the older EB / PAN / certificate wallets
 
   entries   DayBookEntry[]
   dayCloses DayClose[]
@@ -923,6 +948,7 @@ model Expense {
   expenseDate         DateTime        @db.Date
   category            String
   description         String
+  notes               String? // required on new expenses (older ones have none)
   amount              Decimal         @db.Decimal(12, 2)
   vendorId            String
   vendor              Vendor          @relation(fields: [vendorId], references: [id])
@@ -1121,6 +1147,7 @@ model DirectBill {
   accountId     String
   reference     String?
   bankName      String?
+  netType       String? // net banking: NEFT / IMPS / RTGS
   denominations Json?
   status        ReceiptStatus @default(Saved)
   cancelReason  String?
@@ -1131,4 +1158,20 @@ model DirectBill {
 
   @@unique([tenantId, billNo])
   @@index([tenantId, payerMobile])
+}
+
+/// Values of a dropdown kept in Settings (expense purposes now; "Other" values typed by staff later).
+/// Removing a value hides it from new entries; old records keep the text.
+model DropdownOption {
+  id           String   @id @default(cuid())
+  tenantId     String
+  list         String // "expensePurpose", …
+  value        String
+  active       Boolean  @default(true)
+  addedByStaff Boolean  @default(false)
+  sort         Int      @default(0)
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, list])
 }

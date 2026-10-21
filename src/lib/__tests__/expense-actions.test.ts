@@ -21,13 +21,15 @@ const { createExpense, approveExpense, rejectExpense, cancelExpense, repayExpens
 const VENDOR = "Vitest Stationers";
 const users: Record<string, U> = {};
 const as = (u: string) => (session.user = users[u]);
+// "From account" is an account id: the tests say "cash" / "bank" for office cash and the default bank.
+const accountIds: Record<string, string> = {};
 const form = (o: Record<string, string>) => {
   const f = new FormData();
-  Object.entries(o).forEach(([k, v]) => f.set(k, v));
+  Object.entries(o).forEach(([k, v]) => f.set(k, k === "fromAccount" ? accountIds[v] ?? v : v));
   return f;
 };
 const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10);
-const base = { expenseDate: today, category: "Stationery", description: "Paper and pens", vendor: VENDOR, paidBy: "Company", paidByName: "", mode: "Cash", fromAccount: "cash" };
+const base = { expenseDate: today, category: "Stationery", description: "Paper and pens", vendor: VENDOR, paidBy: "Company", paidByName: "", mode: "Cash", fromAccount: "cash", notes: "Vitest notes" };
 let laptopId = "";
 
 beforeAll(async () => {
@@ -36,6 +38,9 @@ beforeAll(async () => {
     users[username] = { id: u.id, name: u.name, username, role: u.role, tenantId: u.tenantId };
   }
   laptopId = (await prisma.expense.findFirstOrThrow({ where: { description: "Laptop" } })).id;
+  for (const type of ["Cash", "Bank"] as const) {
+    accountIds[type.toLowerCase()] = (await prisma.account.findFirstOrThrow({ where: { tenantId: users.arun.tenantId, type, isDefault: true } })).id;
+  }
 });
 
 afterAll(async () => {

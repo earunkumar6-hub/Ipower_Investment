@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { accountDay } from "@/lib/daybook";
 import { istToday } from "@/lib/dates";
-import { prisma } from "@/lib/db";
+import { db, prisma } from "@/lib/db";
 
 const session = vi.hoisted(() => ({ user: null as null | { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string } }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -27,7 +27,7 @@ const form = (o: Record<string, string>) => {
   Object.entries(o).forEach(([k, v]) => f.set(k, v));
   return f;
 };
-const base = { policyId: "", reference: "", bankName: "", notes: "", slipIds: "", denominations: "" };
+const base = { policyId: "", reference: "", bankName: "", netType: "", notes: "", slipIds: "", denominations: "" };
 const users: Record<string, { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string }> = {};
 const as = (u: keyof typeof users) => { session.user = users[u]; };
 
@@ -78,6 +78,8 @@ describe("Cash denomination and net banking", () => {
   it("net banking needs the customer's bank (from the list) and a transaction ID; both show in the Day Book row", async () => {
     const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-105" } });
     const common = { ...base, customerId: policy.customerId, policyId: policy.id, amount: "300", mode: "NetBanking" };
+    expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1", bankName: "HDFC" }))).fieldErrors).toHaveProperty("netType");
+    common.netType = "NEFT";
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1" }))).fieldErrors).toHaveProperty("bankName");
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1", bankName: "Not a bank" }))).fieldErrors).toHaveProperty("bankName");
     expect((await createReceipt({ ok: false }, form({ ...common, bankName: "HDFC" }))).fieldErrors).toHaveProperty("reference");
@@ -86,9 +88,9 @@ describe("Cash denomination and net banking", () => {
     expect(r.ok).toBe(true);
     receipts.push(r.id!);
     const saved = await prisma.receipt.findUniqueOrThrow({ where: { id: r.id } });
-    expect(saved).toMatchObject({ mode: "NetBanking", bankName: "HDFC", reference: "NEFT55120931", denominations: null });
+    expect(saved).toMatchObject({ mode: "NetBanking", netType: "NEFT", bankName: "HDFC", reference: "NEFT55120931", denominations: null });
     const entry = await prisma.dayBookEntry.findFirstOrThrow({ where: { sourceId: r.id } });
-    expect(entry.particulars).toContain("Net banking · HDFC · NEFT55120931");
+    expect(entry.particulars).toContain("Net banking · NEFT · HDFC · NEFT55120931");
   });
 
   it("a mode switched off in Settings is refused", async () => {
@@ -132,7 +134,7 @@ describe("Direct bills", () => {
 
   it("a walk-in bill gets a DB- number, posts money in and is not linked to anyone", async () => {
     as("user");
-    const cashIn = async () => (await accountDay(prisma, users.admin.tenantId, istToday())).find((a) => a.type === "Cash")!.totalIn;
+    const cashIn = async () => (await accountDay(db, users.admin.tenantId, istToday())).find((a) => a.type === "Cash")!.totalIn;
     const before = await cashIn();
     const r = await createDirectBill({ ok: false }, form({ ...bill, payerName: "Walk-in Ganesh", payerMobile: "6000011122" }));
     expect(r.ok).toBe(true);

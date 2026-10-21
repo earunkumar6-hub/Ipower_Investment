@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import type { Tx } from "@/lib/db";
 import { D, fmtINR } from "@/lib/money";
-import { MODE_LABEL, modeText, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type ReceiptMode } from "@/lib/payment-modes";
+import { MODE_LABEL, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type ReceiptMode } from "@/lib/payment-modes";
 
 // Payment modes offered on receipts / direct bills, net banking banks (Settings → Payment modes) and cash denomination.
 // Plain labels / constants (safe for client components) live in payment-modes.ts.
@@ -59,9 +59,10 @@ export const payFields = {
   mode: z.enum(RECEIPT_MODES, "Pick the payment mode"),
   reference: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(60).default(""),
+  netType: z.string().trim().default(""),
   denominations: z.string().default(""),
 };
-type PayInput = { mode: ReceiptMode; reference: string; bankName: string; denominations: string };
+type PayInput = { mode: ReceiptMode; reference: string; bankName: string; netType: string; denominations: string };
 
 /**
  * Checks the mode is switched on, the reference / bank it needs, and that cash notes add up to `amount`.
@@ -76,12 +77,14 @@ export async function checkPayment(tx: Pick<Tx, "paymentOption">, tenantId: stri
     if (!v.denominations || !parsed.success) return fail("denominations", "Enter the cash denomination (notes and coins)");
     const total = denominationTotal(parsed.data);
     if (!total.equals(amount)) return fail("denominations", `Cash denomination adds up to ${fmtINR(total)}, not ${fmtINR(amount)}`);
-    return { ok: { reference: null, bankName: null, denominations: parsed.data as Prisma.InputJsonValue } } as const;
+    return { ok: { reference: null, bankName: null, netType: null, denominations: parsed.data as Prisma.InputJsonValue } } as const;
   }
   if (!v.reference) return fail("reference", `Enter the ${REFERENCE_LABEL[v.mode].toLowerCase()}`);
   if (v.mode === "NetBanking") {
+    if (!(NET_TYPES as readonly string[]).includes(v.netType)) return fail("netType", "Pick NEFT, IMPS or RTGS");
     if (!v.bankName) return fail("bankName", "Pick the customer's bank");
     if (!opts.banks.includes(v.bankName)) return fail("bankName", `${v.bankName} is not in the bank list (Settings → Payment modes)`);
   }
-  return { ok: { reference: v.reference, bankName: v.mode === "NetBanking" ? v.bankName : null, denominations: undefined } } as const;
+  const net = v.mode === "NetBanking";
+  return { ok: { reference: v.reference, bankName: net ? v.bankName : null, netType: net ? v.netType : null, denominations: undefined } } as const;
 }

@@ -102,7 +102,7 @@ async function rechargeWalletUnguarded(_: ActionResult, form: FormData): Promise
   const amount = new D(v.amount);
 
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
-    const wallet = await tx.account.findFirst({ where: { id: v.walletId, tenantId: user.tenantId, type: "Wallet" } });
+    const wallet = await tx.account.findFirst({ where: { id: v.walletId, tenantId: user.tenantId, type: "Wallet", active: true } });
     if (!wallet) return { ok: false, error: "Wallet not found" };
     const accounts = await cashAndBank(tx, user.tenantId);
     const from = v.from === "Bank" ? accounts.bank : accounts.cash;

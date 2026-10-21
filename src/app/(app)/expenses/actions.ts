@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank } from "@/lib/accounts";
+import { dropdownValues } from "@/lib/dropdowns";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { billProblem, saveBill } from "@/lib/bill-storage";
 import { balanceAt, isDayClosed, lockDay, reverseSource } from "@/lib/daybook";
@@ -21,13 +22,14 @@ const expenseSchema = z
     expenseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date"),
     category: z.string().trim().min(1, "Pick a purpose"),
     description: z.string().trim().min(2, "Describe the expense").max(200),
+    notes: z.string().default("").transform((s) => s.trim()).pipe(z.string().min(3, "Enter notes – required for every expense").max(500)),
     amount: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0"),
     vendor: z.string().trim().min(2, "Enter the vendor"),
     billNo: z.string().trim().min(1, "Bill number is required").max(40).transform((v) => v.toUpperCase()),
     paidBy: z.enum(["Company", "Employee", "Owner"]),
     paidByName: z.string().trim().max(80).default(""), // absent when the company paid
     mode: z.enum(["Cash", "UPI", "Bank", "Card", "Cheque"]),
-    fromAccount: z.enum(["cash", "bank", ""]).default(""), // absent when an employee or the owner paid
+    fromAccount: z.string().default(""), // company account id; absent when an employee or the owner paid
   })
   .refine((v) => v.paidBy !== "Company" || v.fromAccount, { message: "Pick the company account", path: ["fromAccount"] })
   .refine((v) => v.paidBy !== "Employee" || v.paidByName, { message: "Enter the employee's name", path: ["paidByName"] });
@@ -74,14 +76,18 @@ async function createExpenseUnguarded(_: ActionResult, form: FormData): Promise<
       if (dup) {
         return fail(`Bill ${v.billNo} from ${vendor.name} is already entered (${dup.expenseNo}, ${fmtDate(dup.expenseDate)}). The same bill number cannot be entered twice.`, "billNo");
       }
-      const accounts = await cashAndBank(tx, user.tenantId);
+      const purposes = await dropdownValues(tx, user.tenantId, "expensePurpose");
+      if (v.category !== "Other" && !purposes.includes(v.category)) return fail("Pick a purpose from the list", "category");
       const company = v.paidBy === "Company";
+      // Settings → Bank accounts and wallets: active bank accounts or office cash.
+      const from = company ? await tx.account.findFirst({ where: { id: v.fromAccount, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } }) : null;
+      if (company && !from) return fail("Pick an active company account", "fromAccount");
       const e = await tx.expense.create({
         data: {
           tenantId: user.tenantId, expenseNo: await nextNumber(tx, user.tenantId, "expense"), expenseDate,
-          category: v.category, description: v.description, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo,
+          category: v.category, description: v.description, notes: v.notes, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo,
           paidBy: v.paidBy, paidByName: v.paidBy === "Owner" ? "Owner" : v.paidBy === "Employee" ? v.paidByName : null, mode: v.mode,
-          fromAccountId: company ? (v.fromAccount === "cash" ? accounts.cash.id : accounts.bank.id) : null,
+          fromAccountId: from?.id ?? null,
           repaymentStatus: company ? "NotNeeded" : "ToBeRepaid",
           status: level === "None" ? "Saved" : "Waiting", approvalLevel: level, createdById: user.id,
         },

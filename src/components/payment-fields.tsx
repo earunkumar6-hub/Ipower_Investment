@@ -3,23 +3,23 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { MODE_LABEL, NOTES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
+import { MODE_LABEL, NET_TYPES, NOTES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
 import { cn } from "@/lib/utils";
 
-export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; notes: Record<string, string>; coins: string };
-export const emptyPay = (modes: ReceiptMode[]): PayValue => ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", notes: {}, coins: "" });
+export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string };
+export const emptyPay = (modes: ReceiptMode[]): PayValue => ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", netType: "", notes: {}, coins: "" });
 
 export const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v) * 100) : 0);
 export const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
 const count = (v: string | undefined) => (/^\d+$/.test(v ?? "") ? Number(v) : 0);
 export const cashTotal = (v: PayValue) => NOTES.reduce((t, n) => t + n * 100 * count(v.notes[n]), paise(v.coins));
 
-/** Form fields sent to the server: mode, reference, bankName and the denomination as JSON (cash only). */
+/** Form fields sent to the server: mode, reference, bankName + netType (net banking) and the denomination as JSON (cash only). */
 export function payFormFields(v: PayValue): Record<string, string> {
   const denominations = v.mode === "Cash"
     ? JSON.stringify({ ...Object.fromEntries(NOTES.filter((n) => count(v.notes[n])).map((n) => [`${n}`, count(v.notes[n])])), coins: v.coins })
     : "";
-  return { mode: v.mode, reference: v.mode === "Cash" ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", denominations };
+  return { mode: v.mode, reference: v.mode === "Cash" ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "", denominations };
 }
 
 /** Mode buttons, then what the mode needs: cash denomination, UTR / transaction ID / cheque no., the customer's bank. */
@@ -69,6 +69,15 @@ export function PaymentFields({ modes, banks, amount, value, onChange, errors = 
         <div className="grid grid-cols-2 gap-3">
           {value.mode === "NetBanking" && (
             <div className="space-y-1.5">
+              <Label htmlFor="netType">Transfer type</Label>
+              <NativeSelect id="netType" value={value.netType} className="w-full" aria-invalid={!!errors.netType} onChange={(e) => set({ netType: e.target.value })}>
+                <NativeSelectOption value="">Pick…</NativeSelectOption>
+                {NET_TYPES.map((t) => <NativeSelectOption key={t} value={t}>{t}</NativeSelectOption>)}
+              </NativeSelect>
+            </div>
+          )}
+          {value.mode === "NetBanking" && (
+            <div className="space-y-1.5">
               <Label htmlFor="bankName">Customer&apos;s bank</Label>
               <NativeSelect id="bankName" value={value.bankName} className="w-full" aria-invalid={!!errors.bankName} onChange={(e) => set({ bankName: e.target.value })}>
                 <NativeSelectOption value="">Pick the bank</NativeSelectOption>
@@ -89,5 +98,5 @@ export function PaymentFields({ modes, banks, amount, value, onChange, errors = 
 /** True when the form can be sent: cash adds up, or the reference (and bank) is filled in. */
 export function payReady(v: PayValue, amount: number) {
   if (v.mode === "Cash") return amount > 0 && cashTotal(v) === amount;
-  return !!v.reference.trim() && (v.mode !== "NetBanking" || !!v.bankName);
+  return !!v.reference.trim() && (v.mode !== "NetBanking" || (!!v.bankName && !!v.netType));
 }

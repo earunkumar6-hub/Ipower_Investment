@@ -48,7 +48,7 @@ export async function closePolicy(_: ActionResult, form: FormData): Promise<Acti
   if (v.kind === "close" && policy.product) {
     if (!policy.product.prematureClosure) return fail(`${policy.product.name} can't be closed early (Settings → Products and schemes)`);
     const lockIn = lockInUntil(policy.startDate, policy.product.lockInMonths);
-    if (lockIn && v.closedOn < lockIn) return fail(`Lock-in runs until ${fmtDate(lockIn)}; it can't be closed before then`);
+    if (lockIn && v.closedOn < lockIn && !policy.product.closeDuringLockIn) return fail(`Lock-in runs until ${fmtDate(lockIn)}; it can't be closed before then`);
   }
 
   const status = v.kind === "close" ? "PrematureClosed" : "Withdrawn";
@@ -89,6 +89,7 @@ const addSchema = z.object({
 });
 
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const MICR = /^\d{9}$/;
 
 /**
  * "Add product directly" on a customer: every rule comes from Settings → Products and schemes (pay modes, shown /
@@ -143,8 +144,10 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
       const raw = String(form.get(`bank_${k}`) ?? "").trim().toUpperCase();
       if (!raw) return fail(`Enter the ${BANK_FIELDS[k].toLowerCase()}`, { [`bank_${k}`]: "Required" });
       if (k === "ifsc" && !IFSC.test(raw)) return fail("IFSC looks like SBIN0001234", { bank_ifsc: "Format" });
+      if (k === "micr" && !MICR.test(raw)) return fail("MICR code is 9 digits", { bank_micr: "Format" });
       if (k === "accountNo" && !/^\d{6,18}$/.test(raw)) return fail("Account number should be 6–18 digits", { bank_accountNo: "Format" });
-      bank[k] = k === "holder" || k === "bank" || k === "branch" ? String(form.get(`bank_${k}`)).trim() : raw;
+      if (k === "accountType" && raw !== "SAVINGS" && raw !== "CURRENT") return fail("Pick Savings or Current", { bank_accountType: "Pick" });
+      bank[k] = k === "holder" || k === "bank" || k === "branch" ? String(form.get(`bank_${k}`)).trim() : k === "accountType" ? (raw === "SAVINGS" ? "Savings" : "Current") : raw;
     }
     try {
       bankDetailsEnc = encryptJson(bank);

@@ -21,7 +21,7 @@ function bankLine(enc: string | null) {
   if (!enc) return null;
   try {
     const b = decryptJson<Record<string, string>>(enc);
-    return [b.holder, b.bank, b.branch, b.ifsc, b.accountNo && `A/c ${maskAccount(b.accountNo)}`].filter(Boolean).join(" · ");
+    return [b.holder, b.bank, b.branch, b.ifsc, b.micr && `MICR ${b.micr}`, b.accountType, b.accountNo && `A/c ${maskAccount(b.accountNo)}`].filter(Boolean).join(" · ");
   } catch {
     return "Saved (encrypted – key not available)";
   }

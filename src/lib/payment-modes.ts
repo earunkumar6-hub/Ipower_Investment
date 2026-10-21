@@ -11,11 +11,13 @@ export type ReceiptMode = (typeof RECEIPT_MODES)[number];
 export const REFERENCE_LABEL: Record<Exclude<ReceiptMode, "Cash">, string> = {
   UPI: "UTR", NetBanking: "Transaction ID", Cheque: "Cheque no.", Card: "Card approval no.",
 };
+/** Net banking sub-types. */
+export const NET_TYPES = ["NEFT", "IMPS", "RTGS"] as const;
 export const NOTES = [500, 200, 100, 50, 20, 10] as const;
 /** Note counts by face value plus coins in rupees: { "500": 4, "200": 2, coins: "12.50" }. */
 export type Denominations = Partial<Record<`${(typeof NOTES)[number]}`, number>> & { coins?: string };
 
 /** "Net banking · HDFC · 55120931", "UPI · UTR 4291…", "Cash". */
-export function modeText(r: { mode: PaymentMode; reference?: string | null; bankName?: string | null }) {
-  return [MODE_LABEL[r.mode], r.bankName, r.reference].filter(Boolean).join(" · ");
+export function modeText(r: { mode: PaymentMode; reference?: string | null; bankName?: string | null; netType?: string | null }) {
+  return [MODE_LABEL[r.mode], r.netType, r.bankName, r.reference].filter(Boolean).join(" · ");
 }
