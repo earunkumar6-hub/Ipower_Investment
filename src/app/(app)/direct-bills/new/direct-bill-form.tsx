@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { emptyPay, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
+import { emptyPay, type IntoAccount, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +12,11 @@ import { isoDate, istToday } from "@/lib/dates";
 import type { ReceiptMode } from "@/lib/payment-modes";
 import { createDirectBill } from "../actions";
 
-export function DirectBillForm({ modes, banks, receivedBy }: { modes: ReceiptMode[]; banks: string[]; receivedBy: string }) {
+export function DirectBillForm({ modes, banks, accounts, receivedBy }: { modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string }) {
   const router = useRouter();
   const today = isoDate(istToday());
   const [f, setF] = useState({ payerName: "", payerMobile: "", purpose: "", amount: "", billDate: today });
-  const [pay, setPay] = useState<PayValue>(emptyPay(modes));
+  const [pay, setPay] = useState<PayValue>(emptyPay(modes, accounts));
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   const [state, dispatch, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
@@ -63,7 +63,7 @@ export function DirectBillForm({ modes, banks, receivedBy }: { modes: ReceiptMod
           <Label>Received by</Label>
           <div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm">{receivedBy}</div>
         </div>
-        <PaymentFields modes={modes} banks={banks} amount={paise(f.amount)} value={pay} onChange={setPay} errors={err} />
+        <PaymentFields modes={modes} banks={banks} accounts={accounts} amount={paise(f.amount)} value={pay} onChange={setPay} errors={err} />
       </div>
       <p className="text-xs text-muted-foreground">
         For anyone, customer or not. If the mobile belongs to a customer, the bill is linked to that customer. The Day Book records it on the bill date.

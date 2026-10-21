@@ -7,49 +7,63 @@ import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
+import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
-import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
+import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { ownerScope, userNames } from "@/lib/leads";
 import { OWNER_PAYABLE } from "@/lib/dues";
 import { MODE_LABEL } from "@/lib/payment-modes";
-import { depositFilter, monthLabel, receiptTab, SLIP_STATUS } from "@/lib/lists";
+import { monthLabel, receiptFilter, receiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
 import { fmtINR, sum, ZERO } from "@/lib/money";
-import { seesAll } from "@/lib/permissions";
 import { requirePermission, type SessionUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { OwnerPaidForm, ReturnToOwnerForm } from "./owner-paid-forms";
+import { ReceiptFilters } from "./receipt-filters";
 
-export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<{ tab?: string; deposit?: string }> }) {
+type Filter = ReturnType<typeof receiptFilter>;
+/** /receipts with the current filters, changed by `patch` (an undefined value drops the key). */
+const href = (params: Params, patch: Params) =>
+  `/receipts?${new URLSearchParams(Object.entries({ ...params, ...patch }).filter((e): e is [string, string] => !!e[1]))}`;
+
+export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const user = await requirePermission("Receipt.View");
   const sp = await searchParams;
   const tab = receiptTab(sp);
-  const deposit = depositFilter(sp);
+  const f = receiptFilter(user, sp);
+  const [customerCount, slipCount, accounts] = await Promise.all([
+    db.receipt.count({ where: f.receiptWhere }),
+    db.ownerPaidSlip.count({ where: f.slipWhere }),
+    db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, orderBy: [{ type: "asc" }, { active: "desc" }, { name: "asc" }] }),
+  ]);
+  const tabs = [["customer", "Customer receipts", customerCount], ["owner", "Owner-paid receipts", slipCount]] as const;
 
   return (
     <>
       <PageHeader title="Receipts" user={user} actions={<>
-        <ExportButton report="receipts" user={user} params={{ deposit: deposit === "all" ? undefined : deposit }} />
+        <ExportButton report="receipts" user={user} params={f.params} />
         <Link href="/receipts/verification" className={buttonVariants({ variant: "outline" })}>PO verification</Link>
         <Link href="/direct-bills" className={buttonVariants({ variant: "outline" })}>Direct bills</Link>
         <Link href="/receipts/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New receipt</Link>
       </>} />
+      <ReceiptFilters f={f} tab={tab} accounts={accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)}${a.active ? "" : " (switched off)"}` }))} />
       <div className="mb-4 flex gap-1 border-b">
-        {[["customer", "Customer receipts"], ["owner", "Owner-paid RD"]].map(([key, label]) => (
-          <Link key={key} href={`/receipts?tab=${key}`}
+        {tabs.map(([key, label, n]) => (
+          <Link key={key} href={href(f.params, { tab: key })}
             className={cn("-mb-px border-b-2 px-3 py-2 text-sm", tab === key ? "border-brand-600 font-medium text-brand-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
-            {label}
+            {label} <span className="ml-1 rounded-full bg-slate-100 px-1.5 text-xs text-slate-700">{n}</span>
           </Link>
         ))}
       </div>
-      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} createdById={seesAll(user.role) ? undefined : user.id} deposit={deposit} />
-        : <OwnerPaid user={user} />}
+      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} f={f} total={customerCount} />
+        : <OwnerPaid user={user} f={f} />}
     </>
   );
 }
 
-async function CustomerReceipts({ tenantId, createdById, deposit }: { tenantId: string; createdById?: string; deposit: "all" | "pending" | "paid" }) {
+async function CustomerReceipts({ tenantId, f, total }: { tenantId: string; f: Filter; total: number }) {
+  const deposit = f.deposit;
   const receipts = await db.receipt.findMany({
-    where: { tenantId, ...(createdById && { createdById }), ...(deposit !== "all" && DEPOSIT_WHERE[deposit]) },
+    where: f.receiptWhere,
     include: {
       customer: { select: { name: true } },
       policy: { select: { partner: true, productName: true, policyNumber: true } },
@@ -60,8 +74,9 @@ async function CustomerReceipts({ tenantId, createdById, deposit }: { tenantId: 
     orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
     take: 100,
   });
-  const [accounts, users] = await Promise.all([db.account.findMany({ where: { tenantId }, select: { id: true, name: true } }), userNames(tenantId)]);
-  const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? "—";
+  const [accounts, users] = await Promise.all([db.account.findMany({ where: { tenantId }, select: { id: true, type: true, name: true, bankName: true, last4: true } }), userNames(tenantId)]);
+  // Every account, switched off ones too: old receipts keep showing where the money went.
+  const accountName = (id: string) => { const a = accounts.find((x) => x.id === id); return a ? accountLabel(a) : "—"; };
   const nameOf = nameLookup(users);
 
   return (
@@ -69,7 +84,7 @@ async function CustomerReceipts({ tenantId, createdById, deposit }: { tenantId: 
       <div className="mb-3 flex items-center gap-2 text-sm">
         <span className="text-muted-foreground">Deposit status:</span>
         {([["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const).map(([k, label]) => (
-          <Link key={k} href={k === "all" ? "/receipts" : `/receipts?deposit=${k}`}
+          <Link key={k} href={href(f.params, { deposit: k === "all" ? undefined : k })}
             className={cn("rounded-full px-3 py-0.5", deposit === k ? "bg-saffron-100 text-saffron-900" : "text-muted-foreground hover:bg-slate-100")}>{label}</Link>
         ))}
       </div>
@@ -109,22 +124,23 @@ async function CustomerReceipts({ tenantId, createdById, deposit }: { tenantId: 
             );
           })}
           {receipts.length === 0 && (
-            <TableRow><TableCell colSpan={11} className="py-8 text-center text-muted-foreground">No receipts yet.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={11} className="py-8 text-center text-muted-foreground">{f.active || deposit !== "all" ? "No receipts match these filters." : "No receipts yet."}</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
       <p className="mt-3 text-xs text-muted-foreground">
+        {total > receipts.length && `Showing the latest ${receipts.length} of ${total}; narrow the filters or export to see all. `}
         Only Admin and Super Admin can cancel a receipt; the number is never reused.
       </p>
     </div>
   );
 }
 
-async function OwnerPaid({ user }: { user: SessionUser }) {
+async function OwnerPaid({ user, f }: { user: SessionUser; f: Filter }) {
   const scope = ownerScope(user);
   const [slips, openItems] = await Promise.all([
     db.ownerPaidSlip.findMany({
-      where: { tenantId: user.tenantId, policy: scope },
+      where: f.slipWhere,
       include: { policy: { select: { policyNumber: true, partner: true } }, customer: { select: { name: true } }, closedByReceipt: { select: { receiptNo: true } }, renewalItem: { select: { billNo: true, dueDate: true } } },
       orderBy: { createdAt: "desc" },
     }),
@@ -176,6 +192,7 @@ async function OwnerPaid({ user }: { user: SessionUser }) {
           <p className="mt-3 text-xs text-muted-foreground">
             Owner-paid slips are internal. A customer receipt is created only when the customer pays. Not counted as collections or income.
             Allowed for every product with bills (RD, SSA, PPF, LIC, SBI Life, health and general insurance); not for one-time deposits or mutual funds.
+            {(f.mode || f.account || f.deposit !== "all") && " Mode, account and deposit status filters don't apply to owner-paid slips."}
           </p>
         </div>
         <div className="w-80 shrink-0 space-y-4">

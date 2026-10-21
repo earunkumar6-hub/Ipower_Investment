@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { cashAndBank, receivingAccountId } from "@/lib/accounts";
+import { cashAndBank } from "@/lib/accounts";
 import { poCommission } from "@/lib/commission";
 import { reverseSource } from "@/lib/daybook";
 import { financialYear, fmtDate, istToday } from "@/lib/dates";
@@ -95,7 +95,6 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       }
       const pay = await checkPayment(tx, user.tenantId, v, amount);
       if ("error" in pay) return { ok: false, error: pay.error, fieldErrors: { [pay.field]: pay.error } };
-      const accounts = await cashAndBank(tx, user.tenantId);
       const common = {
         tenantId: user.tenantId,
         fy: financialYear(billDate),
@@ -103,7 +102,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         txnDate: dateOrToday(v.txnDate),
         customerId: customer.id,
         mode: v.mode,
-        accountId: receivingAccountId(v.mode, accounts),
+        accountId: pay.ok.accountId, // "Received into" (cash drawer for cash)
         reference: pay.ok.reference,
         bankName: pay.ok.bankName,
         netType: pay.ok.netType,

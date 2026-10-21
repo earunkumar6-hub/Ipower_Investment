@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { receivingAccount } from "@/lib/accounts";
 import type { Tx } from "@/lib/db";
 import { D, fmtINR } from "@/lib/money";
 import { MODE_LABEL, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type ReceiptMode } from "@/lib/payment-modes";
@@ -54,15 +55,16 @@ const parseJson = (v: string): unknown => {
   }
 };
 
-/** Form fields shared by receipts and direct bills: mode, reference, bank name, cash denomination (JSON). */
+/** Form fields shared by receipts and direct bills: mode, reference, bank name, cash denomination (JSON), received into. */
 export const payFields = {
   mode: z.enum(RECEIPT_MODES, "Pick the payment mode"),
+  intoAccountId: z.string().trim().default(""), // "Received into" bank account; not used for cash
   reference: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(60).default(""),
   netType: z.string().trim().default(""),
   denominations: z.string().default(""),
 };
-type PayInput = { mode: ReceiptMode; reference: string; bankName: string; netType: string; denominations: string };
+type PayInput = { mode: ReceiptMode; reference: string; bankName: string; netType: string; denominations: string; intoAccountId: string };
 
 /**
  * Cash notes/coins (JSON from the CashDenominationGrid) must add up to `amount`.
@@ -80,17 +82,20 @@ export function checkDenominations(raw: string, amount: Prisma.Decimal): { error
 export const denominationsField = z.string().default("");
 
 /**
- * Checks the mode is switched on, the reference / bank it needs, and that cash notes add up to `amount`.
+ * Checks the mode is switched on, the reference / bank it needs, that cash notes add up to `amount`, and the
+ * account the money came into (cash drawer, or the active bank account picked as "Received into").
  * Returns the error (with its field) or the values to store.
  */
-export async function checkPayment(tx: Pick<Tx, "paymentOption">, tenantId: string, v: PayInput, amount: Prisma.Decimal) {
+export async function checkPayment(tx: Pick<Tx, "paymentOption" | "account">, tenantId: string, v: PayInput, amount: Prisma.Decimal) {
   const opts = await payOptions(tx, tenantId);
   const fail = (field: string, error: string) => ({ error, field }) as const;
   if (!opts.modes.includes(v.mode)) return fail("mode", `${MODE_LABEL[v.mode]} is switched off in Settings`);
   if (v.mode === "Cash") {
     const cash = checkDenominations(v.denominations, amount);
     if ("error" in cash) return fail("denominations", cash.error);
-    return { ok: { reference: null, bankName: null, netType: null, denominations: cash.ok } } as const;
+    const into = await receivingAccount(tx, tenantId, v.mode, "");
+    if ("error" in into) return fail("intoAccountId", into.error);
+    return { ok: { reference: null, bankName: null, netType: null, denominations: cash.ok, accountId: into.ok.id } } as const;
   }
   if (!v.reference) return fail("reference", `Enter the ${REFERENCE_LABEL[v.mode].toLowerCase()}`);
   if (v.mode === "NetBanking") {
@@ -98,6 +103,8 @@ export async function checkPayment(tx: Pick<Tx, "paymentOption">, tenantId: stri
     if (!v.bankName) return fail("bankName", "Pick the customer's bank");
     if (!opts.banks.includes(v.bankName)) return fail("bankName", `${v.bankName} is not in the bank list (Settings → Payment modes)`);
   }
+  const into = await receivingAccount(tx, tenantId, v.mode, v.intoAccountId);
+  if ("error" in into) return fail("intoAccountId", into.error);
   const net = v.mode === "NetBanking";
-  return { ok: { reference: v.reference, bankName: net ? v.bankName : null, netType: net ? v.netType : null, denominations: undefined } } as const;
+  return { ok: { reference: v.reference, bankName: net ? v.bankName : null, netType: net ? v.netType : null, denominations: undefined, accountId: into.ok.id } } as const;
 }

@@ -1,7 +1,9 @@
-import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, Prisma, ProductType } from "@prisma/client";
+import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, ProductType } from "@prisma/client";
 import type { Tone } from "@/components/status-badge";
 import { addDays } from "@/lib/dates";
+import { DEPOSIT_WHERE } from "@/lib/deposit-status";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
+import { MODE_LABEL } from "@/lib/payment-modes";
 import { ownerScope } from "@/lib/leads";
 import { seesAll } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
@@ -213,6 +215,60 @@ export function expenseFilter(user: SessionUser, sp: Params) {
 export const receiptTab = (sp: Params) => (sp.tab === "owner" ? "owner" : "customer");
 /** Receipts list: has the money reached the company? (see `DEPOSIT_WHERE`) */
 export const depositFilter = (sp: Params) => (sp.deposit === "pending" || sp.deposit === "paid" ? sp.deposit : "all");
+
+/** The Receipts filter fields, as search params (also what the export link carries). */
+export const RECEIPT_FILTER_KEYS = ["q", "cif", "product", "policy", "mode", "account", "status", "from", "to", "deposit"] as const;
+
+/**
+ * Receipts screen filters: name or mobile, customer ID, product, policy / account no., mode, account, status,
+ * bill date from / to (and deposit status on customer receipts). They combine (AND), run in the database and
+ * apply to every tab and the export. Users see only the receipts they entered, and slips on their own customers.
+ * Mode, account and deposit status don't apply to owner-paid slips; the slip's date is when it was recorded.
+ */
+export function receiptFilter(user: SessionUser, sp: Params) {
+  const text = (v?: string) => v?.trim() || undefined;
+  const q = text(sp.q), cif = text(sp.cif), policyNo = text(sp.policy);
+  const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
+  const mode = sp.mode && sp.mode in MODE_LABEL ? (sp.mode as PaymentMode) : undefined;
+  const account = text(sp.account);
+  const status = sp.status === "Saved" || sp.status === "Cancelled" ? sp.status : undefined;
+  const from = isoDay(sp.from), to = isoDay(sp.to);
+  const deposit = depositFilter(sp);
+
+  const customer: Prisma.CustomerWhereInput = {
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }] }),
+    ...(cif && { cifNo: { contains: cif, mode: "insensitive" } }),
+  };
+  const policy: Prisma.PolicyWhereInput = {
+    ...(product === "insurance" && { productType: "Insurance" }),
+    ...(product === "mf" && { productType: "MutualFund" }),
+    ...(product === "po" && { productType: { in: [...PO_SCHEMES] } }),
+    ...(policyNo && { policyNumber: { contains: policyNo, mode: "insensitive" } }),
+  };
+  const byCustomer = Object.keys(customer).length > 0, byPolicy = Object.keys(policy).length > 0;
+
+  const receiptWhere: Prisma.ReceiptWhereInput = {
+    tenantId: user.tenantId,
+    ...(!seesAll(user.role) && { createdById: user.id }),
+    ...(byCustomer && { customer }),
+    ...(byPolicy && { policy }),
+    ...(mode && { mode }),
+    ...(account && { accountId: account }),
+    ...(status && { status }),
+    ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
+    ...(deposit !== "all" && DEPOSIT_WHERE[deposit]),
+  };
+  const slipWhere: Prisma.OwnerPaidSlipWhereInput = {
+    tenantId: user.tenantId,
+    policy: { ...ownerScope(user), ...policy },
+    ...(byCustomer && { customer }),
+    ...(status === "Cancelled" ? { status: "Cancelled" } : status === "Saved" ? { status: { not: "Cancelled" } } : {}),
+    ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: addDays(to, 1) }) } }),
+  };
+  const params: Params = Object.fromEntries(RECEIPT_FILTER_KEYS.map((k) => [k, k === "deposit" ? (deposit === "all" ? undefined : deposit) : text(sp[k])]));
+  const active = RECEIPT_FILTER_KEYS.some((k) => k !== "deposit" && params[k]);
+  return { q, cif, product, policyNo, mode, account, status, from: sp.from, to: sp.to, deposit, receiptWhere, slipWhere, params, active };
+}
 
 /** A past or today's date from ?date=YYYY-MM-DD; anything else is today. */
 export function dayBookDate(sp: Params, today: Date) {

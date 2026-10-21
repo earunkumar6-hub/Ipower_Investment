@@ -7,20 +7,30 @@ import { cashJson, cashTotal, DenominationInputs, inr, paise } from "@/component
 import { MODE_LABEL, NET_TYPES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
 import { cn } from "@/lib/utils";
 
-export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string };
-export const emptyPay = (modes: ReceiptMode[]): PayValue => ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", netType: "", notes: {}, coins: "" });
+export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string; intoAccountId: string };
+/** A bank account for the "Received into" picker. */
+export type IntoAccount = { id: string; label: string };
+/** `accounts[0]` (the default bank) is picked to start with. */
+export const emptyPay = (modes: ReceiptMode[], accounts: IntoAccount[] = []): PayValue =>
+  ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", netType: "", notes: {}, coins: "", intoAccountId: accounts[0]?.id ?? "" });
 
 export { cashTotal, inr, paise };
 
-/** Form fields sent to the server: mode, reference, bankName + netType (net banking) and the denomination as JSON (cash only). */
+/** Form fields sent to the server: mode, reference, bankName + netType (net banking), the denomination as JSON (cash only), received into (not cash). */
 export function payFormFields(v: PayValue): Record<string, string> {
-  const denominations = v.mode === "Cash" ? cashJson(v) : "";
-  return { mode: v.mode, reference: v.mode === "Cash" ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "", denominations };
+  const cash = v.mode === "Cash";
+  return {
+    mode: v.mode, reference: cash ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "",
+    denominations: cash ? cashJson(v) : "", intoAccountId: cash ? "" : v.intoAccountId,
+  };
 }
 
-/** Mode buttons, then what the mode needs: cash denomination, UTR / transaction ID / cheque no., the customer's bank. */
-export function PaymentFields({ modes, banks, amount, value, onChange, errors = {} }: {
-  modes: ReceiptMode[]; banks: string[]; amount: number; value: PayValue; onChange: (v: PayValue) => void; errors?: Record<string, string>;
+/**
+ * Mode buttons, then what the mode needs: cash denomination, or UTR / transaction ID / cheque no., the customer's bank
+ * and the company bank account it was received into (`accounts`: active bank accounts, default first).
+ */
+export function PaymentFields({ modes, banks, accounts, amount, value, onChange, errors = {} }: {
+  modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; amount: number; value: PayValue; onChange: (v: PayValue) => void; errors?: Record<string, string>;
 }) {
   const set = (patch: Partial<PayValue>) => onChange({ ...value, ...patch });
   return (
@@ -62,14 +72,22 @@ export function PaymentFields({ modes, banks, amount, value, onChange, errors = 
             <Label htmlFor="reference">{REFERENCE_LABEL[value.mode]}</Label>
             <Input id="reference" value={value.reference} onChange={(e) => set({ reference: e.target.value })} aria-invalid={!!errors.reference} />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="intoAccountId">Received into</Label>
+            <NativeSelect id="intoAccountId" value={value.intoAccountId} className="w-full" aria-invalid={!!errors.intoAccountId} onChange={(e) => set({ intoAccountId: e.target.value })}>
+              <NativeSelectOption value="">Pick the bank account</NativeSelectOption>
+              {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.label}</NativeSelectOption>)}
+            </NativeSelect>
+            {accounts.length === 0 && <p className="text-xs text-destructive">No active bank account – add one in Settings → Bank accounts and wallets</p>}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/** True when the form can be sent: cash adds up, or the reference (and bank) is filled in. */
+/** True when the form can be sent: cash adds up, or the reference, received-into account (and customer's bank) are filled in. */
 export function payReady(v: PayValue, amount: number) {
   if (v.mode === "Cash") return amount > 0 && cashTotal(v) === amount;
-  return !!v.reference.trim() && (v.mode !== "NetBanking" || (!!v.bankName && !!v.netType));
+  return !!v.reference.trim() && !!v.intoAccountId && (v.mode !== "NetBanking" || (!!v.bankName && !!v.netType));
 }

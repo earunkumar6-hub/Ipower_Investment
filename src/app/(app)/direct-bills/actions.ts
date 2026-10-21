@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { cashAndBank, receivingAccountId } from "@/lib/accounts";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { audit } from "@/lib/audit";
 import { reverseSource } from "@/lib/daybook";
@@ -53,12 +52,11 @@ async function createDirectBillUnguarded(_: ActionResult, form: FormData): Promi
       select: { id: true },
       orderBy: { createdAt: "asc" },
     });
-    const accounts = await cashAndBank(tx, user.tenantId);
     const bill = await tx.directBill.create({
       data: {
         tenantId: user.tenantId, billNo: await nextNumber(tx, user.tenantId, "directBill"), billDate,
         customerId: customer?.id ?? null, payerName: v.payerName, payerMobile: v.payerMobile, purpose: v.purpose, amount,
-        mode: v.mode, accountId: receivingAccountId(v.mode, accounts), reference: pay.ok.reference, bankName: pay.ok.bankName, netType: pay.ok.netType,
+        mode: v.mode, accountId: pay.ok.accountId, reference: pay.ok.reference, bankName: pay.ok.bankName, netType: pay.ok.netType,
         denominations: pay.ok.denominations, createdById: user.id,
       },
     });

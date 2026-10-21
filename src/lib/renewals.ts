@@ -1,3 +1,4 @@
+import { receiptRef } from "@/lib/payment-lines";
 import type { Frequency, Policy, PolicyStatus, Prisma, RenewalStatus } from "@prisma/client";
 import { overdueText } from "@/lib/overdue";
 import type { Tone } from "@/components/status-badge";
@@ -58,7 +59,8 @@ export type RenewalRow = {
   status: RenewalStatus;
   paidOn: Date | null;
   paidReceiptId: string | null;
-  paidReceiptNo: string | null;
+  paidReceiptNo: string | null; // the customer's receipt: PAY- when paid with other dues
+  paidReceiptHref: string | null;
   collectedBy: string | null; // user who entered the receipt (Paid tab)
   companyStatus: CompanyStatus | null; // Paid tab only
   lastReminderAt: Date | null;
@@ -109,7 +111,7 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
     });
     const rows: RenewalRow[] = closed.map((p) => ({
       id: `c-${p.id}`, kind: "closed", policy: p, date: p.closedOn ?? maturityDate(p) ?? p.startDate, amount: p.premiumAmount, status: "Lapsed",
-      paidOn: null, paidReceiptId: null, paidReceiptNo: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0, policyStatus: p.status,
+      paidOn: null, paidReceiptId: null, paidReceiptNo: null, paidReceiptHref: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0, policyStatus: p.status,
     }));
     return { ...f, ...none, rows, total: ZERO };
   }
@@ -148,11 +150,12 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
     const date = maturityDate(p)!;
     const inRange = !f.range || (date >= f.range.from && date <= f.range.to);
     const show = (f.tab === "due" ? date >= today : date < today) && inRange;
-    return show ? [{ id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: f.tab === "due" ? "Due" as const : "Overdue" as const, paidOn: null, paidReceiptId: null, paidReceiptNo: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0 }] : [];
+    return show ? [{ id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: f.tab === "due" ? "Due" as const : "Overdue" as const, paidOn: null, paidReceiptId: null, paidReceiptNo: null, paidReceiptHref: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0 }] : [];
   });
   const instalments: RenewalRow[] = items.map((i) => ({
     id: i.id, kind: "instalment", policy: i.policy, date: i.dueDate, amount: i.premiumAmount, status: i.status,
-    paidOn: i.paidOn, paidReceiptId: i.paidReceiptId, paidReceiptNo: i.paidReceipt?.receiptNo ?? null,
+    paidOn: i.paidOn, paidReceiptId: i.paidReceiptId,
+    paidReceiptNo: i.paidReceipt ? receiptRef(i.paidReceipt).no : null, paidReceiptHref: i.paidReceipt ? receiptRef(i.paidReceipt).href : null,
     collectedBy: i.paidReceipt ? nameOf(i.paidReceipt.createdById) : null,
     companyStatus: i.status === "Paid" ? companyStatus(i.paidReceipt, i.policy.partner, nameOf) : null, lastReminderAt: i.lastReminderAt, reminderCount: i.reminderCount,
   }));

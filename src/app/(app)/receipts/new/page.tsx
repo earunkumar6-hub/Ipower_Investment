@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fmtDate, istToday } from "@/lib/dates";
+import { bankAccountOptions } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { payableDues } from "@/lib/dues";
 import { billEnd } from "@/lib/policies";
@@ -47,12 +48,12 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
         tag: d.dueDate < today ? "Overdue" : d.dueDate > monthEnd ? "Advance" : "Due",
       })),
     }));
-    const opts = await payOptions(db, user.tenantId);
+    const [opts, accounts] = await Promise.all([payOptions(db, user.tenantId), bankAccountOptions(db, user.tenantId)]);
     return (
       <>
         <PageHeader title="New receipt" user={user} />
         <ReceiptForm
-          modes={opts.modes} banks={opts.banks} receivedBy={user.name}
+          modes={opts.modes} banks={opts.banks} accounts={accounts} receivedBy={user.name}
           customer={{ id: customer.id, name: customer.name, mobile: customer.mobile }}
           policies={policies}
           openSlips={customer.ownerPaidSlips.map((s) => ({

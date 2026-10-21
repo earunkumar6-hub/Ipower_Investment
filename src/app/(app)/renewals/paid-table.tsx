@@ -16,7 +16,7 @@ import { payToCompany } from "./actions";
 
 export type PaidRow = {
   id: string; customerId: string; customer: string; product: string; policyNumber: string; due: string; amount: string; paise: number;
-  paidOn: string; receiptId: string | null; receiptNo: string | null; collectedBy: string | null; company: string;
+  paidOn: string; receiptId: string | null; receiptNo: string | null; receiptHref: string | null; collectedBy: string | null; company: string;
   status: { state: "pending" | "paid"; text: string; payable: boolean };
 };
 
@@ -71,7 +71,7 @@ export function PaidTable({ rows, accounts, today, canPay }: { rows: PaidRow[]; 
                 <TableCell>{r.due}</TableCell>
                 <TableCell className="text-right">{r.amount}</TableCell>
                 <TableCell className="text-sm">
-                  {r.paidOn} · {r.receiptId ? <Link href={`/receipts/${r.receiptId}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link> : "owner paid"}
+                  {r.paidOn} · {r.receiptHref ? <Link href={r.receiptHref} className="text-brand-700 hover:underline">{r.receiptNo}</Link> : "owner paid"}
                 </TableCell>
                 <TableCell className="text-sm">{r.collectedBy ?? "—"}</TableCell>
                 <TableCell className="text-sm">

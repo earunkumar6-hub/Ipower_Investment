@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useState, startTransition } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { emptyPay, inr, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
+import { emptyPay, type IntoAccount, inr, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,9 @@ const TAG_STYLE = { Overdue: "text-destructive", Due: "text-foreground", Advance
 const unpaidCounts = (policies: PolicyOption[]): Record<string, number> =>
   Object.fromEntries(policies.map((p) => [p.id, p.dues.filter((d) => d.tag !== "Advance").length] as const).filter(([, n]) => n > 0));
 
-export function ReceiptForm({ customer, policies, openSlips, modes, banks, receivedBy }: {
+export function ReceiptForm({ customer, policies, openSlips, modes, banks, accounts, receivedBy }: {
   customer: { id: string; name: string; mobile: string }; policies: PolicyOption[]; openSlips: Slip[];
-  modes: ReceiptMode[]; banks: string[]; receivedBy: string;
+  modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string;
 }) {
   const router = useRouter();
   // Every overdue and due bill starts ticked; with owner-paid slips open the payment is usually for them, so start blank.
@@ -35,7 +35,7 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, recei
   const [counts, setCounts] = useState<Record<string, number>>(openSlips.length ? {} : unpaidCounts(policies));
   const [otherPolicyId, setOtherPolicyId] = useState("");
   const [otherAmount, setOtherAmount] = useState("");
-  const [pay, setPay] = useState<PayValue>(emptyPay(modes));
+  const [pay, setPay] = useState<PayValue>(emptyPay(modes, accounts));
   const [notes, setNotes] = useState("");
   const today = isoDate(istToday());
   const [receiptDate, setReceiptDate] = useState(today);
@@ -156,14 +156,14 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, recei
           <Label>Received by</Label>
           <div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm">{receivedBy}</div>
         </div>
-        <PaymentFields modes={modes} banks={banks} amount={paise(amount)} value={pay} onChange={setPay} errors={err} />
+        <PaymentFields modes={modes} banks={banks} accounts={accounts} amount={paise(amount)} value={pay} onChange={setPay} errors={err} />
         <div className="col-span-2 space-y-1.5">
           <Label htmlFor="notes">Notes</Label>
           <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        {pay.mode === "Cash" ? "Goes into cash in hand." : "Goes into SBI current ••1234."} The Day Book records it on the bill date. RD instalments are marked Collected until deposited at the post office.
+        {pay.mode === "Cash" ? "Goes into cash in hand." : `Goes into ${accounts.find((a) => a.id === pay.intoAccountId)?.label ?? "the bank account picked"}.`} The Day Book records it on the bill date. RD instalments are marked Collected until deposited at the post office.
       </p>
       {state.error && !popup && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending || !payReady(pay, paise(amount))} className="bg-brand-600 hover:bg-brand-700">

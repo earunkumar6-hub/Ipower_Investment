@@ -77,7 +77,8 @@ describe("Cash denomination and net banking", () => {
 
   it("net banking needs the customer's bank (from the list) and a transaction ID; both show in the Day Book row", async () => {
     const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-105" } });
-    const common = { ...base, customerId: policy.customerId, policyId: policy.id, amount: "300", mode: "NetBanking" };
+    const bank = await prisma.account.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, type: "Bank", isDefault: true } });
+    const common = { ...base, customerId: policy.customerId, policyId: policy.id, amount: "300", mode: "NetBanking", intoAccountId: bank.id };
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1", bankName: "HDFC" }))).fieldErrors).toHaveProperty("netType");
     common.netType = "NEFT";
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1" }))).fieldErrors).toHaveProperty("bankName");
@@ -88,7 +89,7 @@ describe("Cash denomination and net banking", () => {
     expect(r.ok).toBe(true);
     receipts.push(r.id!);
     const saved = await prisma.receipt.findUniqueOrThrow({ where: { id: r.id } });
-    expect(saved).toMatchObject({ mode: "NetBanking", netType: "NEFT", bankName: "HDFC", reference: "NEFT55120931", denominations: null });
+    expect(saved).toMatchObject({ mode: "NetBanking", netType: "NEFT", bankName: "HDFC", reference: "NEFT55120931", denominations: null, accountId: bank.id });
     const entry = await prisma.dayBookEntry.findFirstOrThrow({ where: { sourceId: r.id } });
     expect(entry.particulars).toContain("Net banking · NEFT · HDFC · NEFT55120931");
   });

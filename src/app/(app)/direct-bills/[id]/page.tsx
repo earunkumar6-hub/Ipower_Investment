@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
+import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { nameLookup } from "@/lib/deposit-status";
 import { userNames } from "@/lib/leads";
@@ -20,7 +21,7 @@ export default async function DirectBillPage({ params }: { params: Promise<{ id:
   const b = await db.directBill.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: { select: { id: true, name: true } } } });
   if (!b || !(seesAll(user.role) || b.createdById === user.id)) notFound();
   const [account, users] = await Promise.all([
-    db.account.findUnique({ where: { id: b.accountId }, select: { name: true } }),
+    db.account.findUnique({ where: { id: b.accountId }, select: { type: true, name: true, bankName: true, last4: true } }),
     userNames(user.tenantId),
   ]);
   const nameOf = nameLookup(users);
@@ -31,7 +32,7 @@ export default async function DirectBillPage({ params }: { params: Promise<{ id:
     ["Customer", b.customer ? <Link key="c" href={`/customers/${b.customer.id}`} className="text-brand-700 hover:underline">{b.customer.name}</Link> : "Not a customer (no customer has this mobile)"],
     ["Purpose", b.purpose],
     ["Amount", fmtINR(b.amount)],
-    ["Mode", `${modeText(b)} · into ${account?.name}`],
+    ["Mode", `${modeText(b)} · into ${account ? accountLabel(account) : "—"}`],
     ["Bill date", `${fmtDate(b.billDate)} · entered at ${fmtDateTime(b.createdAt)}`],
     ["Received by", nameOf(b.createdById)],
   ];

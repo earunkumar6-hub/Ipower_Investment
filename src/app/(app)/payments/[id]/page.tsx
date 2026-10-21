@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
+import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
@@ -28,7 +29,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
   });
   if (!p || !(seesAll(user.role) || p.createdById === user.id || canActOn(user, p.customer.ownerId))) notFound();
   const [account, users, items] = await Promise.all([
-    db.account.findUnique({ where: { id: p.receipts[0]?.accountId ?? "" }, select: { name: true } }),
+    db.account.findUnique({ where: { id: p.receipts[0]?.accountId ?? "" }, select: { type: true, name: true, bankName: true, last4: true } }),
     userNames(user.tenantId),
     db.renewalItem.findMany({ where: { id: { in: p.receipts.map((r) => r.renewalItemId).filter((x): x is string => !!x) } } }),
   ]);
@@ -38,7 +39,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
   const rows: [string, React.ReactNode][] = [
     ["Customer", `${p.customer.name} · ${p.customer.mobile}`],
     ["Amount", fmtINR(p.amount)],
-    ["Mode", `${modeText(p)} · into ${account?.name ?? "—"}`],
+    ["Mode", `${modeText(p)} · into ${account ? accountLabel(account) : "—"}`],
     ["Received by", nameOf(p.createdById)],
     ["Bill date", `${fmtDate(p.receiptDate)} · entered by ${nameOf(p.createdById)} at ${fmtDateTime(p.createdAt)}`],
     ["Transaction date", fmtDate(p.txnDate)],

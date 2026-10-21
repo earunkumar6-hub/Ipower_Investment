@@ -38,7 +38,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
     id: i.id, customerId: i.policy.customer.id, customer: i.policy.customer.name,
     product: i.policy.productType === "PoRd" ? "Post office RD" : `${i.policy.partner} ${i.policy.productName}`,
     policyNumber: i.policy.policyNumber, due: fmtDate(i.date), amount: fmtINR(i.amount), paise: Math.round(Number(i.amount) * 100),
-    paidOn: i.paidOn ? fmtDate(i.paidOn) : "", receiptId: i.paidReceiptId, receiptNo: i.paidReceiptNo, collectedBy: i.collectedBy, company: i.policy.partner,
+    paidOn: i.paidOn ? fmtDate(i.paidOn) : "", receiptId: i.paidReceiptId, receiptNo: i.paidReceiptNo, receiptHref: i.paidReceiptHref, collectedBy: i.collectedBy, company: i.policy.partner,
     status: i.companyStatus!,
   })) : [];
   const link = (t: string) => `/renewals?${new URLSearchParams({ tab: t, ...filter })}`;

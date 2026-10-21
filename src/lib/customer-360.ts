@@ -1,3 +1,4 @@
+import { receiptRef } from "@/lib/payment-lines";
 import type { Frequency, Prisma } from "@prisma/client";
 import { decryptJson, maskAccount } from "@/lib/crypto";
 import { addDays, istToday } from "@/lib/dates";
@@ -44,7 +45,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
         include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, closeDuringLockIn: true, invoiceRule: true } }, scheme: { select: { name: true } } },
       },
       mobiles: { orderBy: { sort: "asc" } },
-      receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } } } },
+      receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } }, payment: { select: { id: true, paymentNo: true } } } },
       ownerPaidSlips: { orderBy: { createdAt: "desc" }, include: { policy: { select: { policyNumber: true } }, closedByReceipt: { select: { receiptNo: true } } } },
     },
   });
@@ -132,7 +133,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     },
     oneTimeTotal: sum([...oneTime.map((p) => p.premiumAmount), ZERO]),
     regular: active.filter((p) => p.frequency !== "OneTime").map((p) => ({ amount: p.premiumAmount, frequency: p.frequency })),
-    receiptNo: new Map(c.receipts.map((r) => [r.id, r.receiptNo])),
+    receiptNo: new Map(c.receipts.map((r) => [r.id, receiptRef(r)])), // paid bill → the customer's receipt (PAY- when paid with other dues)
     yearlyPremium: active.filter((p) => p.productType === "Insurance").map((p) => p.premiumAmount),
     unpaid: renewals.filter((r) => r.status === "Overdue" || (r.status === "Due" && r.dueDate <= addDays(today, 30))),
     slipFor: new Map(c.ownerPaidSlips.filter((s) => s.renewalItemId).map((s) => [s.renewalItemId!, s.slipNo])),

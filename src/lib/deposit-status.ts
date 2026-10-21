@@ -9,6 +9,7 @@ export type CompanyStatus = { state: "pending" | "paid"; text: string; payable: 
 
 export const depositStatusSelect = {
   id: true, receiptNo: true, status: true, ownerPaid: true, rdStatus: true, createdById: true,
+  payment: { select: { id: true, paymentNo: true } }, // paid with other dues: the customer holds this PAY- number
   companyPayment: { select: { paidOn: true, reference: true, createdById: true } },
   poDepositLine: { select: { poDeposit: { select: { depositDate: true, poReceiptNo: true, createdById: true } } } },
 } satisfies Prisma.ReceiptSelect;

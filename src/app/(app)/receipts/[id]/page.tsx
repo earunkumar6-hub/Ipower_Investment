@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { fmtDate, fmtDateTime, isoDate, istToday } from "@/lib/dates";
+import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { companyStatus, nameLookup, rdDepositable } from "@/lib/deposit-status";
 import { canActOn, userNames } from "@/lib/leads";
@@ -25,7 +26,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   });
   if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) notFound();
   const [account, users] = await Promise.all([
-    db.account.findUnique({ where: { id: r.accountId }, select: { name: true } }),
+    db.account.findUnique({ where: { id: r.accountId }, select: { type: true, name: true, bankName: true, last4: true } }),
     userNames(user.tenantId),
   ]);
   const nameOf = (uid: string | null) => users.find((u) => u.id === uid)?.name ?? "—";
@@ -40,7 +41,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     ["For", r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : r.notes ?? "—"],
     ["Amount", fmtINR(r.amount)],
     ["Received by", nameOf(r.createdById)],
-    ["Mode", `${modeText(r)} · into ${account?.name}`],
+    ["Mode", `${modeText(r)} · into ${account ? accountLabel(account) : "—"}`],
     ["Bill date", `${fmtDate(r.receiptDate)} · entered by ${nameOf(r.createdById)} at ${fmtDateTime(r.createdAt)}`],
     ["Transaction date", fmtDate(r.txnDate)],
   ];

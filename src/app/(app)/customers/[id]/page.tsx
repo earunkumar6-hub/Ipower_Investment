@@ -128,7 +128,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                     <TableCell><StatusBadge tone={RENEWAL_TONE[r.status]}>{r.status === "Overdue" ? `Overdue · ${overdueText(daysBetween(r.dueDate, istToday()))}` : r.status}</StatusBadge></TableCell>
                     <TableCell className="text-sm">
                       {r.paidOn ? fmtDate(r.paidOn) : "—"}
-                      {r.paidReceiptId && <> · <Link href={`/receipts/${r.paidReceiptId}`} className="text-brand-700 hover:underline">{receiptNo.get(r.paidReceiptId)}</Link></>}
+                      {r.paidReceiptId && <> · <Link href={receiptNo.get(r.paidReceiptId)?.href ?? `/receipts/${r.paidReceiptId}`} className="text-brand-700 hover:underline">{receiptNo.get(r.paidReceiptId)?.no}</Link></>}
                       {r.status === "Paid" && !r.paidReceiptId && <span className="text-muted-foreground"> · {slipFor.has(r.id) ? `owner paid · ${slipFor.get(r.id)}` : "before this system"}</span>}
                     </TableCell>
                   </TableRow>

@@ -1,11 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels";
+import { accountLabel } from "@/lib/accounts";
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db, prisma } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
-import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
+import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { esevaiEntries, walletSummary } from "@/lib/esevai-day";
 import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
@@ -13,8 +14,8 @@ import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, maskMobile, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { ownerScope, userNames } from "@/lib/leads";
 import {
-  customerFilter, dayBookDate, rangeLabel, depositFilter, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
-  pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, SLIP_STATUS,
+  customerFilter, dayBookDate, rangeLabel, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
+  pnlMonth, PRODUCT_SHORT, receiptFilter, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
 import { MODE_LABEL } from "@/lib/payment-modes";
@@ -267,7 +268,7 @@ export const REPORTS: Record<string, Report> = {
             columns: [{ header: "Due", type: "date" }, { header: "Policy / account", width: 22 }, { header: "Amount", type: "money" }, { header: "Status" },
               { header: "Paid on", type: "date" }, { header: "Receipt", width: 24 }],
             rows: renewals.map((r) => [r.dueDate, r.policy.policyNumber, r.premiumAmount, r.status, r.paidOn,
-              r.paidReceiptId ? receiptNo.get(r.paidReceiptId) : r.status === "Paid" ? (slipFor.has(r.id) ? `owner paid · ${slipFor.get(r.id)}` : "before this system") : null]),
+              r.paidReceiptId ? receiptNo.get(r.paidReceiptId)?.no : r.status === "Paid" ? (slipFor.has(r.id) ? `owner paid · ${slipFor.get(r.id)}` : "before this system") : null]),
           },
           {
             name: "Receipts",
@@ -336,7 +337,7 @@ export const REPORTS: Record<string, Report> = {
       const [last, now] = await Promise.all([
         prisma.renewalItem.findMany({
           where: { tenantId: user.tenantId, policy: ownerScope(user), dueDate: { gte: lastMonth.range!.from, lte: lastMonth.range!.to }, status: { in: ["Due", "Overdue", "Paid", "Lapsed"] } },
-          include: { policy: { include: { customer: { select: { name: true } } } }, paidReceipt: { select: { receiptNo: true } } }, orderBy: { dueDate: "asc" },
+          include: { policy: { include: { customer: { select: { name: true } } } }, paidReceipt: { select: { receiptNo: true, payment: { select: { paymentNo: true } } } } }, orderBy: { dueDate: "asc" },
         }),
         loadRenewals(user, { tab: "due", range: "month" }, today).then(async (r) => {
           const overdue = await loadRenewals(user, { tab: "overdue", range: "month" }, today);
@@ -353,7 +354,7 @@ export const REPORTS: Record<string, Report> = {
             columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
               { header: "Amount", type: "money" }, { header: "Renewed?", width: 14 }, { header: "Paid on", type: "date" }, { header: "Receipt" }],
             rows: last.map((i) => [i.policy.customer.name, product(i.policy), i.policy.policyNumber, i.dueDate, i.premiumAmount,
-              i.status === "Paid" ? "Renewed" : i.status === "Lapsed" ? "Not renewed (lapsed)" : "Not renewed", i.paidOn, i.paidReceipt?.receiptNo ?? (i.status === "Paid" ? "owner paid" : null)]),
+              i.status === "Paid" ? "Renewed" : i.status === "Lapsed" ? "Not renewed (lapsed)" : "Not renewed", i.paidOn, i.paidReceipt?.payment?.paymentNo ?? i.paidReceipt?.receiptNo ?? (i.status === "Paid" ? "owner paid" : null)]),
           },
           {
             name: "This month due",
@@ -369,34 +370,35 @@ export const REPORTS: Record<string, Report> = {
 
   receipts: {
     permission: "Receipt.View",
-    // Both tabs in one file: customer receipts (with the screen's deposit filter), then owner-paid RD slips.
+    // Both tabs in one file, with the screen's filters: customer receipts, then owner-paid slips.
     async build(user, sp) {
-      const deposit = depositFilter(sp);
+      const f = receiptFilter(user, sp);
+      const deposit = f.deposit;
       const [receipts, slips, accounts, users] = await Promise.all([
         db.receipt.findMany({
-          where: { tenantId: user.tenantId, ...(seesAll(user.role) ? {} : { createdById: user.id }), ...(deposit !== "all" && DEPOSIT_WHERE[deposit]) },
+          where: f.receiptWhere,
           include: {
             customer: { select: { name: true } },
             policy: { select: { partner: true, productName: true, policyNumber: true } },
-            payment: { select: { paymentNo: true } },
+            payment: { select: { id: true, paymentNo: true } },
             companyPayment: depositStatusSelect.companyPayment,
             poDepositLine: depositStatusSelect.poDepositLine,
           },
           orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
         }),
         db.ownerPaidSlip.findMany({
-          where: { tenantId: user.tenantId, policy: ownerScope(user) },
+          where: f.slipWhere,
           include: { policy: { select: { policyNumber: true } }, customer: { select: { name: true } }, closedByReceipt: { select: { receiptNo: true } } },
           orderBy: { createdAt: "desc" },
         }),
-        db.account.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true } }),
+        db.account.findMany({ where: { tenantId: user.tenantId } }).then((rows) => rows.map((a) => ({ id: a.id, name: accountLabel(a) }))),
         userNames(user.tenantId),
       ]);
       const account = nameIn(accounts);
       const nameOf = nameLookup(users);
       return {
         file: `receipts-${stamp()}.xlsx`,
-        title: `Receipts${deposit === "all" ? "" : ` – deposit ${deposit}`}`,
+        title: `Receipts${deposit === "all" ? "" : ` – deposit ${deposit}`}${f.active ? " (filtered)" : ""}`,
         sheets: [{
           name: "Customer receipts",
           totals: true,
@@ -411,7 +413,7 @@ export const REPORTS: Record<string, Report> = {
           }),
         }, {
           // Internal: not collections or income.
-          name: "Owner-paid RD",
+          name: "Owner-paid receipts",
           totals: true,
           columns: [{ header: "Slip" }, { header: "Created", type: "datetime", width: 20 }, { header: "RD account" }, { header: "Customer", width: 24 }, { header: "Month" },
             { header: "Amount", type: "money" }, { header: "PO receipt no." }, { header: "Customer receipt" }, { header: "Status", width: 28 }],
