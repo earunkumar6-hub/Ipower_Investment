@@ -95,7 +95,7 @@ describe("Day Book: ATM, PO deposit, tally, verify, close", () => {
     const before = await cashDay();
 
     expect(await recordAtmWithdrawal({ ok: false }, form({ date, amount: upi.toFixed(2), notes: "for UPI-paid RD" }))).toEqual({ ok: true });
-    expect(await depositToPostOffice({ ok: false }, form({ date, receiptIds: collectedIds.join(","), poReceiptNo: "7781 2290", amount: total.toFixed(2) }))).toEqual({ ok: true });
+    expect(await depositToPostOffice({ ok: false }, form({ date, receiptIds: collectedIds.join(","), poReceiptNo: "7781 2290", amount: total.toFixed(2), denominations: cashFor(total.toFixed(2)) }))).toEqual({ ok: true });
 
     const after = await prisma.receipt.findMany({ where: { id: { in: collectedIds } } });
     expect(new Set(after.map((x) => x.rdStatus))).toEqual(new Set(["Deposited"]));

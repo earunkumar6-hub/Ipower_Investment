@@ -194,7 +194,7 @@ describe("Expenses: notes mandatory, purpose from the list, From account", () =>
     const cash = (await cashAndBank(db, users.arun.tenantId)).cash.id;
     expect((await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-2", fromAccount: cash }))).fieldErrors).toHaveProperty("notes");
     expect((await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-2", fromAccount: cash, notes: "   " }))).fieldErrors).toHaveProperty("notes");
-    expect((await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-2", fromAccount: cash, notes: "ok notes", category: "Made up" }))).fieldErrors).toHaveProperty("category");
+    expect((await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-2", fromAccount: cash, notes: "ok notes", category: "Made up", denominations: JSON.stringify({ "100": 4, "50": 1 }) }))).fieldErrors).toHaveProperty("category");
   });
 
   it("saves with notes and pays from the picked account (non-default bank)", async () => {

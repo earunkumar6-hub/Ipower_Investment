@@ -6,7 +6,7 @@ const TABS = [
   ["products", "Products and schemes", "/settings"],
   ["accounts", "Bank accounts and wallets", "/settings/accounts"],
   ["payment-modes", "Payment modes", "/settings/payment-modes"],
-  ["expense-purposes", "Expense purposes", "/settings/expense-purposes"],
+  ["dropdowns", "Dropdown values", "/settings/dropdowns"],
   ["daybook", "Day Book", "/settings/daybook"],
   ["log", "Change log", "/settings/log"],
 ] as const;

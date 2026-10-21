@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { overdueText } from "@/lib/overdue";
 import { AddLeadDialog } from "@/app/(app)/leads/add-lead-dialog";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
@@ -84,7 +85,7 @@ async function AdminView({ user }: { user: SessionUser }) {
       <div className="mb-4 grid grid-cols-4 gap-3">
         <StatCard title="New leads today" value={String(d.newLeads)} sub={d.newLeadsBySource} href="/leads" />
         <StatCard title="Renewals due this week" value={String(d.renewals.length)} sub={`${fmtINR(d.renewalsPremium)} premium`} href="/renewals?tab=due&within=7" />
-        <StatCard title="Unpaid / not renewed" value={String(d.overdueCount)} sub={d.overdueCount ? `Oldest ${d.oldestOverdueDays} days overdue` : "None"} href="/renewals?tab=overdue" alert={d.overdueCount > 0} />
+        <StatCard title="Unpaid / not renewed" value={String(d.overdueCount)} sub={d.overdueCount ? `Oldest ${overdueText(d.oldestOverdueDays)} overdue` : "None"} href="/renewals?tab=overdue" alert={d.overdueCount > 0} />
         <StatCard title="Today's collections" value={fmtINR(d.collections)} sub={`Cash ${fmtINR(d.collectionsCash)} · UPI ${fmtINR(d.collectionsUpi)}`} href="/daybook" highlight />
         <StatCard title="Cash in hand" value={fmtINR(d.cashInHand)} sub={`Day Book: ${d.cashStatus}`} href="/daybook" alert={d.cashStatus === "NOT TALLIED"} />
         <StatCard title={d.bank.name} value={fmtINR(d.bank.closing)} sub="After ATM, cheques and transfers" href="/daybook" />

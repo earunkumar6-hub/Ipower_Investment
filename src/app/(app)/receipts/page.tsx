@@ -183,7 +183,7 @@ async function OwnerPaid({ user }: { user: SessionUser }) {
             id: i.id,
             label: `${i.billNo} · ${i.policy.policyNumber}${i.policy.partner === "Post Office" ? "" : ` (${i.policy.partner})`} · ${i.policy.customer.name} · ${i.policy.frequency === "Monthly" ? monthLabel(i.dueDate) : fmtDate(i.dueDate)} · ${fmtINR(i.premiumAmount)}`,
           }))} />
-          <ReturnToOwnerForm slips={toReturn.map((s) => ({ id: s.id, label: `${s.slipNo} · ${s.customer.name} · ${fmtINR(s.amount)}` }))} />
+          <ReturnToOwnerForm slips={toReturn.map((s) => ({ id: s.id, label: `${s.slipNo} · ${s.customer.name} · ${fmtINR(s.amount)}`, amount: s.amount.toFixed(2) }))} />
         </div>
       </div>
     </div>

@@ -3,6 +3,11 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 const rupees = (text: string) => Number(text.replace(/[^\d.]/g, ""));
+/** Fill a cash denomination grid (ids `<prefix>-500`, `<prefix>-coins`) with ₹500 notes and the rest in coins. */
+async function fillCash(page: Page, prefix: string, amount: number) {
+  await page.locator(`#${prefix}-500`).fill(String(Math.floor(amount / 500)));
+  await page.locator(`#${prefix}-coins`).fill(String(amount % 500));
+}
 
 async function signIn(browser: Browser, username: string) {
   const context = await browser.newContext();
@@ -124,6 +129,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
       await arun.locator("#vendor").fill("Sri Stationers");
       await arun.locator("#billNo").fill("B-1045");
       await arun.locator("#notes").fill("Monthly stationery for the counter");
+      await fillCash(arun, "note", Number(amount)); // paid from office cash
       await arun.getByRole("button", { name: "Submit" }).click();
     };
     await fill("3200", "Printer paper, pens, files");
@@ -176,6 +182,8 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(admin.getByText("UPI vs ATM").locator("xpath=following-sibling::div[1]")).toHaveText("₹0");
 
     await admin.locator("#poReceiptNo").fill("7781 2290");
+    const selected = await admin.getByText("Selected", { exact: true }).locator("xpath=following-sibling::div[1]").innerText();
+    await fillCash(admin, "po", rupees(selected.split("·")[1]));
     await admin.getByRole("button", { name: "Save deposit" }).click();
     await expect(admin.getByText("No RD money waiting to be deposited.")).toBeVisible();
 

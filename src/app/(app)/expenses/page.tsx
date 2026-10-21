@@ -45,7 +45,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Expenses" user={user} actions={<ExportButton report="expenses" user={user} params={{ tab }} />} />
       <div className="mb-4 flex items-start gap-4">
-        <ExpenseForm categories={purposes} accounts={accounts.map((a) => ({ id: a.id, label: a.type === "Cash" ? "Office cash" : accountLabel(a) }))} today={isoDate(istToday())} userName={user.name} />
+        <ExpenseForm categories={purposes} accounts={accounts.map((a) => ({ id: a.id, label: a.type === "Cash" ? "Office cash" : accountLabel(a), cash: a.type === "Cash" }))} today={isoDate(istToday())} userName={user.name} />
         <div className="w-96 shrink-0 rounded-xl border bg-white p-4 text-sm">
           <h2 className="mb-2 font-semibold">Approval rules</h2>
           <Table>
@@ -104,6 +104,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                     <ExpenseRowActions
                       expenseId={e.id}
                       expenseNo={e.expenseNo}
+                      amount={e.amount.toFixed(2)}
                       canApprove={canApprove(user, e)}
                       canCancel={canCancel(user, e)}
                       canRepay={canRepay && e.paidBy !== "Company" && e.repaymentStatus === "ToBeRepaid" && (e.status === "Saved" || e.status === "Approved")}

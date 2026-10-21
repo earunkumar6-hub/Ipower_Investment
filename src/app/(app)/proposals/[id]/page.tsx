@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { ATTACHMENT_LIST, dropdownValues } from "@/lib/dropdowns";
 import { notFound } from "next/navigation";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ATTACHMENT_KINDS, attachmentRows, KYC_KINDS } from "@/lib/attachments";
+import { attachmentRows, KYC_KINDS } from "@/lib/attachments";
 import { addMonths, fmtDate, fmtDateTime, isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
@@ -120,7 +121,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           )}
           <div>
             <h3 className="mb-1 text-sm font-medium">Documents</h3>
-            <AttachmentsPanel ownerType="Proposal" ownerId={p.id} kinds={ATTACHMENT_KINDS.Proposal} files={files} />
+            <AttachmentsPanel ownerType="Proposal" ownerId={p.id} kinds={await dropdownValues(db, user.tenantId, ATTACHMENT_LIST.Proposal)} files={files} />
           </div>
         </div>
         <aside className="w-80 shrink-0 rounded-xl border bg-white p-4">

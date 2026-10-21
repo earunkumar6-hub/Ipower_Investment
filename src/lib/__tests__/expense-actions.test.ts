@@ -23,9 +23,12 @@ const users: Record<string, U> = {};
 const as = (u: string) => (session.user = users[u]);
 // "From account" is an account id: the tests say "cash" / "bank" for office cash and the default bank.
 const accountIds: Record<string, string> = {};
+/** Office cash needs a denomination that adds up: ₹500 notes, the rest in coins. */
+const cashFor = (amount: string) => JSON.stringify({ "500": Math.floor(Number(amount) / 500), coins: (Number(amount) % 500).toFixed(2) });
 const form = (o: Record<string, string>) => {
   const f = new FormData();
-  Object.entries(o).forEach(([k, v]) => f.set(k, k === "fromAccount" ? accountIds[v] ?? v : v));
+  const withCash = o.paidBy === "Company" && o.fromAccount === "cash" && o.amount && o.denominations === undefined ? { ...o, denominations: cashFor(o.amount) } : o;
+  Object.entries(withCash).forEach(([k, v]) => f.set(k, k === "fromAccount" ? accountIds[v] ?? v : v));
   return f;
 };
 const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10);
@@ -117,7 +120,8 @@ describe("Expenses", () => {
     expect(await entries(e.id)).toHaveLength(0);
     await expect(repayExpense({ ok: false }, form({ expenseId: e.id, from: "cash" }))).rejects.toThrow();
     as("admin");
-    expect(await repayExpense({ ok: false }, form({ expenseId: e.id, from: "cash" }))).toEqual({ ok: true });
+    expect((await repayExpense({ ok: false }, form({ expenseId: e.id, from: "cash" }))).fieldErrors).toHaveProperty("denominations");
+    expect(await repayExpense({ ok: false }, form({ expenseId: e.id, from: "cash", denominations: cashFor("350") }))).toEqual({ ok: true });
     const [out] = await entries(e.id);
     expect([out.entryType, out.amount.toFixed(2)]).toEqual(["ExpenseRepayment", "350.00"]);
   });

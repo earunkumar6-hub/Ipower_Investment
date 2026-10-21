@@ -4,7 +4,8 @@ import { AttachmentOwner } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { ATTACHMENT_KINDS, attachmentOwner, deleteStoredFile, fileProblem, storeFile } from "@/lib/attachments";
+import { attachmentOwner, deleteStoredFile, fileProblem, storeFile } from "@/lib/attachments";
+import { ATTACHMENT_LIST, resolveDropdown } from "@/lib/dropdowns";
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { seesAll } from "@/lib/permissions";
@@ -19,8 +20,7 @@ export async function uploadAttachment(_: ActionResult, form: FormData): Promise
   const user = await authorize("Lead.View");
   const parsed = uploadSchema.safeParse({ ownerType: form.get("ownerType"), ownerId: form.get("ownerId"), kind: form.get("kind") });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
-  const { ownerType, ownerId, kind } = parsed.data;
-  if (!ATTACHMENT_KINDS[ownerType].includes(kind)) return { ok: false, error: "Pick what the file is" };
+  const { ownerType, ownerId } = parsed.data;
   const file = form.get("file") as File | null;
   const problem = fileProblem(file);
   if (problem) return { ok: false, error: problem };
@@ -28,6 +28,10 @@ export async function uploadAttachment(_: ActionResult, form: FormData): Promise
   if (!owner) return { ok: false, error: "Not found, or it belongs to another user" };
   if (owner.closed) return { ok: false, error: "This record is deleted" };
 
+  // File type from Settings → Dropdown values; "Other" adds the typed one to the list.
+  const resolved = await db.$transaction((tx) => resolveDropdown(tx, user, ATTACHMENT_LIST[ownerType], parsed.data.kind, String(form.get("kindOther") ?? "")));
+  if ("error" in resolved) return { ok: false, error: resolved.error === "Pick a value from the list" ? "Pick what the file is" : resolved.error };
+  const kind = resolved.value;
   const storedName = await storeFile(file!);
   await db.attachment.create({
     data: { tenantId: user.tenantId, ownerType, ownerId, kind, fileName: file!.name.slice(0, 120), storedName, contentType: file!.type, size: file!.size, uploadedById: user.id },

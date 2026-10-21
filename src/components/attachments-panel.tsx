@@ -1,6 +1,7 @@
 "use client";
 
 import type { AttachmentOwner } from "@prisma/client";
+import { OtherOptionSelect } from "@/components/other-option-select";
 import { PaperclipIcon } from "lucide-react";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -8,7 +9,6 @@ import { removeAttachment, uploadAttachment } from "@/app/(app)/attachments/acti
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { submitKeepingValues } from "@/lib/form";
 
 export type AttachmentRow = { id: string; kind: string; fileName: string; size: number; added: string; by: string; canRemove: boolean };
@@ -47,10 +47,7 @@ export function AttachmentsPanel({ ownerType, ownerId, kinds, files, readOnly }:
         <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2">
           <input type="hidden" name="ownerType" value={ownerType} />
           <input type="hidden" name="ownerId" value={ownerId} />
-          <NativeSelect name="kind" defaultValue="" aria-label="What is the file" size="sm">
-            <NativeSelectOption value="">What is it?</NativeSelectOption>
-            {kinds.map((k) => <NativeSelectOption key={k} value={k}>{k}</NativeSelectOption>)}
-          </NativeSelect>
+          <OtherOptionSelect name="kind" options={kinds} placeholder="What is it?" label="What is the file" size="sm" className="w-44" />
           <Input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp" aria-label="File" className="h-7 max-w-56 text-xs" />
           <Button type="submit" size="sm" variant="outline" disabled={pending}><PaperclipIcon />{pending ? "Uploading…" : "Attach file"}</Button>
           {state.error && <p className="w-full text-xs text-destructive">{state.error}</p>}

@@ -65,6 +65,21 @@ export const payFields = {
 type PayInput = { mode: ReceiptMode; reference: string; bankName: string; netType: string; denominations: string };
 
 /**
+ * Cash notes/coins (JSON from the CashDenominationGrid) must add up to `amount`.
+ * Returns the error or the value to store.
+ */
+export function checkDenominations(raw: string, amount: Prisma.Decimal): { error: string } | { ok: Prisma.InputJsonValue } {
+  const parsed = denominationSchema.safeParse(parseJson(raw));
+  if (!raw || !parsed.success) return { error: "Enter the cash denomination (notes and coins)" };
+  const total = denominationTotal(parsed.data);
+  if (!total.equals(amount)) return { error: `Cash denomination adds up to ${fmtINR(total)}, not ${fmtINR(amount)}` };
+  return { ok: parsed.data as Prisma.InputJsonValue };
+}
+
+/** Form field carrying the cash denomination JSON. */
+export const denominationsField = z.string().default("");
+
+/**
  * Checks the mode is switched on, the reference / bank it needs, and that cash notes add up to `amount`.
  * Returns the error (with its field) or the values to store.
  */
@@ -73,11 +88,9 @@ export async function checkPayment(tx: Pick<Tx, "paymentOption">, tenantId: stri
   const fail = (field: string, error: string) => ({ error, field }) as const;
   if (!opts.modes.includes(v.mode)) return fail("mode", `${MODE_LABEL[v.mode]} is switched off in Settings`);
   if (v.mode === "Cash") {
-    const parsed = denominationSchema.safeParse(parseJson(v.denominations));
-    if (!v.denominations || !parsed.success) return fail("denominations", "Enter the cash denomination (notes and coins)");
-    const total = denominationTotal(parsed.data);
-    if (!total.equals(amount)) return fail("denominations", `Cash denomination adds up to ${fmtINR(total)}, not ${fmtINR(amount)}`);
-    return { ok: { reference: null, bankName: null, netType: null, denominations: parsed.data as Prisma.InputJsonValue } } as const;
+    const cash = checkDenominations(v.denominations, amount);
+    if ("error" in cash) return fail("denominations", cash.error);
+    return { ok: { reference: null, bankName: null, netType: null, denominations: cash.ok } } as const;
   }
   if (!v.reference) return fail("reference", `Enter the ${REFERENCE_LABEL[v.mode].toLowerCase()}`);
   if (v.mode === "NetBanking") {

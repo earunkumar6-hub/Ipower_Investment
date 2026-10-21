@@ -23,6 +23,7 @@ import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl
 import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
 import { quotationStatus } from "@/lib/quotation";
 import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
+import { overdueText } from "@/lib/overdue";
 import type { SessionUser } from "@/lib/session";
 
 // Excel export per list screen: same filters as the screen (lib/lists.ts), every matching row.
@@ -50,7 +51,7 @@ export const REPORTS: Record<string, Report> = {
       const cards: Cell[][] = [
         ["New leads today", d.newLeads, null, d.newLeadsBySource],
         ["Renewals due this week", d.renewals.length, d.renewalsPremium, "premium"],
-        ["Unpaid / not renewed", d.overdueCount, null, d.overdueCount ? `Oldest ${d.oldestOverdueDays} days overdue` : "None"],
+        ["Unpaid / not renewed", d.overdueCount, null, d.overdueCount ? `Oldest ${overdueText(d.oldestOverdueDays)} overdue` : "None"],
         ["Today's collections", null, d.collections, `Cash ${fmtINR(d.collectionsCash)} · UPI ${fmtINR(d.collectionsUpi)}`],
         ["Cash in hand", null, d.cashInHand, `Day Book: ${d.cashStatus}`],
         [d.bank.name, null, d.bank.closing, "After ATM, cheques and transfers"],

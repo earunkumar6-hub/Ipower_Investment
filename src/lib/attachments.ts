@@ -16,11 +16,7 @@ export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" };
 
 /** What a file is, per record type. Proposals count the KYC ones ("KYC documents x of 3"). */
-export const ATTACHMENT_KINDS: Record<AttachmentOwner, string[]> = {
-  Quotation: ["Health declaration", "Brochure", "Other"],
-  Proposal: ["Aadhaar", "PAN", "Photo", "Proposal form", "Other"],
-  Customer: ["Aadhaar", "PAN", "Policy document", "Bank passbook", "Other"],
-};
+// File types per record type live in Settings → Dropdown values (ATTACHMENT_LIST in src/lib/dropdowns.ts).
 export const KYC_KINDS = ["Aadhaar", "PAN", "Photo"];
 
 export function fileProblem(file: File | null): string | null {

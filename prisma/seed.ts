@@ -10,7 +10,7 @@ import { D, ZERO } from "@/lib/money";
 import { postExpensePayment, postPoDeposit, postReceipt, postServiceTransaction } from "@/lib/posting";
 import { linkPolicies, seedProducts } from "./seed-products";
 import { defaultPayOptions } from "@/lib/payment-options";
-import { DEFAULT_EXPENSE_PURPOSES } from "@/lib/expenses";
+import { DEFAULT_DROPDOWN_VALUES } from "@/lib/dropdowns";
 
 const PASSWORD = "demo1234";
 const today = istToday();
@@ -48,7 +48,9 @@ async function main() {
   const tenant = await prisma.tenant.create({ data: { name: "IPower Investments" } });
   const tenantId = tenant.id;
   await prisma.paymentOption.createMany({ data: defaultPayOptions(tenantId) });
-  await prisma.dropdownOption.createMany({ data: DEFAULT_EXPENSE_PURPOSES.map((value, i) => ({ tenantId, list: "expensePurpose", value, sort: i + 1 })) });
+  await prisma.dropdownOption.createMany({
+    data: Object.entries(DEFAULT_DROPDOWN_VALUES).flatMap(([list, values]) => values.map((value, i) => ({ tenantId, list, value, sort: i + 1 }))),
+  });
 
   // ── Users ──
   const hash = await hashPassword(PASSWORD);

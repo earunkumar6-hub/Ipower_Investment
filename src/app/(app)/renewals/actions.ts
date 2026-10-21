@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { checkDenominations, denominationsField } from "@/lib/payment-options";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { refuseOnClosedDay } from "@/lib/action-guard";
@@ -22,6 +23,7 @@ const companyPaymentSchema = z.object({
   paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date paid").transform((s) => new Date(`${s}T00:00:00Z`)),
   accountId: z.string().min(1, "Pick the account it was paid from"),
   reference: z.string().trim().min(2, "Enter the company receipt / UTR number").max(60),
+  denominations: denominationsField, // when paid from office cash
 });
 
 /**
@@ -56,6 +58,8 @@ export async function payToCompany(_: ActionResult, form: FormData): Promise<Act
       const amount = sum(receipts.map((x) => x.amount));
       const balance = await balanceAt(tx, account.id, v.paidOn);
       if (balance.lt(amount)) return fail(`${account.name} has only ${fmtINR(balance)}`);
+      const notes = account.type === "Cash" ? checkDenominations(v.denominations, amount) : null;
+      if (notes && "error" in notes) return fail(notes.error);
 
       const payment = await tx.companyPayment.create({
         data: {
@@ -65,7 +69,7 @@ export async function payToCompany(_: ActionResult, form: FormData): Promise<Act
       });
       const updated = await tx.receipt.updateMany({ where: { id: { in: receipts.map((x) => x.id) }, companyPaymentId: null }, data: { companyPaymentId: payment.id } });
       if (updated.count !== receipts.length) throw new Error("Receipts changed while saving; try again");
-      await postCompanyPayment(tx, payment, { receiptCount: receipts.length, productCategory: PRODUCT_CATEGORY[receipts[0].policy!.productType] });
+      await postCompanyPayment(tx, payment, { receiptCount: receipts.length, productCategory: PRODUCT_CATEGORY[receipts[0].policy!.productType], denominations: notes?.ok });
       return { ok: true };
     }),
   );

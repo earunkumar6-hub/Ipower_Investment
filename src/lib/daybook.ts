@@ -27,6 +27,8 @@ export type PostLine = {
   productCategory?: string;
   scheme?: string;
   notes?: string;
+  /** Cash notes/coins counted for this line (cash in or out). */
+  denominations?: Prisma.InputJsonValue | null;
 };
 
 export type PostInput = {
@@ -90,6 +92,7 @@ export async function post(tx: Tx, input: PostInput) {
       productCategory: l.productCategory,
       scheme: l.scheme,
       notes: l.notes,
+      denominations: l.denominations ?? undefined,
       idempotencyKey: keys[i],
     })),
   });

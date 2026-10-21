@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CashDenominationGrid, paise } from "@/components/cash-denomination-grid";
 import { submitKeepingValues } from "@/lib/form";
 import { approveExpense, cancelExpense, markExpensePaid, rejectExpense, repayExpense } from "./actions";
 
@@ -15,7 +16,7 @@ type Kind = "reject" | "cancel" | "repay";
 const TITLE: Record<Kind, string> = { reject: "Reject", cancel: "Cancel", repay: "Repay" };
 const ACTION = { reject: rejectExpense, cancel: cancelExpense, repay: repayExpense };
 
-export function ExpenseRowActions(p: { expenseId: string; expenseNo: string; canApprove: boolean; canCancel: boolean; canRepay: boolean; canPay: boolean }) {
+export function ExpenseRowActions(p: { expenseId: string; expenseNo: string; amount: string; canApprove: boolean; canCancel: boolean; canRepay: boolean; canPay: boolean }) {
   const [pending, start] = useTransition();
   const [open, setOpen] = useState<Kind | null>(null);
   if (!p.canApprove && !p.canCancel && !p.canRepay && !p.canPay) return null;
@@ -48,7 +49,8 @@ export function ExpenseRowActions(p: { expenseId: string; expenseNo: string; can
   );
 }
 
-function ReasonForm({ kind, expenseId, expenseNo, onDone }: { kind: Kind; expenseId: string; expenseNo: string; onDone: () => void }) {
+function ReasonForm({ kind, expenseId, expenseNo, amount, onDone }: { kind: Kind; expenseId: string; expenseNo: string; amount: string; onDone: () => void }) {
+  const [from, setFrom] = useState("cash");
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await ACTION[kind](prev, form);
     if (r.ok) {
@@ -65,10 +67,11 @@ function ReasonForm({ kind, expenseId, expenseNo, onDone }: { kind: Kind; expens
       {kind === "repay" ? (
         <div className="space-y-1.5">
           <Label htmlFor="from">Repay from</Label>
-          <NativeSelect id="from" name="from" className="w-full">
-            <NativeSelectOption value="cash">Cash</NativeSelectOption>
-            <NativeSelectOption value="bank">SBI ••1234</NativeSelectOption>
+          <NativeSelect id="from" name="from" className="w-full" value={from} onChange={(e) => setFrom(e.target.value)}>
+            <NativeSelectOption value="cash">Office cash</NativeSelectOption>
+            <NativeSelectOption value="bank">Default bank account</NativeSelectOption>
           </NativeSelect>
+          {from === "cash" && <CashDenominationGrid amount={paise(amount)} error={state.fieldErrors?.denominations} idPrefix="repay" />}
         </div>
       ) : (
         <div className="space-y-1.5">

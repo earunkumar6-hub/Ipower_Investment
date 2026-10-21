@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CashDenominationGrid, paise } from "@/components/cash-denomination-grid";
+import { OtherOptionSelect } from "@/components/other-option-select";
 import { submitKeepingValues } from "@/lib/form";
 import { createExpense } from "./actions";
 
@@ -20,9 +22,11 @@ function routingHint(amount: string) {
   return `${inr(n)} needs Super Admin approval (above ₹5,000).`;
 }
 
-export function ExpenseForm({ categories, accounts, today, userName }: { categories: string[]; accounts: { id: string; label: string }[]; today: string; userName: string }) {
+export function ExpenseForm({ categories, accounts, today, userName }: { categories: string[]; accounts: { id: string; label: string; cash: boolean }[]; today: string; userName: string }) {
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<"Company" | "Employee" | "Owner">("Company");
+  const [fromAccount, setFromAccount] = useState(accounts[0]?.id ?? "");
+  const fromCash = paidBy === "Company" && !!accounts.find((a) => a.id === fromAccount)?.cash;
   const [formKey, setFormKey] = useState(0);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await createExpense(prev, form);
@@ -30,6 +34,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
       toast.success("Expense saved");
       setAmount("");
       setPaidBy("Company");
+      setFromAccount(accounts[0]?.id ?? "");
       setFormKey((k) => k + 1);
     }
     return r;
@@ -42,10 +47,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
       <h2 className="font-semibold">Add expense</h2>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Purpose" error={err.category}>
-          <NativeSelect id="category" name="category" className="w-full" defaultValue={categories[0]}>
-            {categories.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
-            <NativeSelectOption value="Other">Other</NativeSelectOption>
-          </NativeSelect>
+          <OtherOptionSelect name="category" id="category" options={categories} defaultValue={categories[0]} label="Purpose" error={err.category} />
         </Field>
         <Field label="Description" error={err.description}>
           <Input id="description" name="description" placeholder="Printer paper, pens" aria-invalid={!!err.description} />
@@ -76,7 +78,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
         </Field>
         {paidBy === "Company" ? (
           <Field label="From account" error={err.fromAccount}>
-            <NativeSelect id="fromAccount" name="fromAccount" className="w-full" defaultValue={accounts[0]?.id}>
+            <NativeSelect id="fromAccount" name="fromAccount" className="w-full" value={fromAccount} onChange={(e) => setFromAccount(e.target.value)}>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.label}</NativeSelectOption>)}
             </NativeSelect>
           </Field>
@@ -91,6 +93,11 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
         <Field label="Bill photo or PDF (optional)" error={err.bill}>
           <Input id="bill" name="bill" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="text-xs" />
         </Field>
+        {fromCash && (
+          <div className="col-span-3">
+            <CashDenominationGrid amount={paise(amount)} error={err.denominations} />
+          </div>
+        )}
         <div className="col-span-3">
           <Field label="Notes (required)" error={err.notes}>
             <Input id="notes" name="notes" required placeholder="Why it was needed, who asked for it…" aria-invalid={!!err.notes} />

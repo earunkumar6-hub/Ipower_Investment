@@ -122,7 +122,7 @@ export function postServiceTransaction(tx: Tx, t: ServiceTransaction, ctx: { ser
 }
 
 /** Company money leaving for an expense: paid directly, or repaid to the employee/owner. */
-export function postExpensePayment(tx: Tx, e: Expense, ctx: { vendorName: string; date: Date; createdById: string; mode?: Expense["mode"] }) {
+export function postExpensePayment(tx: Tx, e: Expense, ctx: { vendorName: string; date: Date; createdById: string; mode?: Expense["mode"]; denominations?: Prisma.InputJsonValue }) {
   const repayment = e.paidBy !== "Company";
   const accountId = repayment ? e.repaidFromAccountId : e.fromAccountId;
   if (!accountId) throw new Error(`${e.expenseNo}: no company account to pay from`);
@@ -142,6 +142,8 @@ export function postExpensePayment(tx: Tx, e: Expense, ctx: { vendorName: string
         entryType: repayment ? "ExpenseRepayment" : "Expense",
         mode: ctx.mode ?? e.mode,
         particulars: `${e.expenseNo} · ${e.description}${repayment ? ` (repaid to ${e.paidByName})` : ""}`,
+        // Office cash: the notes counted (at repayment, or when the expense was entered).
+        denominations: ctx.denominations ?? (repayment ? null : (e.denominations as Prisma.InputJsonValue | null)),
         productCategory: e.category,
         scheme: ctx.vendorName,
       },
@@ -150,7 +152,7 @@ export function postExpensePayment(tx: Tx, e: Expense, ctx: { vendorName: string
 }
 
 /** Money taken to the post office for RD receipts (cash from the Day Book; cash or bank from a receipt's page). */
-export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { accountId: string; mode: "Cash" | "Bank"; receiptCount: number }) {
+export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { accountId: string; mode: "Cash" | "Bank"; receiptCount: number; denominations?: Prisma.InputJsonValue }) {
   return post(tx, {
     tenantId: d.tenantId,
     entryDate: d.depositDate,
@@ -168,6 +170,7 @@ export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { accountId: string; mo
         mode: ctx.mode,
         isPassThrough: true,
         particulars: `PO receipt ${d.poReceiptNo} · ${ctx.receiptCount} ${ctx.receiptCount === 1 ? "receipt" : "receipts"}`,
+        denominations: ctx.denominations,
         productCategory: "Post office",
         scheme: "Post office RD",
       },
@@ -176,7 +179,7 @@ export function postPoDeposit(tx: Tx, d: PoDeposit, ctx: { accountId: string; mo
 }
 
 /** Collected premiums paid on to the insurer / AMC / post office (SSA, PPF): money leaves the account. */
-export function postCompanyPayment(tx: Tx, p: CompanyPayment, ctx: { receiptCount: number; productCategory: string }) {
+export function postCompanyPayment(tx: Tx, p: CompanyPayment, ctx: { receiptCount: number; productCategory: string; denominations?: Prisma.InputJsonValue }) {
   return post(tx, {
     tenantId: p.tenantId,
     entryDate: p.paidOn,
@@ -194,6 +197,7 @@ export function postCompanyPayment(tx: Tx, p: CompanyPayment, ctx: { receiptCoun
         mode: p.mode,
         isPassThrough: true,
         particulars: `Paid to ${p.company} · ref ${p.reference} · ${ctx.receiptCount} receipts`,
+        denominations: ctx.denominations,
         productCategory: ctx.productCategory,
         scheme: p.company,
       },
@@ -202,7 +206,7 @@ export function postCompanyPayment(tx: Tx, p: CompanyPayment, ctx: { receiptCoun
 }
 
 /** Money collected from the customer handed back to the owner who paid the PO first. */
-export function postOwnerReturn(tx: Tx, slip: { id: string; tenantId: string; slipNo: string; amount: Prisma.Decimal }, ctx: { accountId: string; mode: "Cash" | "Bank"; date: Date; createdById: string }) {
+export function postOwnerReturn(tx: Tx, slip: { id: string; tenantId: string; slipNo: string; amount: Prisma.Decimal }, ctx: { accountId: string; mode: "Cash" | "Bank"; date: Date; createdById: string; denominations?: Prisma.InputJsonValue }) {
   return post(tx, {
     tenantId: slip.tenantId,
     entryDate: ctx.date,
@@ -220,6 +224,7 @@ export function postOwnerReturn(tx: Tx, slip: { id: string; tenantId: string; sl
         mode: ctx.mode,
         isPassThrough: true,
         particulars: `${slip.slipNo} · returned to owner`,
+        denominations: ctx.denominations,
         productCategory: "Post office",
         scheme: "Post office RD",
       },

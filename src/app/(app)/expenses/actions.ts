@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank } from "@/lib/accounts";
-import { dropdownValues } from "@/lib/dropdowns";
+import { resolveDropdown } from "@/lib/dropdowns";
+import { checkDenominations, denominationsField } from "@/lib/payment-options";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { billProblem, saveBill } from "@/lib/bill-storage";
 import { balanceAt, isDayClosed, lockDay, reverseSource } from "@/lib/daybook";
@@ -21,6 +22,7 @@ const expenseSchema = z
   .object({
     expenseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date"),
     category: z.string().trim().min(1, "Pick a purpose"),
+    categoryOther: z.string().default(""), // typed when the purpose is "Other"
     description: z.string().trim().min(2, "Describe the expense").max(200),
     notes: z.string().default("").transform((s) => s.trim()).pipe(z.string().min(3, "Enter notes – required for every expense").max(500)),
     amount: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0"),
@@ -30,6 +32,7 @@ const expenseSchema = z
     paidByName: z.string().trim().max(80).default(""), // absent when the company paid
     mode: z.enum(["Cash", "UPI", "Bank", "Card", "Cheque"]),
     fromAccount: z.string().default(""), // company account id; absent when an employee or the owner paid
+    denominations: denominationsField, // when paid from office cash
   })
   .refine((v) => v.paidBy !== "Company" || v.fromAccount, { message: "Pick the company account", path: ["fromAccount"] })
   .refine((v) => v.paidBy !== "Employee" || v.paidByName, { message: "Enter the employee's name", path: ["paidByName"] });
@@ -40,12 +43,12 @@ class PaymentBlocked extends Error {}
 const fail = (error: string, field?: string): ActionResult => ({ ok: false, error, fieldErrors: field ? { [field]: error } : undefined });
 
 /** Company money leaves now: check the balance, then post to the Day Book (dated today, the payment day). */
-async function payNow(tx: Tx, e: Expense, user: SessionUser, accountId: string, vendorName: string, mode?: Expense["mode"]) {
+async function payNow(tx: Tx, e: Expense, user: SessionUser, accountId: string, vendorName: string, mode?: Expense["mode"], denominations?: Prisma.InputJsonValue) {
   const today = istToday();
   const account = await tx.account.findUniqueOrThrow({ where: { id: accountId } });
   const balance = await balanceAt(tx, accountId, today);
   if (balance.lt(e.amount)) return `${account.name} has only ${fmtINR(balance)} for this ${fmtINR(e.amount)} payment`;
-  await postExpensePayment(tx, e, { vendorName, date: today, createdById: user.id, mode });
+  await postExpensePayment(tx, e, { vendorName, date: today, createdById: user.id, mode, denominations });
   return null;
 }
 
@@ -76,18 +79,24 @@ async function createExpenseUnguarded(_: ActionResult, form: FormData): Promise<
       if (dup) {
         return fail(`Bill ${v.billNo} from ${vendor.name} is already entered (${dup.expenseNo}, ${fmtDate(dup.expenseDate)}). The same bill number cannot be entered twice.`, "billNo");
       }
-      const purposes = await dropdownValues(tx, user.tenantId, "expensePurpose");
-      if (v.category !== "Other" && !purposes.includes(v.category)) return fail("Pick a purpose from the list", "category");
       const company = v.paidBy === "Company";
       // Settings → Bank accounts and wallets: active bank accounts or office cash.
       const from = company ? await tx.account.findFirst({ where: { id: v.fromAccount, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } }) : null;
       if (company && !from) return fail("Pick an active company account", "fromAccount");
+      // Paid out of office cash: count the notes (stored now, put on the Day Book line when the money moves).
+      const cash = from?.type === "Cash" ? checkDenominations(v.denominations, new D(v.amount)) : null;
+      if (cash && "error" in cash) return fail(cash.error, "denominations");
+      // Purpose from Settings → Dropdown values; "Other" adds the typed one to the list – last check, so a refused
+      // expense never leaves a new value behind (returning from the transaction does not roll it back).
+      const purpose = await resolveDropdown(tx, user, "expensePurpose", v.category, v.categoryOther);
+      if ("error" in purpose) return fail(purpose.error, "category");
       const e = await tx.expense.create({
         data: {
           tenantId: user.tenantId, expenseNo: await nextNumber(tx, user.tenantId, "expense"), expenseDate,
-          category: v.category, description: v.description, notes: v.notes, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo,
+          category: purpose.value, description: v.description, notes: v.notes, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo,
           paidBy: v.paidBy, paidByName: v.paidBy === "Owner" ? "Owner" : v.paidBy === "Employee" ? v.paidByName : null, mode: v.mode,
           fromAccountId: from?.id ?? null,
+          denominations: cash?.ok ?? undefined,
           repaymentStatus: company ? "NotNeeded" : "ToBeRepaid",
           status: level === "None" ? "Saved" : "Waiting", approvalLevel: level, createdById: user.id,
         },
@@ -181,7 +190,7 @@ async function cancelExpenseUnguarded(_: ActionResult, form: FormData): Promise<
   return result;
 }
 
-const repaySchema = z.object({ expenseId: z.string(), from: z.enum(["cash", "bank"]) });
+const repaySchema = z.object({ expenseId: z.string(), from: z.enum(["cash", "bank"]), denominations: denominationsField });
 
 /** Pay back an employee or the owner who spent their own money; this is when company money moves. */
 async function repayExpenseUnguarded(_: ActionResult, form: FormData): Promise<ActionResult> {
@@ -196,11 +205,13 @@ async function repayExpenseUnguarded(_: ActionResult, form: FormData): Promise<A
       if (e.status !== "Saved" && e.status !== "Approved") return fail("Approve the expense before repaying it");
       const accounts = await cashAndBank(tx, user.tenantId);
       const account = parsed.data.from === "cash" ? accounts.cash : accounts.bank;
+      const cash = parsed.data.from === "cash" ? checkDenominations(parsed.data.denominations, e.amount) : null;
+      if (cash && "error" in cash) return fail(cash.error, "denominations");
       const updated = await tx.expense.update({
         where: { id: e.id },
         data: { repaymentStatus: "Repaid", repaidOn: istToday(), repaidFromAccountId: account.id },
       });
-      const err = await payNow(tx, updated, user, account.id, e.vendor.name, parsed.data.from === "cash" ? "Cash" : "Bank");
+      const err = await payNow(tx, updated, user, account.id, e.vendor.name, parsed.data.from === "cash" ? "Cash" : "Bank", cash?.ok);
       if (err) throw new PaymentBlocked(err);
       return { ok: true };
     });

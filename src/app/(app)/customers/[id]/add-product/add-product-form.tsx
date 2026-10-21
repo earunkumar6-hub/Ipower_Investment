@@ -84,6 +84,10 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
   return (
     <form onSubmit={confirm.onSubmit} className="space-y-4">
       <input type="hidden" name="customerId" value={customerId} />
+      {/* Save at the top and the bottom: both run the same check-before-saving pop-up. */}
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending || !product} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save product"}</Button>
+      </div>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Product" name="productId" required error={err.productId}>
           <NativeSelect id="productId" name="productId" value={productId} onChange={(e) => { setProductId(e.target.value); setSchemeId(""); setTerm(""); }} className="w-full">

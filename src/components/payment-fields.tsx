@@ -3,22 +3,18 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { MODE_LABEL, NET_TYPES, NOTES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
+import { cashJson, cashTotal, DenominationInputs, inr, paise } from "@/components/cash-denomination-grid";
+import { MODE_LABEL, NET_TYPES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
 import { cn } from "@/lib/utils";
 
 export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string };
 export const emptyPay = (modes: ReceiptMode[]): PayValue => ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", netType: "", notes: {}, coins: "" });
 
-export const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v) * 100) : 0);
-export const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
-const count = (v: string | undefined) => (/^\d+$/.test(v ?? "") ? Number(v) : 0);
-export const cashTotal = (v: PayValue) => NOTES.reduce((t, n) => t + n * 100 * count(v.notes[n]), paise(v.coins));
+export { cashTotal, inr, paise };
 
 /** Form fields sent to the server: mode, reference, bankName + netType (net banking) and the denomination as JSON (cash only). */
 export function payFormFields(v: PayValue): Record<string, string> {
-  const denominations = v.mode === "Cash"
-    ? JSON.stringify({ ...Object.fromEntries(NOTES.filter((n) => count(v.notes[n])).map((n) => [`${n}`, count(v.notes[n])])), coins: v.coins })
-    : "";
+  const denominations = v.mode === "Cash" ? cashJson(v) : "";
   return { mode: v.mode, reference: v.mode === "Cash" ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "", denominations };
 }
 
@@ -27,7 +23,6 @@ export function PaymentFields({ modes, banks, amount, value, onChange, errors = 
   modes: ReceiptMode[]; banks: string[]; amount: number; value: PayValue; onChange: (v: PayValue) => void; errors?: Record<string, string>;
 }) {
   const set = (patch: Partial<PayValue>) => onChange({ ...value, ...patch });
-  const total = cashTotal(value);
   return (
     <div className="col-span-2 space-y-3">
       <div className="space-y-1.5">
@@ -42,29 +37,7 @@ export function PaymentFields({ modes, banks, amount, value, onChange, errors = 
         </div>
       </div>
       {value.mode === "Cash" ? (
-        <div className="space-y-1.5">
-          <Label>Cash denomination</Label>
-          <div className="grid grid-cols-4 gap-2 rounded-lg border p-2 sm:grid-cols-8">
-            {NOTES.map((n) => (
-              <div key={n} className="space-y-1">
-                <Label htmlFor={`note-${n}`} className="text-xs text-muted-foreground">₹{n} ×</Label>
-                <Input id={`note-${n}`} inputMode="numeric" value={value.notes[n] ?? ""} placeholder="0" aria-invalid={!!errors.denominations}
-                  onChange={(e) => set({ notes: { ...value.notes, [n]: e.target.value.replace(/\D/g, "") } })} />
-              </div>
-            ))}
-            <div className="space-y-1">
-              <Label htmlFor="coins" className="text-xs text-muted-foreground">Coins ₹</Label>
-              <Input id="coins" inputMode="decimal" value={value.coins} placeholder="0" onChange={(e) => set({ coins: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-muted-foreground">Total</span>
-              <div className={cn("flex h-8 items-center text-sm font-semibold", amount > 0 && total !== amount ? "text-destructive" : "text-green-700")}>{inr(total)}</div>
-            </div>
-          </div>
-          {amount > 0 && total !== amount && (
-            <p className="text-xs text-destructive">Notes and coins must add up to {inr(amount)} ({total > amount ? `${inr(total - amount)} too much` : `${inr(amount - total)} short`}).</p>
-          )}
-        </div>
+        <DenominationInputs value={value} onChange={(c) => set(c)} amount={amount} error={errors.denominations} />
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {value.mode === "NetBanking" && (

@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { OTHER, OtherSelect } from "@/components/other-option-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PAY_MODE_LABEL } from "@/lib/products";
 import { createQuotation } from "../actions";
 
-const CATEGORIES = ["Health", "Life", "Motor", "Personal accident", "Other"];
 const INSURERS = ["Star Health", "Care Health", "SBI Life", "LIC", "HDFC Life", "ICICI Lombard", "Niva Bupa"];
 
-type Item = { category: string; insurer: string; productName: string; sumInsured: string; premium: string; payMode: Frequency };
-const blank = (category: string): Item => ({ category, insurer: "", productName: "", sumInsured: "", premium: "", payMode: "Yearly" });
+type Item = { category: string; categoryOther: string; insurer: string; productName: string; sumInsured: string; premium: string; payMode: Frequency };
+const blank = (category: string): Item => ({ category, categoryOther: "", insurer: "", productName: "", sumInsured: "", premium: "", payMode: "Yearly" });
 type Plan = { partner: string; name: string; payModes: Frequency[] };
 const PAY_MODES: Frequency[] = ["Yearly", "HalfYearly", "Quarterly", "Monthly", "OneTime"];
 
@@ -25,8 +25,9 @@ const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v)
 const gstPaise = (p: number) => Math.round((p * 18) / 100);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
 
-export function QuotationForm(props: { customerId: string; leadId: string; customerName: string; mobile: string; defaultValidUpto: string; plans: Plan[] }) {
-  const [items, setItems] = useState<Item[]>([blank("Health"), blank("Life")]);
+export function QuotationForm(props: { customerId: string; leadId: string; customerName: string; mobile: string; defaultValidUpto: string; plans: Plan[]; categories: string[] }) {
+  const { categories } = props;
+  const [items, setItems] = useState<Item[]>([blank(categories[0] ?? OTHER), blank(categories[1] ?? categories[0] ?? OTHER)]);
   const [state, action, pending] = useActionState<ActionResult, FormData>(createQuotation, { ok: false });
   const set = (n: number, patch: Partial<Item>) => setItems(items.map((it, i) => (i === n ? { ...it, ...patch } : it)));
   const totals = items.reduce(
@@ -42,7 +43,7 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
     ["Mobile", String(form.get("mobile") ?? "")],
     ["Valid till", fmtValid(String(form.get("validUpto") ?? ""))],
     ...items.filter((it) => it.insurer || it.productName || it.premium).map((it, n): [string, string] => [
-      `Product ${n + 1}`, `${it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${PAY_MODE_LABEL[it.payMode]}\n${inr(paise(it.premium))} + GST ${inr(gstPaise(paise(it.premium)))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
+      `Product ${n + 1}`, `${it.category === OTHER ? it.categoryOther : it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${PAY_MODE_LABEL[it.payMode]}\n${inr(paise(it.premium))} + GST ${inr(gstPaise(paise(it.premium)))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
     ]),
     ["Total", inr(totals.total)],
   ]);
@@ -83,9 +84,8 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
             return (
               <TableRow key={n}>
                 <TableCell>
-                  <NativeSelect value={it.category} onChange={(e) => set(n, { category: e.target.value })} aria-label="Product" className="w-full">
-                    {CATEGORIES.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
-                  </NativeSelect>
+                  <OtherSelect value={it.category} other={it.categoryOther} options={categories} label="Product"
+                    onChange={(category, categoryOther) => set(n, { category, categoryOther })} />
                 </TableCell>
                 <TableCell><Input list="insurers" value={it.insurer} onChange={(e) => set(n, { insurer: e.target.value })} aria-label="Insurer" placeholder="Star Health" /></TableCell>
                 <TableCell>
@@ -114,7 +114,7 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
           })}
           <TableRow>
             <TableCell colSpan={5}>
-              {items.length < 5 && <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, blank("Health")])}>Add product</Button>}
+              {items.length < 5 && <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, blank(categories[0] ?? OTHER)])}>Add product</Button>}
             </TableCell>
             <TableCell className="font-medium">{inr(totals.premium)}</TableCell>
             <TableCell className="text-right font-medium">{inr(totals.gst)}</TableCell>

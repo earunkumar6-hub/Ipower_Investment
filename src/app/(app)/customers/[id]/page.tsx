@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
+import { ATTACHMENT_LIST, dropdownValues } from "@/lib/dropdowns";
 import { notFound } from "next/navigation";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { ExportButton } from "@/components/export-button";
@@ -7,10 +9,11 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge, type Tone } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ATTACHMENT_KINDS, attachmentRows } from "@/lib/attachments";
+import { attachmentRows } from "@/lib/attachments";
 import { HOLDING_KIND as KIND, loadCustomer360, PER_LABEL } from "@/lib/customer-360";
 import { fmtDate, fmtDateTime, isoDate, istDate, istToday } from "@/lib/dates";
 import { maskMobile } from "@/lib/lead-labels";
+import { daysBetween, overdueText } from "@/lib/overdue";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
@@ -112,7 +115,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                     <TableCell>{r.policy.productType === "PoRd" ? monthLabel(r.dueDate) : fmtDate(r.dueDate)}</TableCell>
                     <TableCell>{r.policy.policyNumber}</TableCell>
                     <TableCell className="text-right">{fmtINR(r.premiumAmount)}</TableCell>
-                    <TableCell><StatusBadge tone={RENEWAL_TONE[r.status]}>{r.status}</StatusBadge></TableCell>
+                    <TableCell><StatusBadge tone={RENEWAL_TONE[r.status]}>{r.status === "Overdue" ? `Overdue · ${overdueText(daysBetween(r.dueDate, istToday()))}` : r.status}</StatusBadge></TableCell>
                     <TableCell className="text-sm">
                       {r.paidOn ? fmtDate(r.paidOn) : "—"}
                       {r.paidReceiptId && <> · <Link href={`/receipts/${r.paidReceiptId}`} className="text-brand-700 hover:underline">{receiptNo.get(r.paidReceiptId)}</Link></>}
@@ -185,7 +188,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             </Table>
           </Section>
           <Section title="Documents">
-            <AttachmentsPanel ownerType="Customer" ownerId={c.id} kinds={ATTACHMENT_KINDS.Customer} files={files} />
+            <AttachmentsPanel ownerType="Customer" ownerId={c.id} kinds={await dropdownValues(db, user.tenantId, ATTACHMENT_LIST.Customer)} files={files} />
           </Section>
           <Section title="Owner-paid renewals for this customer">
             <Table>

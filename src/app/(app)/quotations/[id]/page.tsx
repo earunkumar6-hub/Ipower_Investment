@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { ATTACHMENT_LIST, dropdownValues } from "@/lib/dropdowns";
 import { notFound } from "next/navigation";
 import { AttachmentsPanel } from "@/components/attachments-panel";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
-import { ATTACHMENT_KINDS, attachmentRows } from "@/lib/attachments";
+import { attachmentRows } from "@/lib/attachments";
 import { fmtDate, fmtDateTime, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
@@ -75,7 +76,7 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
 
           <div>
             <h3 className="mb-1 text-sm font-medium">Attachments</h3>
-            <AttachmentsPanel ownerType="Quotation" ownerId={q.id} kinds={ATTACHMENT_KINDS.Quotation} files={files} readOnly={deleted} />
+            <AttachmentsPanel ownerType="Quotation" ownerId={q.id} kinds={await dropdownValues(db, user.tenantId, ATTACHMENT_LIST.Quotation)} files={files} readOnly={deleted} />
           </div>
         </div>
 

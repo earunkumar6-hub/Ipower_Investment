@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CashDenominationGrid } from "@/components/cash-denomination-grid";
 import { submitKeepingValues } from "@/lib/form";
 import { payToCompany } from "./actions";
 
@@ -22,8 +23,9 @@ export type PaidRow = {
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
 
 /** Paid tab: tick receipts still pending for one company, then record paying that company in one go. */
-export function PaidTable({ rows, accounts, today, canPay }: { rows: PaidRow[]; accounts: { id: string; name: string }[]; today: string; canPay: boolean }) {
+export function PaidTable({ rows, accounts, today, canPay }: { rows: PaidRow[]; accounts: { id: string; name: string; type: string }[]; today: string; canPay: boolean }) {
   const [ticked, setTicked] = useState<string[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [key, setKey] = useState(0);
   const selected = rows.filter((r) => r.receiptId && ticked.includes(r.receiptId));
   const company = selected[0]?.company;
@@ -91,13 +93,14 @@ export function PaidTable({ rows, accounts, today, canPay }: { rows: PaidRow[]; 
           <div className="space-y-1"><Label htmlFor="paidOn" className="text-xs">Paid on</Label><Input id="paidOn" name="paidOn" type="date" defaultValue={today} max={today} className="h-8" /></div>
           <div className="space-y-1">
             <Label htmlFor="accountId" className="text-xs">Paid from</Label>
-            <NativeSelect id="accountId" name="accountId" size="sm" defaultValue="">
+            <NativeSelect id="accountId" name="accountId" size="sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               <NativeSelectOption value="">Pick account</NativeSelectOption>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
             </NativeSelect>
           </div>
           <div className="space-y-1"><Label htmlFor="reference" className="text-xs">Company receipt / UTR no.</Label><Input id="reference" name="reference" className="h-8 w-48" /></div>
           <Button type="submit" size="sm" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : `Save payment to ${company}`}</Button>
+          {accounts.find((a) => a.id === accountId)?.type === "Cash" && <div className="w-full"><CashDenominationGrid amount={total} idPrefix="pay" /></div>}
           {state.error && <p className="w-full text-xs text-destructive">{state.error}</p>}
         </form>
       )}

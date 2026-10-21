@@ -1,6 +1,7 @@
 "use client";
 
 import { LockIcon } from "lucide-react";
+import { CashDenominationGrid } from "@/components/cash-denomination-grid";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
@@ -177,6 +178,7 @@ export function PoDepositForm({ date, closed, receipts, atmToday, isAdmin }: { d
             <Input id="amountReason" name="amountReason" disabled={!isAdmin} />
           </div>
         )}
+        {selected.length > 0 && <CashDenominationGrid amount={deposited} idPrefix="po" />}
         <Input name="note" placeholder="Note (optional)" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" disabled={pending || selected.length === 0} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save deposit"}</Button>

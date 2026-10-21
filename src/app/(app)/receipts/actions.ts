@@ -16,7 +16,7 @@ import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { postOwnerReturn, postReceipt } from "@/lib/posting";
 import { ADVANCE_MONTHS, lockPolicyDues, OWNER_PAYABLE, payableDues, type Due } from "@/lib/dues";
-import { checkPayment, MODE_LABEL, payFields } from "@/lib/payment-options";
+import { checkDenominations, checkPayment, denominationsField, MODE_LABEL, payFields } from "@/lib/payment-options";
 import { billEnd } from "@/lib/policies";
 import { authorize } from "@/lib/session";
 
@@ -340,21 +340,23 @@ export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<
   return result;
 }
 
-const returnSchema = z.object({ slipId: z.string().min(1, "Pick a slip"), mode: z.enum(["Cash", "Bank"]) });
+const returnSchema = z.object({ slipId: z.string().min(1, "Pick a slip"), mode: z.enum(["Cash", "Bank"]), denominations: denominationsField });
 
 /** Hand the collected money back to the owner: Day Book outflow, slip settled. */
 async function returnToOwnerUnguarded(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("DayBook.Create");
   const parsed = returnSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
-  const { slipId, mode } = parsed.data;
+  const { slipId, mode, denominations } = parsed.data;
   const today = istToday();
 
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const slip = await tx.ownerPaidSlip.findFirst({ where: { id: slipId, tenantId: user.tenantId, status: "CollectedReturnToOwner" } });
     if (!slip) return { ok: false, error: "Only slips the customer has paid can be returned" };
+    const notes = mode === "Cash" ? checkDenominations(denominations, slip.amount) : null;
+    if (notes && "error" in notes) return { ok: false, error: notes.error };
     const accounts = await cashAndBank(tx, user.tenantId);
-    const [entry] = await postOwnerReturn(tx, slip, { accountId: mode === "Cash" ? accounts.cash.id : accounts.bank.id, mode, date: today, createdById: user.id });
+    const [entry] = await postOwnerReturn(tx, slip, { accountId: mode === "Cash" ? accounts.cash.id : accounts.bank.id, mode, date: today, createdById: user.id, denominations: notes?.ok });
     await tx.ownerPaidSlip.update({
       where: { id: slip.id },
       data: { status: "Settled", returnedEntryId: entry.id, confirmedById: user.id, confirmedOn: new Date() },

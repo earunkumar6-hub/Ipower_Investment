@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { dropdownValues } from "@/lib/dropdowns";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
           mobile={party.mobile}
           defaultValidUpto={isoDate(addDays(istToday(), 15))}
           plans={plans}
+          categories={await dropdownValues(db, user.tenantId, "quotationCategory")}
         />
       </>
     );

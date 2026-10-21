@@ -1,4 +1,5 @@
 import type { Frequency, Policy, PolicyStatus, Prisma, RenewalStatus } from "@prisma/client";
+import { overdueText } from "@/lib/overdue";
 import type { Tone } from "@/components/status-badge";
 import { addMonths } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -166,7 +167,7 @@ export function renewalStatus(r: RenewalRow, today: Date): [string, Tone] {
   if (r.kind === "closed") return r.policyStatus === "Matured" ? ["Matured – not renewed", "slate"] : ["Lapsed – not renewed", "red"];
   if (r.kind === "maturity") return days > 0 ? [`Matured ${days} days ago`, "red"] : [days === 0 ? "Matures today" : `Matures in ${-days} days`, "indigo"];
   if (r.status === "Paid") return ["Paid", "green"];
-  if (r.status === "Overdue") return [`${days} days overdue`, "red"];
+  if (r.status === "Overdue") return [`${overdueText(days)} overdue`, "red"];
   return [days === 0 ? "Due today" : `Due in ${-days} days`, "orange"];
 }
 

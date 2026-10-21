@@ -33,7 +33,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const deposit = r.policy && !cancelled ? companyStatus(r, r.policy.partner, nameLookup(users)) : null;
   const isRd = rdDepositable(r);
   const canDeposit = !!deposit && (deposit.payable || isRd) && hasPermission(user.role, "DayBook.Create");
-  const accounts = canDeposit ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] }) : [];
+  const accounts = canDeposit ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true, type: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] }) : [];
 
   const rows: [string, React.ReactNode][] = [
     ["Customer", `${r.customer.name} · ${r.customer.mobile}`],
@@ -76,7 +76,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
         <div className="space-y-4">
-          {canDeposit && <DepositStatusForm receiptId={r.id} company={r.policy!.partner} isRd={isRd} accounts={accounts} today={isoDate(istToday())} />}
+          {canDeposit && <DepositStatusForm receiptId={r.id} amount={r.amount.toFixed(2)} company={r.policy!.partner} isRd={isRd} accounts={accounts} today={isoDate(istToday())} />}
           {hasPermission(user.role, "Receipt.Cancel") && !cancelled && !r.payment && !r.companyPaymentId && !r.poDepositLine && (
             <CancelReceiptForm receiptId={r.id} receiptNo={r.receiptNo} />
           )}

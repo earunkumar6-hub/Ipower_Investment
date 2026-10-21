@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CashDenominationGrid, paise } from "@/components/cash-denomination-grid";
 import { submitKeepingValues } from "@/lib/form";
 import { recordOwnerPaid, returnToOwner } from "./actions";
 
@@ -39,7 +40,10 @@ export function OwnerPaidForm({ items }: { items: Option[] }) {
   );
 }
 
-export function ReturnToOwnerForm({ slips }: { slips: Option[] }) {
+export function ReturnToOwnerForm({ slips }: { slips: (Option & { amount: string })[] }) {
+  const [slipId, setSlipId] = useState("");
+  const [mode, setMode] = useState("Cash");
+  const slip = slips.find((s) => s.id === slipId);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await returnToOwner(prev, form);
     if (r.ok) toast.success("Returned to owner; Day Book updated");
@@ -51,18 +55,19 @@ export function ReturnToOwnerForm({ slips }: { slips: Option[] }) {
       <h2 className="font-semibold">Return to owner</h2>
       <div className="space-y-1.5">
         <Label htmlFor="slipId">Slip</Label>
-        <NativeSelect id="slipId" name="slipId" className="w-full" defaultValue="">
+        <NativeSelect id="slipId" name="slipId" className="w-full" value={slipId} onChange={(e) => setSlipId(e.target.value)}>
           <NativeSelectOption value="">{slips.length ? "Pick a slip" : "Nothing to return"}</NativeSelectOption>
           {slips.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="mode">Returned by</Label>
-        <NativeSelect id="mode" name="mode" className="w-full">
+        <NativeSelect id="mode" name="mode" className="w-full" value={mode} onChange={(e) => setMode(e.target.value)}>
           <NativeSelectOption value="Cash">Cash</NativeSelectOption>
           <NativeSelectOption value="Bank">Bank transfer</NativeSelectOption>
         </NativeSelect>
       </div>
+      {mode === "Cash" && slip && <CashDenominationGrid amount={paise(slip.amount)} idPrefix="ret" />}
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" variant="outline" disabled={pending || !slips.length} className="w-full">{pending ? "Saving…" : "Record return"}</Button>
       <p className="text-xs text-muted-foreground">Posts the money out of cash or bank in the Day Book and settles the slip.</p>

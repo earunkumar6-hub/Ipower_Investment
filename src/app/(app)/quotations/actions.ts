@@ -1,6 +1,7 @@
 "use server";
 
 import { Frequency, type Prisma } from "@prisma/client";
+import { resolveDropdown } from "@/lib/dropdowns";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -17,6 +18,7 @@ const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount");
 
 const itemSchema = z.object({
   category: z.string().trim().min(1, "Pick a product"),
+  categoryOther: z.string().default(""),
   insurer: z.string().trim().min(2, "Enter the insurer"),
   productName: z.string().trim().min(2, "Enter the plan"),
   sumInsured: z.union([z.literal(""), money]),
@@ -32,6 +34,9 @@ const quotationSchema = z.object({
   validUpto: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
   items: z.array(itemSchema).min(1, "Add at least one product").max(5, "At most 5 products"),
 });
+
+/** Thrown inside the quotation transaction to roll back everything already written. */
+class QuoteRefused extends Error {}
 
 export async function createQuotation(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Quote.Create");
@@ -61,35 +66,49 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
   }
 
   const priced = priceQuotation(v.items.map((i) => i.premium));
-  const quotation = await db.$transaction(async (tx) => {
-    const q = await tx.quotation.create({
-      data: {
-        tenantId: user.tenantId,
-        quoteNo: await nextNumber(tx, user.tenantId, "quotation"),
-        customerId: customer?.id,
-        leadId: lead?.id,
-        customerName: v.customerName,
-        mobile: v.mobile,
-        validUpto,
-        subtotal: priced.subtotal,
-        gstTotal: priced.gstTotal,
-        total: priced.total,
-        ownerId: customer?.ownerId ?? lead?.ownerId ?? user.id,
-        items: {
-          create: v.items.map((i, n) => ({
-            category: i.category,
-            insurer: i.insurer,
-            productName: i.productName,
-            sumInsured: i.sumInsured || null,
-            payMode: i.payMode,
-            ...priced.items[n],
-          })),
+  let quotation;
+  try {
+    quotation = await db.$transaction(async (tx) => {
+      // Product type from Settings → Dropdown values; "Other" adds the typed one to the list.
+      // Throw (not return) on a bad product so values typed for earlier products are rolled back too.
+      const categories: string[] = [];
+      for (const [n, i] of v.items.entries()) {
+        const r = await resolveDropdown(tx, user, "quotationCategory", i.category, i.categoryOther);
+        if ("error" in r) throw new QuoteRefused(`Product ${n + 1}: ${r.error}`);
+        categories.push(r.value);
+      }
+      const q = await tx.quotation.create({
+        data: {
+          tenantId: user.tenantId,
+          quoteNo: await nextNumber(tx, user.tenantId, "quotation"),
+          customerId: customer?.id,
+          leadId: lead?.id,
+          customerName: v.customerName,
+          mobile: v.mobile,
+          validUpto,
+          subtotal: priced.subtotal,
+          gstTotal: priced.gstTotal,
+          total: priced.total,
+          ownerId: customer?.ownerId ?? lead?.ownerId ?? user.id,
+          items: {
+            create: v.items.map((i, n) => ({
+              category: categories[n],
+              insurer: i.insurer,
+              productName: i.productName,
+              sumInsured: i.sumInsured || null,
+              payMode: i.payMode,
+              ...priced.items[n],
+            })),
+          },
         },
-      },
+      });
+      if (lead) await advanceStage(tx, lead.id, "Quotation");
+      return q;
     });
-    if (lead) await advanceStage(tx, lead.id, "Quotation");
-    return q;
-  });
+  } catch (e) {
+    if (e instanceof QuoteRefused) return { ok: false, error: e.message };
+    throw e;
+  }
   revalidatePath("/", "layout");
   redirect(`/quotations/${quotation.id}`);
 }

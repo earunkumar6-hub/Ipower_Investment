@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { checkDenominations, denominationsField } from "@/lib/payment-options";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
@@ -69,6 +70,7 @@ const depositSchema = z.object({
   amountReason: z.string().trim().max(200).default(""),
   upiReason: z.union([z.literal(""), z.enum(UPI_ADJUSTMENT_REASONS)]).default(""),
   note: z.string().trim().max(200).default(""),
+  denominations: denominationsField, // the cash handed over
 });
 
 /**
@@ -108,6 +110,8 @@ export async function depositToPostOffice(_: ActionResult, form: FormData): Prom
       }
       const cashNow = await balanceAt(tx, cash.id, v.date);
       if (cashNow.lt(amount)) return fail(`Cash in hand is only ${fmtINR(cashNow)}`);
+      const notes = checkDenominations(v.denominations, amount);
+      if ("error" in notes) return fail(notes.error);
 
       const reasons = [v.upiReason && `UPI vs ATM: ${v.upiReason}`, v.amountReason && `Amount: ${v.amountReason}`].filter(Boolean).join("; ");
       const deposit = await tx.poDeposit.create({
@@ -119,7 +123,7 @@ export async function depositToPostOffice(_: ActionResult, form: FormData): Prom
       });
       await tx.receipt.updateMany({ where: { id: { in: receipts.map((r) => r.id) } }, data: { rdStatus: "Deposited" } });
       await tx.commission.updateMany({ where: { receiptId: { in: receipts.map((r) => r.id) } }, data: { poDepositId: deposit.id } });
-      await postPoDeposit(tx, deposit, { accountId: cash.id, mode: "Cash", receiptCount: receipts.length });
+      await postPoDeposit(tx, deposit, { accountId: cash.id, mode: "Cash", receiptCount: receipts.length, denominations: notes.ok });
       return { ok: true };
     }),
   );
@@ -130,6 +134,7 @@ const oneDepositSchema = z.object({
   paidOn: isoDay,
   accountId: z.string().min(1, "Pick the account it was paid from"),
   reference: z.string().trim().min(2, "Enter the post office receipt / transaction ID").max(60),
+  denominations: denominationsField, // when paid from office cash
 });
 
 /**
@@ -158,6 +163,8 @@ export async function depositOneRdReceipt(_: ActionResult, form: FormData): Prom
       const balance = await balanceAt(tx, account.id, v.paidOn);
       if (balance.lt(r.amount)) return fail(`${account.name} has only ${fmtINR(balance)}`);
       const mode = account.type === "Cash" ? "Cash" as const : "Bank" as const;
+      const notes = mode === "Cash" ? checkDenominations(v.denominations, r.amount) : null;
+      if (notes && "error" in notes) return fail(notes.error);
 
       const deposit = await tx.poDeposit.create({
         data: {
@@ -169,7 +176,7 @@ export async function depositOneRdReceipt(_: ActionResult, form: FormData): Prom
       const updated = await tx.receipt.updateMany({ where: { id: r.id, rdStatus: "Collected" }, data: { rdStatus: "Deposited" } });
       if (updated.count !== 1) throw new Error("Receipt changed while saving; try again");
       await tx.commission.updateMany({ where: { receiptId: r.id }, data: { poDepositId: deposit.id } });
-      await postPoDeposit(tx, deposit, { accountId: account.id, mode, receiptCount: 1 });
+      await postPoDeposit(tx, deposit, { accountId: account.id, mode, receiptCount: 1, denominations: notes?.ok });
       return { ok: true };
     }),
   );
