@@ -8,18 +8,22 @@ import { MODE_LABEL } from "@/lib/payment-modes";
 type Filter = ReturnType<typeof receiptFilter>;
 
 /** Filter bar above every Receipts tab: a plain GET form, so the filters live in the address and the export link. */
-export function ReceiptFilters({ f, tab, accounts }: { f: Filter; tab: string; accounts: { id: string; label: string }[] }) {
+export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: string; accounts: { id: string; label: string }[]; groups: { id: string; name: string }[] }) {
   const cls = "h-8 w-full";
   return (
     <form className="mb-4 grid grid-cols-2 gap-2 rounded-xl border bg-white p-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
       <input type="hidden" name="tab" value={tab} />
       {f.deposit !== "all" && <input type="hidden" name="deposit" value={f.deposit} />}
-      <Input name="q" defaultValue={f.q} placeholder="Name or mobile" aria-label="Name or mobile" className={cls} />
-      <Input name="cif" defaultValue={f.cif} placeholder="Customer ID (CIF)" aria-label="Customer ID" className={cls} />
+      <Input id="rf-q" name="q" defaultValue={f.q} placeholder="Name or mobile" aria-label="Name or mobile" className={cls} />
+      <Input id="rf-cif" name="cif" defaultValue={f.cif} placeholder="Customer ID (CIF)" aria-label="Customer ID" className={cls} />
+      <NativeSelect name="group" defaultValue={f.group ?? ""} aria-label="Bill group" className={cls}>
+        <NativeSelectOption value="">Any bill group</NativeSelectOption>
+        {groups.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}
+      </NativeSelect>
       <NativeSelect name="product" defaultValue={f.product} aria-label="Product" className={cls}>
         {RENEWAL_PRODUCTS.map(([k, label]) => <NativeSelectOption key={k} value={k}>{label}</NativeSelectOption>)}
       </NativeSelect>
-      <Input name="policy" defaultValue={f.policyNo} placeholder="Policy / account no." aria-label="Policy / account no." className={cls} />
+      <Input id="rf-policy" name="policy" defaultValue={f.policyNo} placeholder="Policy / account no." aria-label="Policy / account no." className={cls} />
       <NativeSelect name="mode" defaultValue={f.mode ?? ""} aria-label="Payment mode" className={cls}>
         <NativeSelectOption value="">All modes</NativeSelectOption>
         {Object.entries(MODE_LABEL).map(([k, label]) => <NativeSelectOption key={k} value={k}>{label}</NativeSelectOption>)}
@@ -33,8 +37,8 @@ export function ReceiptFilters({ f, tab, accounts }: { f: Filter; tab: string; a
         <NativeSelectOption value="Saved">Saved</NativeSelectOption>
         <NativeSelectOption value="Cancelled">Cancelled</NativeSelectOption>
       </NativeSelect>
-      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">From</span><Input type="date" name="from" defaultValue={f.from} className={cls} /></label>
-      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">To</span><Input type="date" name="to" defaultValue={f.to} className={cls} /></label>
+      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">From</span><Input id="rf-from" type="date" name="from" defaultValue={f.from} className={cls} /></label>
+      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">To</span><Input id="rf-to" type="date" name="to" defaultValue={f.to} className={cls} /></label>
       <div className="flex gap-2">
         <Button type="submit" size="sm" variant="outline">Filter</Button>
         {f.active && <Link href={`/receipts?tab=${tab}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Clear</Link>}

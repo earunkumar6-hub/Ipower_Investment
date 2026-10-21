@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   "Policy.View", "Policy.Create",
   "Renewal.View",
   "Receipt.View", "Receipt.Create", "Receipt.Cancel",
+  "BillGroup.Manage", // create bill groups, add / remove policies (Admin, Super Admin)
   "Service.Record", "Wallet.View", "Wallet.Recharge",
   "Expense.View", "Expense.Create", "Expense.Approve",
   "DayBook.View", "DayBook.Create", "DayBook.Verify", "DayBook.Close",
@@ -26,7 +27,7 @@ export type Action = Split<Permission>[1];
 export type AppAbility = MongoAbility<[Action, Subject]>;
 
 const STAFF_DENIED: Permission[] = [
-  "Receipt.Cancel", "Wallet.Recharge", "Expense.Approve",
+  "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
   "DayBook.Verify", "DayBook.Close", "Commission.View", "PnL.View", "Report.Export",
   "Settings.Edit", "Audit.View",
 ];

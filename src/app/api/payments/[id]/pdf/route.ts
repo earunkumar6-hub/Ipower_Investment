@@ -1,11 +1,10 @@
 import { fmtDate, fmtTime, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
-import { dueLabel } from "@/lib/payment-lines";
+import { canSeePayment, dueLabel, payerOf } from "@/lib/payment-lines";
 import { denominationText, modeText } from "@/lib/payment-options";
 import { esc, htmlToPdf, PDF_STYLE, pdfHeader } from "@/lib/pdf";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session";
 
 // Customer copy of a payment covering several dues: one line per receipt. Never shows commission.
@@ -15,9 +14,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params;
   const p = await db.payment.findFirst({
     where: { id, tenantId: user.tenantId },
-    include: { customer: true, receipts: { orderBy: { receiptNo: "asc" }, include: { policy: true } } },
+    include: { customer: true, billGroup: { select: { name: true } }, receipts: { orderBy: { receiptNo: "asc" }, include: { policy: true, customer: { select: { name: true, ownerId: true } } } } },
   });
-  if (!p || !(seesAll(user.role) || p.createdById === user.id || canActOn(user, p.customer.ownerId))) {
+  if (!p || !canSeePayment(user, p)) {
     return new Response("Not found", { status: 404 });
   }
   const [tenant, receivedBy] = await Promise.all([
@@ -25,10 +24,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     db.user.findUnique({ where: { id: p.createdById }, select: { name: true } }),
   ]);
   const cash = denominationText(p.denominations);
+  const several = p.kind !== "Customer"; // combined / bill group: lines under different customers
   const items = await db.renewalItem.findMany({ where: { id: { in: p.receipts.map((r) => r.renewalItemId).filter((x): x is string => !!x) } } });
   const lines = p.receipts.map((r) => `<tr>
       <td>${esc(r.receiptNo)}</td>
       <td>${esc(items.find((i) => i.id === r.renewalItemId)?.billNo ?? "—")}</td>
+      ${several ? `<td>${esc(r.customer.name)}</td>` : ""}
       <td>${esc(r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : r.notes ?? "")}</td>
       <td>${esc(dueLabel(r, items))}</td>
       <td class="num">${esc(fmtINR(r.amount))}</td>
@@ -40,7 +41,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     ${pdfHeader(tenant.name, `<h1>Payment receipt</h1><div>${esc(p.paymentNo)}</div>`)}
     ${p.status === "Cancelled" ? `<p class="stamp">CANCELLED</p>` : ""}
     <table>
-      <tr><th style="width:30%">Received from</th><td>${esc(p.customer.name)} · ${esc(p.customer.mobile)}</td></tr>
+      <tr><th style="width:30%">Received from</th><td>${esc(payerOf(p).name)} · ${esc(payerOf(p).mobile)}</td></tr>
+      ${p.billGroup ? `<tr><th>Bill group</th><td>${esc(p.billGroup.name)}</td></tr>` : ""}
+      ${p.poReceiptNo ? `<tr><th>PO receipt no.</th><td>${esc(p.poReceiptNo)}</td></tr>` : ""}
       <tr><th>Amount</th><td><b>${esc(fmtINR(p.amount))}</b></td></tr>
       <tr><th>Mode</th><td>${esc(modeText(p))}</td></tr>
       ${cash ? `<tr><th>Cash denomination</th><td>${esc(cash)}</td></tr>` : ""}
@@ -49,9 +52,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       <tr><th>Received by</th><td>${esc(receivedBy?.name ?? "—")}</td></tr>
     </table>
     <table>
-      <thead><tr><th>Receipt no.</th><th>Bill no.</th><th>Towards</th><th>Due</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th>Receipt no.</th><th>Bill no.</th>${several ? "<th>Customer</th>" : ""}<th>Towards</th><th>Due</th><th class="num">Amount</th></tr></thead>
       <tbody>${lines}</tbody>
-      <tfoot><tr class="total"><td colspan="4">Total</td><td class="num">${esc(fmtINR(p.amount))}</td></tr></tfoot>
+      <tfoot><tr class="total"><td colspan="${several ? 5 : 4}">Total</td><td class="num">${esc(fmtINR(p.amount))}</td></tr></tfoot>
     </table>
     <p class="muted" style="margin-top:24px">Premiums and deposits are collected on behalf of the insurer or post office. This is a computer-generated receipt.</p>
   </body></html>`;

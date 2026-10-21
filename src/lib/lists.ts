@@ -212,22 +212,26 @@ export function expenseFilter(user: SessionUser, sp: Params) {
   return { tab, where };
 }
 
-export const receiptTab = (sp: Params) => (sp.tab === "owner" ? "owner" : "customer");
+export const RECEIPT_TABS = [["customer", "Customer receipts"], ["owner", "Owner-paid receipts"], ["combined", "Combined receipts"], ["family", "Family grouped receipts"]] as const;
+export type ReceiptTab = (typeof RECEIPT_TABS)[number][0];
+export const receiptTab = (sp: Params): ReceiptTab => RECEIPT_TABS.find(([k]) => k === sp.tab)?.[0] ?? "customer";
 /** Receipts list: has the money reached the company? (see `DEPOSIT_WHERE`) */
 export const depositFilter = (sp: Params) => (sp.deposit === "pending" || sp.deposit === "paid" ? sp.deposit : "all");
 
 /** The Receipts filter fields, as search params (also what the export link carries). */
-export const RECEIPT_FILTER_KEYS = ["q", "cif", "product", "policy", "mode", "account", "status", "from", "to", "deposit"] as const;
+export const RECEIPT_FILTER_KEYS = ["q", "cif", "group", "product", "policy", "mode", "account", "status", "from", "to", "deposit"] as const;
 
 /**
- * Receipts screen filters: name or mobile, customer ID, product, policy / account no., mode, account, status,
- * bill date from / to (and deposit status on customer receipts). They combine (AND), run in the database and
+ * Receipts screen filters: name or mobile, customer ID, bill group, product, policy / account no., mode, account,
+ * status, bill date from / to (and deposit status on customer receipts). They combine (AND), run in the database and
  * apply to every tab and the export. Users see only the receipts they entered, and slips on their own customers.
  * Mode, account and deposit status don't apply to owner-paid slips; the slip's date is when it was recorded.
+ * Customer receipts are the ones not inside a combined / bill-group receipt (those have their own tabs, matched
+ * when any of their lines matches; name or mobile also matches the payer).
  */
 export function receiptFilter(user: SessionUser, sp: Params) {
   const text = (v?: string) => v?.trim() || undefined;
-  const q = text(sp.q), cif = text(sp.cif), policyNo = text(sp.policy);
+  const q = text(sp.q), cif = text(sp.cif), policyNo = text(sp.policy), group = text(sp.group);
   const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
   const mode = sp.mode && sp.mode in MODE_LABEL ? (sp.mode as PaymentMode) : undefined;
   const account = text(sp.account);
@@ -244,6 +248,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(product === "mf" && { productType: "MutualFund" }),
     ...(product === "po" && { productType: { in: [...PO_SCHEMES] } }),
     ...(policyNo && { policyNumber: { contains: policyNo, mode: "insensitive" } }),
+    ...(group && { billGroup: { billGroupId: group } }),
   };
   const byCustomer = Object.keys(customer).length > 0, byPolicy = Object.keys(policy).length > 0;
 
@@ -257,6 +262,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(status && { status }),
     ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
     ...(deposit !== "all" && DEPOSIT_WHERE[deposit]),
+    AND: [{ OR: [{ paymentId: null }, { payment: { kind: "Customer" } }] }],
   };
   const slipWhere: Prisma.OwnerPaidSlipWhereInput = {
     tenantId: user.tenantId,
@@ -265,9 +271,28 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(status === "Cancelled" ? { status: "Cancelled" } : status === "Saved" ? { status: { not: "Cancelled" } } : {}),
     ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: addDays(to, 1) }) } }),
   };
+  const matchQ: Prisma.CustomerWhereInput | undefined = q
+    ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }] }
+    : undefined;
+  const line: Prisma.ReceiptWhereInput = {
+    ...(cif && { customer: { cifNo: { contains: cif, mode: "insensitive" } } }),
+    ...(byPolicy && { policy }),
+    ...(account && { accountId: account }),
+  };
+  const paymentWhere = (kind: "Combined" | "BillGroup"): Prisma.PaymentWhereInput => ({
+    tenantId: user.tenantId, kind,
+    ...(!seesAll(user.role) && { createdById: user.id }),
+    ...(mode && { mode }),
+    ...(status && { status }),
+    ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
+    AND: [
+      ...(matchQ ? [{ OR: [{ payerName: { contains: q, mode: "insensitive" as const } }, { payerMobile: { contains: q } }, { receipts: { some: { customer: matchQ } } }] }] : []),
+      ...(Object.keys(line).length ? [{ receipts: { some: line } }] : []),
+    ],
+  });
   const params: Params = Object.fromEntries(RECEIPT_FILTER_KEYS.map((k) => [k, k === "deposit" ? (deposit === "all" ? undefined : deposit) : text(sp[k])]));
   const active = RECEIPT_FILTER_KEYS.some((k) => k !== "deposit" && params[k]);
-  return { q, cif, product, policyNo, mode, account, status, from: sp.from, to: sp.to, deposit, receiptWhere, slipWhere, params, active };
+  return { q, cif, group, product, policyNo, mode, account, status, from: sp.from, to: sp.to, deposit, receiptWhere, slipWhere, paymentWhere, params, active };
 }
 
 /** A past or today's date from ?date=YYYY-MM-DD; anything else is today. */

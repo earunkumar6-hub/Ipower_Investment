@@ -13,17 +13,12 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isoDate, istToday } from "@/lib/dates";
 import { MODE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
+import type { PolicyOption } from "@/lib/receipt-options";
 import { cn } from "@/lib/utils";
 import { createReceipt } from "../actions";
+import { BillsPicker, ticked as tickedBills, unpaidCounts } from "../bills-picker";
 
-/** `dues`: payable bills oldest first (unpaid, then advance up to 12 months ahead); advance bills get a BL- number when paid. */
-export type PolicyOption = { id: string; label: string; dues: { billNo: string | null; label: string; amount: string; tag: "Overdue" | "Due" | "Advance" }[] };
 type Slip = { id: string; slipNo: string; account: string; month: string; amount: string; poReceiptNo: string };
-
-const TAG_STYLE = { Overdue: "text-destructive", Due: "text-foreground", Advance: "text-brand-700" };
-/** Overdue and due bills of each policy: ticked when the form opens. */
-const unpaidCounts = (policies: PolicyOption[]): Record<string, number> =>
-  Object.fromEntries(policies.map((p) => [p.id, p.dues.filter((d) => d.tag !== "Advance").length] as const).filter(([, n]) => n > 0));
 
 export function ReceiptForm({ customer, policies, openSlips, modes, banks, accounts, receivedBy }: {
   customer: { id: string; name: string; mobile: string }; policies: PolicyOption[]; openSlips: Slip[];
@@ -53,19 +48,12 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
   }, { ok: false });
 
   const withDues = policies.filter((p) => p.dues.length);
-  const picked = withDues.filter((p) => (counts[p.id] ?? 0) > 0);
-  const duesTotal = picked.reduce((t, p) => t + p.dues.slice(0, counts[p.id]).reduce((s, d) => s + paise(d.amount), 0), 0);
-  const dueCount = picked.reduce((t, p) => t + counts[p.id], 0);
+  const { dues: pickedDues, total: duesTotal, count: dueCount } = tickedBills(withDues, counts);
   const amount = dueCount ? (duesTotal / 100).toFixed(2) : otherAmount;
-  const unpaid = unpaidCounts(withDues);
-  const allUnpaidTicked = Object.keys(unpaid).length > 0 && Object.entries(unpaid).every(([id, n]) => (counts[id] ?? 0) >= n);
-
-  /** Ticking a bill ticks the older ones of that policy; unticking it unticks the later ones. */
-  const tick = (p: PolicyOption, i: number, on: boolean) => setCounts({ ...counts, [p.id]: on ? i + 1 : i });
 
   function submit(slipIds: string[]) {
     const form = new FormData();
-    const dues = slipIds.length ? [] : picked.map((p) => ({ policyId: p.id, count: counts[p.id] }));
+    const dues = slipIds.length ? [] : pickedDues;
     Object.entries({
       customerId: customer.id, policyId: dues.length ? "" : otherPolicyId, dues: dues.length ? JSON.stringify(dues) : "",
       amount, notes, slipIds: slipIds.join(","), receiptDate, txnDate, ...payFormFields(pay),
@@ -91,44 +79,7 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
         <p className="text-xs text-muted-foreground">{customer.mobile}{openSlips.length > 0 && ` · ${openSlips.length} owner-paid bill(s) open`}</p>
       </div>
 
-      {withDues.length > 0 && (
-        <div className="space-y-1.5">
-          <Label>Bills to pay</Label>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <input type="checkbox" aria-label="Tick all due bills" checked={allUnpaidTicked}
-                    onChange={(e) => setCounts(e.target.checked ? { ...counts, ...unpaid } : {})} />
-                </TableHead>
-                <TableHead>Bill</TableHead><TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {withDues.flatMap((p) => {
-                const n = counts[p.id] ?? 0;
-                // Every unpaid bill, plus the advance bills ticked and one more to tick.
-                const shown = Math.max(p.dues.filter((d) => d.tag !== "Advance").length, Math.min(n + 1, p.dues.length));
-                return p.dues.slice(0, shown).map((d, i) => (
-                  <TableRow key={`${p.id}-${i}`} className={cn(i > 0 && "border-t-0", i < n && "bg-saffron-50/40")}>
-                    <TableCell>
-                      <input type="checkbox" aria-label={`Pay ${p.label} ${d.label}`} checked={i < n} onChange={(e) => tick(p, i, e.target.checked)} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{d.billNo ?? "—"}</TableCell>
-                    <TableCell className="whitespace-normal">{i === 0 ? p.label : ""}</TableCell>
-                    <TableCell>{d.label} <span className={cn("text-xs", TAG_STYLE[d.tag])}>{d.tag === "Due" ? "" : d.tag.toLowerCase()}</span></TableCell>
-                    <TableCell className="text-right">{inr(paise(d.amount))}</TableCell>
-                  </TableRow>
-                ));
-              })}
-            </TableBody>
-          </Table>
-          <p className="text-xs text-muted-foreground">
-            Every overdue and due bill is ticked; untick what is not being paid. Bills are paid oldest first; advance up to 12 months ahead.
-            {dueCount > 1 && ` ${dueCount} bills · ${inr(duesTotal)} → one payment receipt for the customer, with a receipt line per bill.`}
-          </p>
-        </div>
-      )}
+      {withDues.length > 0 && <BillsPicker policies={withDues} counts={counts} onChange={setCounts} scope={{ customerId: customer.id }} />}
 
       <div className="grid grid-cols-2 gap-3">
         {dueCount === 0 && (

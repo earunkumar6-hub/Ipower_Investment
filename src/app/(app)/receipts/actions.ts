@@ -8,64 +8,32 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank } from "@/lib/accounts";
 import { poCommission } from "@/lib/commission";
 import { reverseSource } from "@/lib/daybook";
-import { financialYear, fmtDate, istToday } from "@/lib/dates";
+import { financialYear, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { seesAll } from "@/lib/permissions";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
-import { postOwnerReturn, postReceipt } from "@/lib/posting";
-import { ADVANCE_MONTHS, lockPolicyDues, OWNER_PAYABLE, payableDues, type Due } from "@/lib/dues";
+import { postOwnerReturn } from "@/lib/posting";
+import { OWNER_PAYABLE } from "@/lib/dues";
+import { canSeePayment, payerOf } from "@/lib/payment-lines";
+import { addReceiptLine, closedDayError, dateOrToday, duesField, type LineCommon, moneyField, pastOrTodayField, payDueLine, pickDues, Refused } from "@/lib/receipt-lines";
 import { checkDenominations, checkPayment, denominationsField, MODE_LABEL, payFields } from "@/lib/payment-options";
-import { billEnd } from "@/lib/policies";
 import { authorize } from "@/lib/session";
-
-const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0");
-// "" or missing = today. Past dates are allowed; a closed Day Book day is refused when posting.
-const pastOrToday = z.union([
-  z.literal(""),
-  z.iso.date("Pick a date").refine((d) => new Date(`${d}T00:00:00Z`) <= istToday(), "Date can't be in the future"),
-]).optional();
-const dateOrToday = (d: string | undefined) => (d ? new Date(`${d}T00:00:00Z`) : istToday());
-
-const duesSchema = z.array(z.object({ policyId: z.string().min(1), count: z.number().int().min(1).max(60) })).max(20);
-
-const parseJson = (v: string): unknown => {
-  try {
-    return JSON.parse(v);
-  } catch {
-    return null;
-  }
-};
 
 const receiptSchema = z
   .object({
     customerId: z.string().min(1),
     policyId: z.string(), // "other payment" (no instalment) only
-    // Dues picked per policy as JSON [{ policyId, count }]: the oldest `count` payable instalments of each.
-    dues: z.string().optional().transform((v, ctx) => {
-      if (!v) return [];
-      const parsed = duesSchema.safeParse(parseJson(v));
-      if (!parsed.success) {
-        ctx.addIssue({ code: "custom", message: "Pick the dues again" });
-        return z.NEVER;
-      }
-      return parsed.data;
-    }),
-    amount: money,
+    dues: duesField,
+    amount: moneyField,
     ...payFields, // mode, reference, bank name (net banking), cash denomination
     notes: z.string().trim().max(200),
     slipIds: z.string(), // comma-separated owner-paid slips to close with this payment
-    receiptDate: pastOrToday, // bill date
-    txnDate: pastOrToday, // when the customer actually paid
+    receiptDate: pastOrTodayField, // bill date
+    txnDate: pastOrTodayField, // when the customer actually paid
   });
 
-/** Thrown inside a transaction to roll back everything already written. */
-class Refused extends Error {
-  constructor(public result: ActionResult) {
-    super(result.error);
-  }
-}
 
 async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Receipt.Create");
@@ -86,21 +54,16 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       const customer = await tx.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId } });
       if (!customer) return { ok: false, error: "Customer not found" };
       if (!canActOn(user, customer.ownerId)) return { ok: false, error: "This customer belongs to another user" };
-      // Balances run from the first entry, so a bill dated before a closed day would change that day's verified
-      // figures. Only days after the last close can be back-dated (a closed bill date itself is refused on posting).
-      const lastClose = await tx.dayClose.findFirst({ where: { tenantId: user.tenantId, status: "Closed" }, orderBy: { date: "desc" }, select: { date: true } });
-      if (lastClose && billDate < lastClose.date) {
-        const msg = `Day Book is closed up to ${fmtDate(lastClose.date)}; pick a later bill date`;
-        return { ok: false, error: msg, fieldErrors: { receiptDate: msg } };
-      }
+      const closed = await closedDayError(tx, user.tenantId, billDate);
+      if (closed) return { ok: false, error: closed, fieldErrors: { receiptDate: closed } };
       const pay = await checkPayment(tx, user.tenantId, v, amount);
       if ("error" in pay) return { ok: false, error: pay.error, fieldErrors: { [pay.field]: pay.error } };
-      const common = {
+      const common: LineCommon = {
         tenantId: user.tenantId,
         fy: financialYear(billDate),
         receiptDate: billDate,
         txnDate: dateOrToday(v.txnDate),
-        customerId: customer.id,
+        notes: v.notes || null,
         mode: v.mode,
         accountId: pay.ok.accountId, // "Received into" (cash drawer for cash)
         reference: pay.ok.reference,
@@ -113,23 +76,8 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       const thanks = (policy: Policy, receiptNo: string) =>
         `Thank you ${customer.name}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${policy.partner} ${policy.policyNumber}. Receipt ${receiptNo}.`;
 
-      /** One RCPT for one policy: Day Book in; RD → Collected + commission expected. Numbered at insert time. */
-      const addReceipt = async (policy: Policy, lineAmount: Prisma.Decimal, extra: Partial<Prisma.ReceiptUncheckedCreateInput> = {}) => {
-        const isRd = policy.productType === "PoRd" && !extra.ownerPaid;
-        const receipt = await tx.receipt.create({
-          data: {
-            ...common, receiptNo: await nextNumber(tx, user.tenantId, "receipt"), amount: lineAmount, notes: v.notes || null,
-            policyId: policy.id, rdStatus: isRd ? "Collected" : null, ...extra,
-          },
-        });
-        if (isRd) {
-          await tx.commission.create({
-            data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: receipt.receiptNo, policyId: policy.id, receiptId: receipt.id, earnedOn: billDate, ...poCommission("PoRd", lineAmount) },
-          });
-        }
-        await postReceipt(tx, receipt, { customerName: customer.name, policy });
-        return receipt;
-      };
+      const addReceipt = (policy: Policy, lineAmount: Prisma.Decimal, extra: Partial<Prisma.ReceiptUncheckedCreateInput> = {}) =>
+        addReceiptLine(tx, common, policy, customer, lineAmount, extra);
 
       if (slipIds.length) {
         // Customer repays instalments the owner already paid at the post office.
@@ -161,19 +109,9 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       }
 
       // Dues: the server picks the oldest `count` payable instalments of each policy and prices them.
-      const lines: { policy: Policy; due: Due }[] = [];
-      for (const { policyId, count } of v.dues) {
-        const policy = await tx.policy.findFirst({ where: { id: policyId, customerId: customer.id, status: "Active" }, include: { product: { select: { invoiceRule: true } } } });
-        if (!policy) return { ok: false, error: "A policy picked is not active for this customer; reload and try again" };
-        if (lines.some((l) => l.policy.id === policy.id)) return { ok: false, error: "Pick the dues again" };
-        await lockPolicyDues(tx, policy.id);
-        const stored = await tx.renewalItem.findMany({ where: { policyId: policy.id } });
-        const payable = payableDues({ ...policy, billUntil: billEnd(policy, policy.product?.invoiceRule) }, stored, today);
-        if (count > payable.length) {
-          return { ok: false, error: `${policy.policyNumber}: only ${payable.length} instalment(s) can be paid now (up to ${ADVANCE_MONTHS} months ahead)` };
-        }
-        for (const due of payable.slice(0, count)) lines.push({ policy, due });
-      }
+      const picked = await pickDues(tx, user, v.dues, today, { customerId: customer.id });
+      if ("error" in picked) return { ok: false, error: picked.error };
+      const { lines } = picked;
       const total = sum(lines.map((l) => l.due.amount));
       if (!total.equals(amount)) {
         return { ok: false, error: `Amount must be ${fmtINR(total)} for the dues picked`, fieldErrors: { amount: "Mismatch" } };
@@ -189,24 +127,8 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
           })
         : null;
       const receipts = [];
-      for (const { policy, due } of lines) {
-        // Cash denomination is kept once: on the payment when several dues are paid together.
-        const receipt = await addReceipt(policy, due.amount, { paymentId: payment?.id ?? null, renewalItemId: due.itemId, ...(!payment && { denominations: pay.ok.denominations }) });
-        if (due.itemId) {
-          const paid = await tx.renewalItem.updateMany({
-            where: { id: due.itemId, status: { in: ["Due", "Overdue"] } },
-            data: { status: "Paid", paidOn: billDate, paidReceiptId: receipt.id },
-          });
-          if (paid.count !== 1) throw new Refused({ ok: false, error: "An instalment picked was just paid by someone else; reload and try again" });
-        } else {
-          // Advance instalment: stored now, already paid.
-          const item = await tx.renewalItem.create({
-            data: { tenantId: user.tenantId, policyId: policy.id, dueDate: due.dueDate, premiumAmount: due.amount, status: "Paid", paidOn: billDate, paidReceiptId: receipt.id },
-          });
-          await tx.receipt.update({ where: { id: receipt.id }, data: { renewalItemId: item.id } });
-        }
-        receipts.push(receipt);
-      }
+      // Cash denomination is kept once: on the payment when several dues are paid together.
+      for (const line of lines) receipts.push(await payDueLine(tx, common, line, { paymentId: payment?.id ?? null, ...(!payment && { denominations: pay.ok.denominations }) }));
 
       if (!payment) {
         await whatsApp(thanks(lines[0].policy, receipts[0].receiptNo), "Receipt", receipts[0].id);
@@ -374,7 +296,9 @@ export async function shareOnWhatsApp(kind: "Receipt" | "Payment" | "DirectBill"
   const user = await authorize("Receipt.View");
   const found =
     kind === "Receipt" ? await db.receipt.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true } }).then((r) => r && { no: r.receiptNo, amount: r.amount, name: r.customer.name, mobile: r.customer.mobile, ownerId: r.customer.ownerId, createdById: r.createdById, path: "receipts" })
-    : kind === "Payment" ? await db.payment.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true } }).then((p) => p && { no: p.paymentNo, amount: p.amount, name: p.customer.name, mobile: p.customer.mobile, ownerId: p.customer.ownerId, createdById: p.createdById, path: "payments" })
+    : kind === "Payment" ? await db.payment.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true, receipts: { select: { customer: { select: { ownerId: true } } } } } })
+      // Checked here (lines can belong to several customers); passes the check below as the user's own.
+      .then((p) => p && canSeePayment(user, p) && { no: p.paymentNo, amount: p.amount, name: payerOf(p).name, mobile: payerOf(p).mobile, ownerId: null, createdById: user.id, path: "payments" })
     : await db.directBill.findFirst({ where: { id, tenantId: user.tenantId } }).then((b) => b && { no: b.billNo, amount: b.amount, name: b.payerName, mobile: b.payerMobile, ownerId: null, createdById: b.createdById, path: "direct-bills" });
   if (!found || !(seesAll(user.role) || found.createdById === user.id || (found.ownerId && canActOn(user, found.ownerId)))) return { ok: false, error: "Not found" };
   await db.messageLog.create({

@@ -449,6 +449,7 @@ model Policy {
   receipts       Receipt[]
   ownerPaidSlips OwnerPaidSlip[]
   commissions    Commission[]
+  billGroup      BillGroupMember? // at most one bill group per policy
 
   @@unique([tenantId, policyNumber])
 }
@@ -587,6 +588,7 @@ model RenewalItem {
   ownerPaidSlips OwnerPaidSlip[]
 
   @@unique([tenantId, billNo])
+  @@unique([policyId, dueDate]) // one bill per instalment date (advance bills can't be generated twice)
   @@index([tenantId, status, dueDate])
 }
 
@@ -655,15 +657,27 @@ model Receipt {
   @@index([tenantId, receiptDate])
 }
 
-/// One customer payment covering several dues: the customer gets one PAY- receipt, each due keeps its own RCPT line.
+enum PaymentKind {
+  Customer // several dues of one customer
+  Combined // bills ticked across customers, paid by one person
+  BillGroup // a saved bill group ("Family grouped receipts")
+}
+
+/// One payment covering several dues: the payer gets one PAY- receipt, each due keeps its own RCPT line (under its own customer).
 model Payment {
   id            String        @id @default(cuid())
   tenantId      String
   paymentNo     String
+  kind          PaymentKind   @default(Customer)
   receiptDate   DateTime      @db.Date // bill date, same on every line
   txnDate       DateTime      @db.Date
-  customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id])
+  customerId    String? // Customer kind only; combined and bill-group payments name the payer instead
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payerName     String? // "Paid by" on combined and bill-group receipts
+  payerMobile   String?
+  poReceiptNo   String? // optional PO receipt no. on a combined receipt
+  billGroupId   String?
+  billGroup     BillGroup?    @relation(fields: [billGroupId], references: [id])
   amount        Decimal       @db.Decimal(12, 2)
   mode          PaymentMode
   reference     String?
@@ -1182,4 +1196,30 @@ model DropdownOption {
   createdAt    DateTime @default(now())
 
   @@index([tenantId, list])
+}
+
+/// Bill groups (change set #21): saved sets of policies / accounts across customers, billed and paid as one.
+/// Created and edited by Admin / Super Admin only.
+model BillGroup {
+  id            String            @id @default(cuid())
+  tenantId      String
+  name          String
+  contactName   String? // offered as "Paid by" on the group's receipts
+  contactMobile String?
+  createdById   String
+  createdAt     DateTime          @default(now())
+  members       BillGroupMember[]
+  payments      Payment[]
+
+  @@unique([tenantId, name])
+}
+
+model BillGroupMember {
+  id          String    @id @default(cuid())
+  billGroupId String
+  billGroup   BillGroup @relation(fields: [billGroupId], references: [id], onDelete: Cascade)
+  policyId    String    @unique // one group per policy, so a bill can't be billed through two groups
+  policy      Policy    @relation(fields: [policyId], references: [id])
+  addedById   String
+  addedAt     DateTime  @default(now())
 }

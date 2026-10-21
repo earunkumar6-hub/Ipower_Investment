@@ -370,11 +370,16 @@ export const REPORTS: Record<string, Report> = {
 
   receipts: {
     permission: "Receipt.View",
-    // Both tabs in one file, with the screen's filters: customer receipts, then owner-paid slips.
+    // Every tab in one file, with the screen's filters: customer receipts, owner-paid slips, combined and bill-group receipts.
     async build(user, sp) {
       const f = receiptFilter(user, sp);
       const deposit = f.deposit;
-      const [receipts, slips, accounts, users] = await Promise.all([
+      const grouped = (kind: "Combined" | "BillGroup") => db.payment.findMany({
+        where: f.paymentWhere(kind),
+        include: { billGroup: { select: { name: true } }, receipts: { select: { accountId: true, customer: { select: { name: true } } } } },
+        orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
+      });
+      const [receipts, slips, accounts, users, combined, family] = await Promise.all([
         db.receipt.findMany({
           where: f.receiptWhere,
           include: {
@@ -393,7 +398,19 @@ export const REPORTS: Record<string, Report> = {
         }),
         db.account.findMany({ where: { tenantId: user.tenantId } }).then((rows) => rows.map((a) => ({ id: a.id, name: accountLabel(a) }))),
         userNames(user.tenantId),
+        grouped("Combined"),
+        grouped("BillGroup"),
       ]);
+      const groupedSheet = (name: string, rows: typeof combined, family: boolean): Sheet => ({
+        name,
+        totals: true,
+        columns: [{ header: "Receipt no." }, { header: "Bill date", type: "date" }, ...(family ? [{ header: "Bill group", width: 24 }] : []), { header: "Paid by", width: 24 }, { header: "Payer mobile" },
+          { header: "Customers", width: 40 }, { header: "Bills" }, { header: "Mode" }, { header: "Reference" }, { header: "Account" }, { header: "Amount", type: "money" },
+          { header: "PO receipt no." }, { header: "Collected by" }, { header: "Status" }, { header: "Cancel reason", width: 24 }],
+        rows: rows.map((p) => [p.paymentNo, p.receiptDate, ...(family ? [p.billGroup?.name ?? null] : []), p.payerName, p.payerMobile,
+          [...new Set(p.receipts.map((r) => r.customer.name))].join(", "), p.receipts.length, MODE_LABEL[p.mode], [p.bankName, p.reference].filter(Boolean).join(" · "),
+          account(p.receipts[0]?.accountId ?? null), p.amount, p.poReceiptNo, nameOf(p.createdById), p.status, p.cancelReason]),
+      });
       const account = nameIn(accounts);
       const nameOf = nameLookup(users);
       return {
@@ -419,7 +436,7 @@ export const REPORTS: Record<string, Report> = {
             { header: "Amount", type: "money" }, { header: "PO receipt no." }, { header: "Customer receipt" }, { header: "Status", width: 28 }],
           rows: slips.map((s) => [s.slipNo, s.createdAt, s.policy.policyNumber, s.customer.name, monthLabel(s.month), s.amount, s.poReceiptNo,
             s.closedByReceipt?.receiptNo, SLIP_STATUS[s.status][0]]),
-        }],
+        }, groupedSheet("Combined receipts", combined, false), groupedSheet("Family grouped receipts", family, true)],
       };
     },
   },

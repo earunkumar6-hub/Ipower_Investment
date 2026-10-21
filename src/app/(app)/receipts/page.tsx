@@ -13,7 +13,7 @@ import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-st
 import { ownerScope, userNames } from "@/lib/leads";
 import { OWNER_PAYABLE } from "@/lib/dues";
 import { MODE_LABEL } from "@/lib/payment-modes";
-import { monthLabel, receiptFilter, receiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
+import { monthLabel, RECEIPT_TABS, receiptFilter, receiptTab, type ReceiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
 import { fmtINR, sum, ZERO } from "@/lib/money";
 import { requirePermission, type SessionUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -30,12 +30,17 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const tab = receiptTab(sp);
   const f = receiptFilter(user, sp);
-  const [customerCount, slipCount, accounts] = await Promise.all([
-    db.receipt.count({ where: f.receiptWhere }),
-    db.ownerPaidSlip.count({ where: f.slipWhere }),
+  const [counts, accounts, groups] = await Promise.all([
+    Promise.all([
+      db.receipt.count({ where: f.receiptWhere }),
+      db.ownerPaidSlip.count({ where: f.slipWhere }),
+      db.payment.count({ where: f.paymentWhere("Combined") }),
+      db.payment.count({ where: f.paymentWhere("BillGroup") }),
+    ]),
     db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] } }, orderBy: [{ type: "asc" }, { active: "desc" }, { name: "asc" }] }),
+    db.billGroup.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
-  const tabs = [["customer", "Customer receipts", customerCount], ["owner", "Owner-paid receipts", slipCount]] as const;
+  const count: Record<ReceiptTab, number> = { customer: counts[0], owner: counts[1], combined: counts[2], family: counts[3] };
 
   return (
     <>
@@ -45,17 +50,18 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
         <Link href="/direct-bills" className={buttonVariants({ variant: "outline" })}>Direct bills</Link>
         <Link href="/receipts/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New receipt</Link>
       </>} />
-      <ReceiptFilters f={f} tab={tab} accounts={accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)}${a.active ? "" : " (switched off)"}` }))} />
+      <ReceiptFilters f={f} tab={tab} groups={groups} accounts={accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)}${a.active ? "" : " (switched off)"}` }))} />
       <div className="mb-4 flex gap-1 border-b">
-        {tabs.map(([key, label, n]) => (
+        {RECEIPT_TABS.map(([key, label]) => [key, label, count[key]] as const).map(([key, label, n]) => (
           <Link key={key} href={href(f.params, { tab: key })}
             className={cn("-mb-px border-b-2 px-3 py-2 text-sm", tab === key ? "border-brand-600 font-medium text-brand-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
             {label} <span className="ml-1 rounded-full bg-slate-100 px-1.5 text-xs text-slate-700">{n}</span>
           </Link>
         ))}
       </div>
-      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} f={f} total={customerCount} />
-        : <OwnerPaid user={user} f={f} />}
+      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} f={f} total={count.customer} />
+        : tab === "owner" ? <OwnerPaid user={user} f={f} />
+        : <GroupedReceipts tenantId={user.tenantId} f={f} kind={tab === "combined" ? "Combined" : "BillGroup"} total={count[tab]} />}
     </>
   );
 }
@@ -203,6 +209,73 @@ async function OwnerPaid({ user, f }: { user: SessionUser; f: Filter }) {
           <ReturnToOwnerForm slips={toReturn.map((s) => ({ id: s.id, label: `${s.slipNo} · ${s.customer.name} · ${fmtINR(s.amount)}`, amount: s.amount.toFixed(2) }))} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Combined and Family grouped (bill-group) receipts: one row per PAY- receipt, made out to the payer. */
+async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string; f: Filter; kind: "Combined" | "BillGroup"; total: number }) {
+  const [payments, accounts, users] = await Promise.all([
+    db.payment.findMany({
+      where: f.paymentWhere(kind),
+      include: { billGroup: { select: { id: true, name: true } }, receipts: { select: { accountId: true, customer: { select: { name: true } } } } },
+      orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    }),
+    db.account.findMany({ where: { tenantId }, select: { id: true, type: true, name: true, bankName: true, last4: true } }),
+    userNames(tenantId),
+  ]);
+  const accountName = (id?: string) => { const a = accounts.find((x) => x.id === id); return a ? accountLabel(a) : "—"; };
+  const nameOf = nameLookup(users);
+  const family = kind === "BillGroup";
+  return (
+    <div className="rounded-xl border bg-white p-4">
+      <div className="mb-3 flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          {family ? "Receipts for saved bill groups: every member's bill paid in one receipt." : "Bills ticked across customers, paid by one person in one receipt."}
+        </span>
+        {family
+          ? <Link href="/receipts/groups" className={buttonVariants({ size: "sm", variant: "outline" })}>Bill groups</Link>
+          : <Link href="/receipts/combined/new" className={cn(buttonVariants({ size: "sm" }), "bg-brand-600 hover:bg-brand-700")}>New combined receipt</Link>}
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Receipt no.</TableHead><TableHead>Bill date</TableHead>{family && <TableHead>Bill group</TableHead>}<TableHead>Paid by</TableHead><TableHead>Customers</TableHead>
+            <TableHead className="text-right">Bills</TableHead><TableHead>Mode</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead>
+            {!family && <TableHead>PO receipt no.</TableHead>}<TableHead>Collected by</TableHead><TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {payments.map((p) => {
+            const names = [...new Set(p.receipts.map((r) => r.customer.name))];
+            return (
+              <TableRow key={p.id} className={cn(p.status === "Cancelled" && "text-muted-foreground")}>
+                <TableCell><Link href={`/payments/${p.id}`} className="text-brand-700 hover:underline">{p.paymentNo}</Link></TableCell>
+                <TableCell>{fmtDate(p.receiptDate)}</TableCell>
+                {family && <TableCell>{p.billGroup ? <Link href={`/receipts/groups/${p.billGroup.id}`} className="hover:underline">{p.billGroup.name}</Link> : "—"}</TableCell>}
+                <TableCell>{p.payerName}<span className="block text-xs text-muted-foreground">{p.payerMobile}</span></TableCell>
+                <TableCell className="max-w-48 whitespace-normal text-sm">{names.slice(0, 3).join(", ")}{names.length > 3 && ` +${names.length - 3}`}</TableCell>
+                <TableCell className="text-right">{p.receipts.length}</TableCell>
+                <TableCell>{MODE_LABEL[p.mode]}{p.bankName && <span className="block text-xs text-muted-foreground">{p.bankName}</span>}</TableCell>
+                <TableCell>{accountName(p.receipts[0]?.accountId)}</TableCell>
+                <TableCell className="text-right">{fmtINR(p.amount)}</TableCell>
+                {!family && <TableCell>{p.poReceiptNo ?? "—"}</TableCell>}
+                <TableCell>{nameOf(p.createdById)}</TableCell>
+                <TableCell>{p.status === "Cancelled" ? <StatusBadge tone="slate">Cancelled</StatusBadge> : <StatusBadge tone="green">Saved</StatusBadge>}</TableCell>
+              </TableRow>
+            );
+          })}
+          {payments.length === 0 && (
+            <TableRow><TableCell colSpan={12} className="py-8 text-center text-muted-foreground">{f.active ? "No receipts match these filters." : "No receipts yet."}</TableCell></TableRow>
+          )}
+        </TableBody>
+      </Table>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {total > payments.length && `Showing the latest ${payments.length} of ${total}; narrow the filters or export to see all. `}
+        Each bill keeps its own receipt line under its customer. Only Admin and Super Admin can cancel; the whole receipt is cancelled together.
+        {f.deposit !== "all" && " The deposit status filter applies to customer receipts only."}
+      </p>
     </div>
   );
 }
