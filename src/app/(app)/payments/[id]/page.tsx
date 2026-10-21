@@ -8,11 +8,13 @@ import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
+import { denominationText, modeText } from "@/lib/payment-options";
 import { hasPermission, seesAll } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { dueLabel } from "@/lib/payment-lines";
 import { CancelPaymentForm } from "./cancel-form";
+import { ShareButton } from "../../receipts/share-button";
 
 export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Receipt.View");
@@ -36,10 +38,12 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
   const rows: [string, React.ReactNode][] = [
     ["Customer", `${p.customer.name} · ${p.customer.mobile}`],
     ["Amount", fmtINR(p.amount)],
-    ["Mode", `${p.mode}${p.reference ? ` · ${p.reference}` : ""} · into ${account?.name ?? "—"}`],
+    ["Mode", `${modeText(p)} · into ${account?.name ?? "—"}`],
+    ["Received by", nameOf(p.createdById)],
     ["Bill date", `${fmtDate(p.receiptDate)} · entered by ${nameOf(p.createdById)} at ${fmtDateTime(p.createdAt)}`],
     ["Transaction date", fmtDate(p.txnDate)],
   ];
+  if (p.denominations) rows.push(["Cash denomination", denominationText(p.denominations)]);
   if (p.notes) rows.push(["Notes", p.notes]);
   if (cancelled) rows.push(["Cancelled", `${p.cancelReason} · by ${nameOf(p.cancelledById)}${p.cancelledAt ? ` at ${fmtDateTime(p.cancelledAt)}` : ""}`]);
 
@@ -62,12 +66,13 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
           <h3 className="mt-4 mb-1 text-sm font-medium">Dues paid ({p.receipts.length})</h3>
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Receipt no.</TableHead><TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>RD status</TableHead></TableRow>
+              <TableRow><TableHead>Receipt no.</TableHead><TableHead>Bill</TableHead><TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>RD status</TableHead></TableRow>
             </TableHeader>
             <TableBody>
               {p.receipts.map((r) => (
                 <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
                   <TableCell><Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link></TableCell>
+                  <TableCell className="text-muted-foreground">{items.find((i) => i.id === r.renewalItemId)?.billNo ?? "—"}</TableCell>
                   <TableCell>{r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : "—"}</TableCell>
                   <TableCell>{dueLabel(r, items)}</TableCell>
                   <TableCell className="text-right">{fmtINR(r.amount)}</TableCell>
@@ -78,6 +83,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
           </Table>
           <div className="mt-4 flex gap-2">
             <a href={`/api/payments/${p.id}/pdf`} className={buttonVariants({ variant: "outline" })}>Download PDF</a>
+            {!cancelled && <ShareButton kind="Payment" id={p.id} />}
             <Link href="/receipts" className={buttonVariants({ variant: "ghost" })}>Back to receipts</Link>
           </div>
         </div>

@@ -17,6 +17,7 @@ import {
   pnlMonth, PRODUCT_SHORT, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
+import { MODE_LABEL } from "@/lib/payment-modes";
 import { seesAll, type Permission } from "@/lib/permissions";
 import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
@@ -270,7 +271,7 @@ export const REPORTS: Record<string, Report> = {
           {
             name: "Receipts",
             columns: [{ header: "Receipt" }, { header: "Date", type: "date" }, { header: "For", width: 24 }, { header: "Mode" }, { header: "Amount", type: "money" }, { header: "Status" }],
-            rows: c.receipts.map((r) => [r.receiptNo, r.receiptDate, (r.policy?.policyNumber ?? r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : ""), r.mode, r.amount, r.status]),
+            rows: c.receipts.map((r) => [r.receiptNo, r.receiptDate, (r.policy?.policyNumber ?? r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : ""), MODE_LABEL[r.mode], r.amount, r.status]),
           },
           {
             name: "Owner-paid slips",
@@ -403,7 +404,7 @@ export const REPORTS: Record<string, Report> = {
             { header: "Collected by" }, { header: "Status" }, { header: "RD status" }, { header: "Deposit status", width: 48 }, { header: "Cancel reason", width: 24 }],
           rows: receipts.map((r) => {
             const forText = (r.policy ? (r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`) : r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : "");
-            return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, r.mode, r.reference, account(r.accountId), r.amount,
+            return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, MODE_LABEL[r.mode], [r.bankName, r.reference].filter(Boolean).join(" · "), account(r.accountId), r.amount,
               nameOf(r.createdById), r.status, r.status !== "Cancelled" ? r.rdStatus : null,
               r.policy && r.status !== "Cancelled" ? companyStatus(r, r.policy.partner, nameOf).text : null, r.cancelReason];
           }),

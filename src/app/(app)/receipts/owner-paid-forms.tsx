@@ -21,17 +21,17 @@ export function OwnerPaidForm({ items }: { items: Option[] }) {
 
   return (
     <form onSubmit={submitKeepingValues(action)} className="space-y-3 rounded-xl border bg-white p-4">
-      <h2 className="font-semibold">Record owner-paid RD</h2>
+      <h2 className="font-semibold">Record owner-paid bill</h2>
       <div className="space-y-1.5">
-        <Label htmlFor="renewalItemId">RD instalment</Label>
+        <Label htmlFor="renewalItemId">Bill</Label>
         <NativeSelect id="renewalItemId" name="renewalItemId" className="w-full" defaultValue="">
-          <NativeSelectOption value="">Pick account and month</NativeSelectOption>
+          <NativeSelectOption value="">Pick the bill</NativeSelectOption>
           {items.map((i) => <NativeSelectOption key={i.id} value={i.id}>{i.label}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="poReceiptNo">Post office receipt no. (required)</Label>
-        <Input id="poReceiptNo" name="poReceiptNo" placeholder="7781 2318" />
+        <Label htmlFor="poReceiptNo">Reference no. (required)</Label>
+        <Input id="poReceiptNo" name="poReceiptNo" placeholder="PO receipt no. or insurer txn no." />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save owner-paid slip"}</Button>

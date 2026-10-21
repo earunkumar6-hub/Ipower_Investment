@@ -10,6 +10,8 @@ import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { companyStatus, DEPOSIT_WHERE, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { ownerScope, userNames } from "@/lib/leads";
+import { OWNER_PAYABLE } from "@/lib/dues";
+import { MODE_LABEL } from "@/lib/payment-modes";
 import { depositFilter, monthLabel, receiptTab, SLIP_STATUS } from "@/lib/lists";
 import { fmtINR, sum, ZERO } from "@/lib/money";
 import { seesAll } from "@/lib/permissions";
@@ -27,6 +29,8 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Receipts" user={user} actions={<>
         <ExportButton report="receipts" user={user} params={{ deposit: deposit === "all" ? undefined : deposit }} />
+        <Link href="/receipts/verification" className={buttonVariants({ variant: "outline" })}>PO verification</Link>
+        <Link href="/direct-bills" className={buttonVariants({ variant: "outline" })}>Direct bills</Link>
         <Link href="/receipts/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New receipt</Link>
       </>} />
       <div className="mb-4 flex gap-1 border-b">
@@ -90,7 +94,7 @@ async function CustomerReceipts({ tenantId, createdById, deposit }: { tenantId: 
                 <TableCell>{fmtDate(r.txnDate)}</TableCell>
                 <TableCell>{r.customer.name}</TableCell>
                 <TableCell>{r.policy ? `${r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`}` : r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
-                <TableCell>{r.mode}</TableCell>
+                <TableCell>{MODE_LABEL[r.mode]}{r.bankName && <span className="block text-xs text-muted-foreground">{r.bankName}</span>}</TableCell>
                 <TableCell>{accountName(r.accountId)}</TableCell>
                 <TableCell className="text-right">{fmtINR(r.amount)}</TableCell>
                 <TableCell>{nameOf(r.createdById)}</TableCell>
@@ -121,13 +125,13 @@ async function OwnerPaid({ user }: { user: SessionUser }) {
   const [slips, openItems] = await Promise.all([
     db.ownerPaidSlip.findMany({
       where: { tenantId: user.tenantId, policy: scope },
-      include: { policy: { select: { policyNumber: true } }, customer: { select: { name: true } }, closedByReceipt: { select: { receiptNo: true } } },
+      include: { policy: { select: { policyNumber: true, partner: true } }, customer: { select: { name: true } }, closedByReceipt: { select: { receiptNo: true } }, renewalItem: { select: { billNo: true, dueDate: true } } },
       orderBy: { createdAt: "desc" },
     }),
-    // RD instalments that can still be marked owner-paid: unpaid, due by this month end.
+    // Bills that can still be marked owner-paid: unpaid, due within a month (every billed product except MF).
     db.renewalItem.findMany({
-      where: { tenantId: user.tenantId, status: { in: ["Due", "Overdue"] }, dueDate: { lt: addMonths(istToday(), 1) }, policy: { productType: "PoRd", ...scope } },
-      include: { policy: { select: { policyNumber: true, customer: { select: { name: true } } } } },
+      where: { tenantId: user.tenantId, status: { in: ["Due", "Overdue"] }, dueDate: { lt: addMonths(istToday(), 1) }, policy: { ...OWNER_PAYABLE, ...scope } },
+      include: { policy: { select: { policyNumber: true, partner: true, frequency: true, customer: { select: { name: true } } } } },
       orderBy: { dueDate: "asc" },
     }),
   ]);
@@ -145,21 +149,21 @@ async function OwnerPaid({ user }: { user: SessionUser }) {
       </div>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1 rounded-xl border bg-white p-4">
-          <h2 className="mb-2 font-semibold">Owner-paid slips</h2>
+          <h2 className="mb-2 font-semibold">Owner-paid slips · billed products</h2>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Slip</TableHead><TableHead>RD account</TableHead><TableHead>Customer</TableHead><TableHead>Month</TableHead>
-                <TableHead className="text-right">Amount</TableHead><TableHead>PO receipt no.</TableHead><TableHead>Customer receipt</TableHead><TableHead>Status</TableHead>
+                <TableHead>Slip</TableHead><TableHead>Policy / account</TableHead><TableHead>Customer</TableHead><TableHead>Bill</TableHead>
+                <TableHead className="text-right">Amount</TableHead><TableHead>Reference no.</TableHead><TableHead>Customer receipt</TableHead><TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {slips.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell>{s.slipNo}</TableCell>
-                  <TableCell>{s.policy.policyNumber}</TableCell>
+                  <TableCell>{s.policy.policyNumber}{s.policy.partner !== "Post Office" && <span className="text-xs text-muted-foreground"> ({s.policy.partner})</span>}</TableCell>
                   <TableCell>{s.customer.name}</TableCell>
-                  <TableCell>{monthLabel(s.month)}</TableCell>
+                  <TableCell>{s.renewalItem ? <>{s.renewalItem.billNo} <span className="text-xs text-muted-foreground">{fmtDate(s.renewalItem.dueDate)}</span></> : monthLabel(s.month)}</TableCell>
                   <TableCell className="text-right">{fmtINR(s.amount)}</TableCell>
                   <TableCell>{s.poReceiptNo}</TableCell>
                   <TableCell>{s.closedByReceipt ? <Link href={`/receipts/${s.closedByReceiptId}`} className="text-brand-700 hover:underline">{s.closedByReceipt.receiptNo}</Link> : "—"}</TableCell>
@@ -171,12 +175,13 @@ async function OwnerPaid({ user }: { user: SessionUser }) {
           </Table>
           <p className="mt-3 text-xs text-muted-foreground">
             Owner-paid slips are internal. A customer receipt is created only when the customer pays. Not counted as collections or income.
+            Allowed for every product with bills (RD, SSA, PPF, LIC, SBI Life, health and general insurance); not for one-time deposits or mutual funds.
           </p>
         </div>
         <div className="w-80 shrink-0 space-y-4">
           <OwnerPaidForm items={openItems.map((i) => ({
             id: i.id,
-            label: `${i.policy.policyNumber} · ${i.policy.customer.name} · ${monthLabel(i.dueDate)} · ${fmtINR(i.premiumAmount)}`,
+            label: `${i.billNo} · ${i.policy.policyNumber}${i.policy.partner === "Post Office" ? "" : ` (${i.policy.partner})`} · ${i.policy.customer.name} · ${i.policy.frequency === "Monthly" ? monthLabel(i.dueDate) : fmtDate(i.dueDate)} · ${fmtINR(i.premiumAmount)}`,
           }))} />
           <ReturnToOwnerForm slips={toReturn.map((s) => ({ id: s.id, label: `${s.slipNo} · ${s.customer.name} · ${fmtINR(s.amount)}` }))} />
         </div>

@@ -78,9 +78,11 @@ export async function loadCustomer360(user: SessionUser, id: string) {
   const oneTime = active.filter((p) => p.frequency === "OneTime");
   const paidInstalments = c.receipts.filter((r) => r.status === "Saved" && r.policyId && active.some((p) => p.id === r.policyId && p.frequency !== "OneTime" && INVESTMENT_TYPES.includes(p.productType)));
   const nextDue = renewals.filter((r) => r.status === "Due" || r.status === "Overdue")[0] ?? null;
-  const [services, messages, changes] = await Promise.all([
+  const [services, directBills, messages, changes] = await Promise.all([
     // E-Sevai entries linked by any of the customer's mobile numbers
     db.serviceTransaction.findMany({ where: { tenantId: user.tenantId, customerMobile: { in: numbers } }, include: { serviceType: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+    // Direct bills linked to the customer, or paid from one of their numbers (walk-in before they became a customer)
+    db.directBill.findMany({ where: { tenantId: user.tenantId, OR: [{ customerId: c.id }, { payerMobile: { in: numbers } }] }, orderBy: { createdAt: "desc" }, take: 20 }),
     db.messageLog.findMany({ where: { tenantId: user.tenantId, to: { in: numbers } }, orderBy: { createdAt: "desc" }, take: 10 }),
     db.auditLog.findMany({
       where: { tenantId: user.tenantId, OR: [{ entity: "Customer", entityId: c.id }, { entity: "Policy", entityId: { in: c.policies.map((p) => p.id) } }] } satisfies Prisma.AuditLogWhereInput,
@@ -100,6 +102,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     numbers,
     holdings,
     services,
+    directBills,
     activity,
     cards: {
       holdings: active.length,

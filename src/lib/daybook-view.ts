@@ -3,6 +3,7 @@ import { accountDay, earliestOpenDayBefore } from "@/lib/daybook";
 import type { CashSource } from "@/lib/daybook-labels";
 import { db, type Tx } from "@/lib/db";
 import { sum, ZERO } from "@/lib/money";
+import { MODE_LABEL } from "@/lib/payment-modes";
 import { seesAll } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 
@@ -120,7 +121,7 @@ export async function loadDayBook(user: SessionUser, date: Date) {
       particulars: e.particulars,
       product: [e.productCategory, e.scheme].filter(Boolean).join(" · "),
       account: accountOf(e.accountId).name,
-      mode: e.mode,
+      mode: e.mode && MODE_LABEL[e.mode],
       inAmount: e.direction === "In" ? e.amount : null,
       outAmount: e.direction === "Out" ? e.amount : null,
       notes: e.notes,
@@ -139,7 +140,7 @@ export async function loadDayBook(user: SessionUser, date: Date) {
       customer: r.customer.name,
       account: r.policy?.policyNumber ?? "—",
       amount: r.amount.toFixed(2),
-      mode: r.mode,
+      mode: MODE_LABEL[r.mode],
       ageDays: Math.round((date.getTime() - r.receiptDate.getTime()) / 86_400_000),
     })),
     atmToday: net(atm).toFixed(2),

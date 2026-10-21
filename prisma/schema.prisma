@@ -356,6 +356,7 @@ model Customer {
   quotations     Quotation[]
   proposals      Proposal[]
   mobiles        CustomerMobile[]
+  directBills    DirectBill[]
 
   @@index([tenantId, mobile])
 }
@@ -562,19 +563,22 @@ model AuditLog {
 }
 
 model RenewalItem {
-  id             String        @id @default(cuid())
+  id             String          @id @default(cuid())
   tenantId       String
   policyId       String
-  policy         Policy        @relation(fields: [policyId], references: [id])
-  dueDate        DateTime      @db.Date
-  premiumAmount  Decimal       @db.Decimal(12, 2)
-  status         RenewalStatus @default(Due)
+  policy         Policy          @relation(fields: [policyId], references: [id])
+  dueDate        DateTime        @db.Date
+  premiumAmount  Decimal         @db.Decimal(12, 2)
+  status         RenewalStatus   @default(Due)
   paidReceiptId  String?
-  paidReceipt    Receipt?      @relation(fields: [paidReceiptId], references: [id])
-  paidOn         DateTime?     @db.Date
+  paidReceipt    Receipt?        @relation(fields: [paidReceiptId], references: [id])
+  paidOn         DateTime?       @db.Date
   lastReminderAt DateTime?
-  reminderCount  Int           @default(0)
+  reminderCount  Int             @default(0)
+  billNo         String          @default(dbgenerated("next_bill_no()")) // BL-0001, given by the database
+  ownerPaidSlips OwnerPaidSlip[]
 
+  @@unique([tenantId, billNo])
   @@index([tenantId, status, dueDate])
 }
 
@@ -586,6 +590,7 @@ enum PaymentMode {
   Cheque
   Bank
   Card
+  NetBanking // customer's bank name + transaction ID
 }
 
 enum ReceiptStatus {
@@ -614,7 +619,9 @@ model Receipt {
   amount           Decimal         @db.Decimal(12, 2)
   mode             PaymentMode
   accountId        String // account the money came into
-  reference        String? // UTR / cheque no.
+  reference        String? // UTR / cheque no. / net banking transaction ID / card approval no.
+  bankName         String? // net banking: the customer's bank (reference only)
+  denominations    Json? // cash: { "500": 4, "200": 2, …, "coins": "12.50" }; on the Payment when several dues are paid together
   notes            String?
   isPassThrough    Boolean         @default(true)
   rdStatus         RdStatus? // RD instalments only
@@ -651,6 +658,8 @@ model Payment {
   amount        Decimal       @db.Decimal(12, 2)
   mode          PaymentMode
   reference     String?
+  bankName      String?
+  denominations Json?
   notes         String?
   status        ReceiptStatus @default(Saved)
   cancelReason  String?
@@ -680,9 +689,10 @@ model OwnerPaidSlip {
   customerId        String
   customer          Customer            @relation(fields: [customerId], references: [id])
   renewalItemId     String?
+  renewalItem       RenewalItem?        @relation(fields: [renewalItemId], references: [id])
   month             DateTime            @db.Date
   amount            Decimal             @db.Decimal(12, 2)
-  poReceiptNo       String
+  poReceiptNo       String // reference no.: PO receipt no. for RD, insurer receipt / transaction no. otherwise
   status            OwnerPaidSlipStatus @default(CustomerOwes)
   closedByReceiptId String?
   closedByReceipt   Receipt?            @relation(fields: [closedByReceiptId], references: [id])
@@ -697,32 +707,48 @@ model OwnerPaidSlip {
 
 /// Collected premiums paid on to one company (insurer, AMC or post office for SSA/PPF) in one go.
 model CompanyPayment {
-  id          String      @id @default(cuid())
-  tenantId    String
-  company     String // Policy.partner of every receipt in it
-  paidOn      DateTime    @db.Date
-  accountId   String // account the money left
-  mode        PaymentMode
-  amount      Decimal     @db.Decimal(12, 2)
-  reference   String // company receipt / UTR / cheque no.
-  createdById String
-  createdAt   DateTime    @default(now())
+  id           String       @id @default(cuid())
+  tenantId     String
+  company      String // Policy.partner of every receipt in it
+  paidOn       DateTime     @db.Date
+  accountId    String // account the money left
+  mode         PaymentMode
+  amount       Decimal      @db.Decimal(12, 2)
+  reference    String // company receipt / UTR / cheque no.
+  createdById  String
+  createdAt    DateTime     @default(now())
+  // Post office payments (SSA, PPF, TD…) are checked on the agent portal by policy number.
+  verifyStatus VerifyStatus @default(Pending)
+  verifyNote   String?
+  verifiedById String?
+  verifiedAt   DateTime?
 
   receipts Receipt[]
 }
 
+/// Checked on the post office agent portal: RD deposits by PO receipt no., other schemes by policy no.
+enum VerifyStatus {
+  Pending
+  Verified
+  Mismatch
+}
+
 model PoDeposit {
-  id               String   @id @default(cuid())
+  id               String       @id @default(cuid())
   tenantId         String
   poReceiptNo      String
-  depositDate      DateTime @db.Date
-  amount           Decimal  @db.Decimal(12, 2)
-  receiptsTotal    Decimal  @db.Decimal(12, 2)
-  upiPortion       Decimal  @db.Decimal(12, 2)
+  depositDate      DateTime     @db.Date
+  amount           Decimal      @db.Decimal(12, 2)
+  receiptsTotal    Decimal      @db.Decimal(12, 2)
+  upiPortion       Decimal      @db.Decimal(12, 2)
   adjustmentReason String?
   adjustmentNote   String?
   createdById      String
-  createdAt        DateTime @default(now())
+  createdAt        DateTime     @default(now())
+  verifyStatus     VerifyStatus @default(Pending)
+  verifyNote       String?
+  verifiedById     String?
+  verifiedAt       DateTime?
 
   lines       PoDepositLine[]
   commissions Commission[]
@@ -945,6 +971,7 @@ enum EntryType {
 
 enum SourceType {
   Receipt
+  DirectBill
   ServiceTransaction
   Expense
   PoDeposit
@@ -1059,4 +1086,49 @@ model Attachment {
   createdAt    DateTime        @default(now())
 
   @@index([ownerType, ownerId])
+}
+
+/// Payment modes that can be switched off and the bank names offered for net banking (Settings → Payment modes).
+model PaymentOption {
+  id       String        @id @default(cuid())
+  tenantId String
+  kind     PayOptionKind
+  name     String // a PaymentMode value for kind Mode; a bank name for kind Bank
+  active   Boolean       @default(true)
+  sort     Int           @default(0)
+
+  @@unique([tenantId, kind, name])
+}
+
+enum PayOptionKind {
+  Mode
+  Bank
+}
+
+/// A bill for anyone (customer or not: name + mobile) for a purpose; money in through the Day Book like a receipt.
+model DirectBill {
+  id            String        @id @default(cuid())
+  tenantId      String
+  billNo        String // DB-0001
+  billDate      DateTime      @db.Date
+  customerId    String? // linked when the mobile belongs to a customer
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  payerName     String
+  payerMobile   String
+  purpose       String
+  amount        Decimal       @db.Decimal(12, 2)
+  mode          PaymentMode
+  accountId     String
+  reference     String?
+  bankName      String?
+  denominations Json?
+  status        ReceiptStatus @default(Saved)
+  cancelReason  String?
+  cancelledById String?
+  cancelledAt   DateTime?
+  createdById   String // received by
+  createdAt     DateTime      @default(now())
+
+  @@unique([tenantId, billNo])
+  @@index([tenantId, payerMobile])
 }

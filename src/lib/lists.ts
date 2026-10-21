@@ -17,6 +17,8 @@ export const MESSAGE_TEMPLATE: Record<string, string> = {
   kyc_consent_link: "KYC consent link",
   maturity_reminder: "Maturity reminder",
   receipt: "Receipt",
+  receipt_share: "Receipt shared",
+  direct_bill: "Direct bill",
   renewal_reminder: "Renewal reminder",
   low_wallet_balance: "Low wallet balance",
 };

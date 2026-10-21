@@ -11,6 +11,7 @@ import { ATTACHMENT_KINDS, attachmentRows } from "@/lib/attachments";
 import { HOLDING_KIND as KIND, loadCustomer360, PER_LABEL } from "@/lib/customer-360";
 import { fmtDate, fmtDateTime, isoDate, istDate, istToday } from "@/lib/dates";
 import { maskMobile } from "@/lib/lead-labels";
+import { MODE_LABEL } from "@/lib/payment-modes";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
 import { fmtTenure } from "@/lib/products";
@@ -32,7 +33,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const user = await requirePermission("Policy.View");
   const data = await loadCustomer360(user, (await params).id);
   if (!data) notFound();
-  const { c, owner, renewals, receiptNo, holdings, cards, services, activity, oneTimeTotal, regular, slipFor } = data;
+  const { c, owner, renewals, receiptNo, holdings, cards, services, directBills, activity, oneTimeTotal, regular, slipFor } = data;
   const today = istToday();
   const canEdit = hasPermission(user.role, "Policy.Create");
   const files = await attachmentRows(user, "Customer", c.id);
@@ -136,7 +137,16 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                     <TableCell className="text-right">{fmtINR(t.customerAmount)}</TableCell>
                   </TableRow>
                 ))}
-                {services.length === 0 && <TableRow><TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No E-Sevai entries with this customer&apos;s numbers.</TableCell></TableRow>}
+                {directBills.map((b) => (
+                  <TableRow key={b.id} className={cn(b.status !== "Saved" && "text-muted-foreground")}>
+                    <TableCell>{fmtDate(b.billDate)}</TableCell>
+                    <TableCell>Direct bill – {b.purpose}{b.status !== "Saved" && " (cancelled)"}</TableCell>
+                    <TableCell><Link href={`/direct-bills/${b.id}`} className="text-brand-700 hover:underline">{b.billNo}</Link></TableCell>
+                    <TableCell>{maskMobile(b.payerMobile)}</TableCell>
+                    <TableCell className="text-right">{fmtINR(b.amount)}</TableCell>
+                  </TableRow>
+                ))}
+                {services.length + directBills.length === 0 && <TableRow><TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No E-Sevai entries or direct bills with this customer&apos;s numbers.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </Section>
@@ -157,7 +167,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                     <TableCell><Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link></TableCell>
                     <TableCell>{fmtDate(r.receiptDate)}</TableCell>
                     <TableCell>{r.policy?.policyNumber ?? r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
-                    <TableCell className="text-right">{fmtINR(r.amount)} · {r.mode}</TableCell>
+                    <TableCell className="text-right">{fmtINR(r.amount)} · {MODE_LABEL[r.mode]}</TableCell>
                     <TableCell><StatusBadge tone={r.status === "Cancelled" ? "slate" : "green"}>{r.status}</StatusBadge></TableCell>
                   </TableRow>
                 ))}

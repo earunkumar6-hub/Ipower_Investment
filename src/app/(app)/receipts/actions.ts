@@ -11,10 +11,12 @@ import { reverseSource } from "@/lib/daybook";
 import { financialYear, fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
+import { seesAll } from "@/lib/permissions";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { postOwnerReturn, postReceipt } from "@/lib/posting";
-import { ADVANCE_MONTHS, lockPolicyDues, payableDues, type Due } from "@/lib/dues";
+import { ADVANCE_MONTHS, lockPolicyDues, OWNER_PAYABLE, payableDues, type Due } from "@/lib/dues";
+import { checkPayment, MODE_LABEL, payFields } from "@/lib/payment-options";
 import { billEnd } from "@/lib/policies";
 import { authorize } from "@/lib/session";
 
@@ -51,14 +53,12 @@ const receiptSchema = z
       return parsed.data;
     }),
     amount: money,
-    mode: z.enum(["Cash", "UPI", "Cheque"]),
-    reference: z.string().trim().max(40),
+    ...payFields, // mode, reference, bank name (net banking), cash denomination
     notes: z.string().trim().max(200),
     slipIds: z.string(), // comma-separated owner-paid slips to close with this payment
     receiptDate: pastOrToday, // bill date
     txnDate: pastOrToday, // when the customer actually paid
-  })
-  .refine((v) => v.mode === "Cash" || v.reference, { message: "Enter the UTR or cheque number", path: ["reference"] });
+  });
 
 /** Thrown inside a transaction to roll back everything already written. */
 class Refused extends Error {
@@ -93,6 +93,8 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         const msg = `Day Book is closed up to ${fmtDate(lastClose.date)}; pick a later bill date`;
         return { ok: false, error: msg, fieldErrors: { receiptDate: msg } };
       }
+      const pay = await checkPayment(tx, user.tenantId, v, amount);
+      if ("error" in pay) return { ok: false, error: pay.error, fieldErrors: { [pay.field]: pay.error } };
       const accounts = await cashAndBank(tx, user.tenantId);
       const common = {
         tenantId: user.tenantId,
@@ -102,13 +104,14 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         customerId: customer.id,
         mode: v.mode,
         accountId: receivingAccountId(v.mode, accounts),
-        reference: v.reference || null,
+        reference: pay.ok.reference,
+        bankName: pay.ok.bankName,
         createdById: user.id,
       };
       const whatsApp = (body: string, relatedType: string, relatedId: string) =>
         tx.messageLog.create({ data: { tenantId: user.tenantId, channel: "WhatsApp", to: customer.mobile, template: "receipt", body, relatedType, relatedId, createdById: user.id } });
       const thanks = (policy: Policy, receiptNo: string) =>
-        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${v.mode}) for ${policy.partner} ${policy.policyNumber}. Receipt ${receiptNo}.`;
+        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${policy.partner} ${policy.policyNumber}. Receipt ${receiptNo}.`;
 
       /** One RCPT for one policy: Day Book in; RD → Collected + commission expected. Numbered at insert time. */
       const addReceipt = async (policy: Policy, lineAmount: Prisma.Decimal, extra: Partial<Prisma.ReceiptUncheckedCreateInput> = {}) => {
@@ -139,7 +142,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
           return { ok: false, error: `Payment ${fmtINR(amount)} must equal the slips selected (${fmtINR(selected)})` };
         }
         const policy = await tx.policy.findUniqueOrThrow({ where: { id: slips[0].policyId } });
-        const receipt = await addReceipt(policy, amount, { ownerPaid: true, notes: v.notes || `Owner-paid ${slips.map((s) => s.slipNo).join(", ")}` });
+        const receipt = await addReceipt(policy, amount, { ownerPaid: true, denominations: pay.ok.denominations, notes: v.notes || `Owner-paid ${slips.map((s) => s.slipNo).join(", ")}` });
         await tx.ownerPaidSlip.updateMany({
           where: { id: { in: slipIds }, status: "CustomerOwes" },
           data: { status: "CollectedReturnToOwner", closedByReceiptId: receipt.id },
@@ -152,7 +155,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         // Other payment: a policy but no instalment.
         const policy = await tx.policy.findFirst({ where: { id: v.policyId, customerId: customer.id } });
         if (!policy) return { ok: false, error: "Pick the dues being paid, or a policy for another payment", fieldErrors: { policyId: "Required" } };
-        const receipt = await addReceipt(policy, amount);
+        const receipt = await addReceipt(policy, amount, { denominations: pay.ok.denominations });
         await whatsApp(thanks(policy, receipt.receiptNo), "Receipt", receipt.id);
         return { ok: true, id: receipt.id, href: `/receipts/${receipt.id}` };
       }
@@ -180,13 +183,15 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         ? await tx.payment.create({
             data: {
               tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), receiptDate: common.receiptDate, txnDate: common.txnDate,
-              customerId: customer.id, amount, mode: v.mode, reference: common.reference, notes: v.notes || null, createdById: user.id,
+              customerId: customer.id, amount, mode: v.mode, reference: common.reference, bankName: common.bankName, denominations: pay.ok.denominations,
+              notes: v.notes || null, createdById: user.id,
             },
           })
         : null;
       const receipts = [];
       for (const { policy, due } of lines) {
-        const receipt = await addReceipt(policy, due.amount, { paymentId: payment?.id ?? null, renewalItemId: due.itemId });
+        // Cash denomination is kept once: on the payment when several dues are paid together.
+        const receipt = await addReceipt(policy, due.amount, { paymentId: payment?.id ?? null, renewalItemId: due.itemId, ...(!payment && { denominations: pay.ok.denominations }) });
         if (due.itemId) {
           const paid = await tx.renewalItem.updateMany({
             where: { id: due.itemId, status: { in: ["Due", "Overdue"] } },
@@ -209,7 +214,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       }
       const accountsPaid = [...new Set(lines.map((l) => l.policy.policyNumber))].join(", ");
       await whatsApp(
-        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${v.mode}) for ${lines.length} dues (${accountsPaid}). Payment receipt ${payment.paymentNo}.`,
+        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${lines.length} dues (${accountsPaid}). Payment receipt ${payment.paymentNo}.`,
         "Payment", payment.id,
       );
       return { ok: true, id: payment.id, href: `/payments/${payment.id}` };
@@ -296,11 +301,11 @@ async function cancelPaymentUnguarded(_: ActionResult, form: FormData): Promise<
 }
 
 const ownerPaidSchema = z.object({
-  renewalItemId: z.string().min(1, "Pick the RD instalment"),
-  poReceiptNo: z.string().trim().min(3, "Enter the post office receipt number"),
+  renewalItemId: z.string().min(1, "Pick the bill"),
+  poReceiptNo: z.string().trim().min(3, "Enter the reference no. (PO receipt no. or insurer receipt / transaction no.)").max(60),
 });
 
-/** The owner paid a customer's RD instalment at the post office; no company money moves. */
+/** The owner paid a customer's bill (RD at the post office, insurance premium to the insurer); no company money moves. */
 export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Receipt.Create");
   const parsed = ownerPaidSchema.safeParse(Object.fromEntries(form));
@@ -310,10 +315,10 @@ export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<
 
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const item = await tx.renewalItem.findFirst({
-      where: { id: renewalItemId, tenantId: user.tenantId, status: { in: ["Due", "Overdue"] }, policy: { productType: "PoRd" } },
+      where: { id: renewalItemId, tenantId: user.tenantId, status: { in: ["Due", "Overdue"] }, policy: OWNER_PAYABLE },
       include: { policy: true },
     });
-    if (!item) return { ok: false, error: "That RD instalment is not open" };
+    if (!item) return { ok: false, error: "That bill is not open" };
     if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
     const slip = await tx.ownerPaidSlip.create({
       data: {
@@ -323,9 +328,11 @@ export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<
       },
     });
     await tx.renewalItem.update({ where: { id: item.id }, data: { status: "Paid", paidOn: today } });
-    await tx.commission.create({
-      data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: poReceiptNo, policyId: item.policyId, earnedOn: today, ...poCommission("PoRd", item.premiumAmount) },
-    });
+    if (item.policy.productType === "PoRd") {
+      await tx.commission.create({
+        data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: poReceiptNo, policyId: item.policyId, earnedOn: today, ...poCommission("PoRd", item.premiumAmount) },
+      });
+    }
     return { ok: true, id: slip.id };
   });
   if (result.ok) revalidatePath("/receipts");
@@ -355,6 +362,26 @@ async function returnToOwnerUnguarded(_: ActionResult, form: FormData): Promise<
   });
   if (result.ok) revalidatePath("/", "layout");
   return result;
+}
+
+/**
+ * "Share on WhatsApp" (mocked like every message): writes the share with the PDF link to the message log.
+ * Receipts and payments go to the customer's number; direct bills to the payer's.
+ */
+export async function shareOnWhatsApp(kind: "Receipt" | "Payment" | "DirectBill", id: string): Promise<ActionResult> {
+  const user = await authorize("Receipt.View");
+  const found =
+    kind === "Receipt" ? await db.receipt.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true } }).then((r) => r && { no: r.receiptNo, amount: r.amount, name: r.customer.name, mobile: r.customer.mobile, ownerId: r.customer.ownerId, createdById: r.createdById, path: "receipts" })
+    : kind === "Payment" ? await db.payment.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true } }).then((p) => p && { no: p.paymentNo, amount: p.amount, name: p.customer.name, mobile: p.customer.mobile, ownerId: p.customer.ownerId, createdById: p.createdById, path: "payments" })
+    : await db.directBill.findFirst({ where: { id, tenantId: user.tenantId } }).then((b) => b && { no: b.billNo, amount: b.amount, name: b.payerName, mobile: b.payerMobile, ownerId: null, createdById: b.createdById, path: "direct-bills" });
+  if (!found || !(seesAll(user.role) || found.createdById === user.id || (found.ownerId && canActOn(user, found.ownerId)))) return { ok: false, error: "Not found" };
+  await db.messageLog.create({
+    data: {
+      tenantId: user.tenantId, channel: "WhatsApp", to: found.mobile, template: "receipt_share", relatedType: kind, relatedId: id, createdById: user.id,
+      body: `Dear ${found.name}, here is your receipt ${found.no} for ${fmtINR(found.amount)} (PDF: /api/${found.path}/${id}/pdf). – IPower Investments`,
+    },
+  });
+  return { ok: true };
 }
 
 export async function createReceipt(_: ActionResult, form: FormData): Promise<ActionResult> {

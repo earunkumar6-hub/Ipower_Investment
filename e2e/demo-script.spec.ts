@@ -101,6 +101,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
       const pick = arun.getByRole("combobox", { name: /Instalments for RD 2231-10/ }).first();
       await expect(pick).toHaveValue("1");
       await expect(pick).toContainText("1 · Oct");
+      await arun.locator("#note-500").fill("2"); // cash denomination must add up to ₹1,000
       await arun.getByRole("button", { name: "Save receipt" }).click();
       await arun.waitForURL(/\/receipts\/c/);
       await expect(arun.getByText("Collected", { exact: true })).toBeVisible();
@@ -146,7 +147,8 @@ test.describe.serial("Demo script – three roles on the same data", () => {
   test("7. Rajesh Kumar pays ₹1,000 cash: owner-paid pop-up → receipt created, OWN slip closed", async () => {
     await arun.goto("/receipts/new?q=Rajesh");
     await arun.getByRole("link", { name: /Rajesh Kumar/ }).click();
-    await arun.getByLabel("Amount (₹)").fill("1000");
+    await arun.getByLabel("Amount received (₹)").fill("1000");
+    await arun.locator("#note-500").fill("2");
     await arun.getByRole("button", { name: "Save receipt" }).click();
     const popup = arun.getByRole("dialog");
     await expect(popup.getByText("Rajesh Kumar paid ₹1,000 (Cash)")).toBeVisible();

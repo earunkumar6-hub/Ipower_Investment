@@ -8,18 +8,20 @@ import { db } from "@/lib/db";
 import { companyStatus, nameLookup, rdDepositable } from "@/lib/deposit-status";
 import { canActOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
+import { denominationText, modeText } from "@/lib/payment-options";
 import { hasPermission, seesAll } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { CancelReceiptForm } from "./cancel-form";
 import { DepositStatusForm } from "./deposit-form";
+import { ShareButton } from "../share-button";
 
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Receipt.View");
   const { id } = await params;
   const r = await db.receipt.findFirst({
     where: { id, tenantId: user.tenantId },
-    include: { customer: true, policy: true, closedSlips: true, poDepositLine: { include: { poDeposit: true } }, payment: { select: { id: true, paymentNo: true } }, companyPayment: true },
+    include: { customer: true, policy: true, closedSlips: true, poDepositLine: { include: { poDeposit: true } }, payment: { select: { id: true, paymentNo: true } }, companyPayment: true, renewalItems: { select: { billNo: true, dueDate: true } } },
   });
   if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) notFound();
   const [account, users] = await Promise.all([
@@ -37,11 +39,13 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     ["Customer", `${r.customer.name} · ${r.customer.mobile}`],
     ["For", r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : r.notes ?? "—"],
     ["Amount", fmtINR(r.amount)],
-    ["Collected by", nameOf(r.createdById)],
-    ["Mode", `${r.mode}${r.reference ? ` · ${r.reference}` : ""} · into ${account?.name}`],
+    ["Received by", nameOf(r.createdById)],
+    ["Mode", `${modeText(r)} · into ${account?.name}`],
     ["Bill date", `${fmtDate(r.receiptDate)} · entered by ${nameOf(r.createdById)} at ${fmtDateTime(r.createdAt)}`],
     ["Transaction date", fmtDate(r.txnDate)],
   ];
+  if (r.denominations) rows.push(["Cash denomination", denominationText(r.denominations)]);
+  if (r.renewalItems[0]) rows.push(["Bill", `${r.renewalItems[0].billNo} · due ${fmtDate(r.renewalItems[0].dueDate)}`]);
   if (r.payment) rows.push(["Part of payment", <Link key="pay" href={`/payments/${r.payment.id}`} className="text-brand-700 hover:underline">{r.payment.paymentNo}</Link>]);
   if (r.rdStatus && r.status !== "Cancelled") rows.push(["RD status", r.poDepositLine ? `${r.rdStatus} · PO receipt ${r.poDepositLine.poDeposit.poReceiptNo}` : r.rdStatus]);
   if (deposit) rows.push(["Deposit status", <StatusBadge key="dep" tone={deposit.state === "paid" ? "green" : "orange"}>{deposit.text}</StatusBadge>]);
@@ -67,6 +71,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           </dl>
           <div className="mt-4 flex gap-2">
             <a href={`/api/receipts/${r.id}/pdf`} className={buttonVariants({ variant: "outline" })}>Download PDF</a>
+            {!cancelled && <ShareButton kind="Receipt" id={r.id} />}
             <Link href="/receipts" className={buttonVariants({ variant: "ghost" })}>Back to receipts</Link>
           </div>
         </div>

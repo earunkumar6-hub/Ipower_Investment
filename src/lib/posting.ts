@@ -1,5 +1,6 @@
-import type { CompanyPayment, Expense, Policy, PoDeposit, Prisma, ProductType, Receipt, ServiceTransaction } from "@prisma/client";
+import type { CompanyPayment, DirectBill, Expense, Policy, PoDeposit, Prisma, ProductType, Receipt, ServiceTransaction } from "@prisma/client";
 import type { Tx } from "@/lib/db";
+import { modeText } from "@/lib/payment-modes";
 import { post } from "@/lib/daybook";
 
 // Maps each business record to its Day Book lines. Called in the same transaction
@@ -32,6 +33,30 @@ const SCHEME: Partial<Record<ProductType, string>> = {
 export const schemeOf = (p: Pick<Policy, "productType" | "partner" | "productName">) =>
   SCHEME[p.productType] ?? `${p.partner} ${p.productName}`;
 
+/** Direct bill (customer or walk-in, any purpose): money in, like a receipt; not a premium, so no product category. */
+export function postDirectBill(tx: Tx, b: DirectBill) {
+  return post(tx, {
+    tenantId: b.tenantId,
+    entryDate: b.billDate,
+    sourceType: "DirectBill",
+    sourceId: b.id,
+    sourceNo: b.billNo,
+    createdById: b.createdById,
+    lines: [
+      {
+        key: "in",
+        accountId: b.accountId,
+        direction: "In",
+        amount: b.amount,
+        entryType: "Collection",
+        mode: b.mode,
+        particulars: `${b.billNo} · ${b.payerName} · ${b.purpose}${b.mode === "NetBanking" ? ` · ${modeText(b)}` : ""}`,
+        productCategory: "Direct bill",
+      },
+    ],
+  });
+}
+
 export function postReceipt(tx: Tx, r: Receipt, ctx: { customerName: string; policy: Policy | null }) {
   return post(tx, {
     tenantId: r.tenantId,
@@ -49,7 +74,8 @@ export function postReceipt(tx: Tx, r: Receipt, ctx: { customerName: string; pol
         entryType: "Collection",
         mode: r.mode,
         isPassThrough: r.isPassThrough,
-        particulars: `${r.receiptNo} · ${ctx.customerName}`,
+        // Net banking: the customer's bank and transaction ID show in the Day Book row.
+        particulars: `${r.receiptNo} · ${ctx.customerName}${r.mode === "NetBanking" ? ` · ${modeText(r)}` : ""}`,
         productCategory: ctx.policy ? PRODUCT_CATEGORY[ctx.policy.productType] : "Other",
         scheme: ctx.policy ? schemeOf(ctx.policy) : undefined,
         notes: r.notes ?? undefined,

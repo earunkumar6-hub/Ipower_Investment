@@ -21,9 +21,12 @@ vi.mock("@/lib/session", async () => {
 
 const { createReceipt, cancelReceipt, cancelPayment } = await import("@/app/(app)/receipts/actions");
 
+/** Cash needs a denomination that adds up: ₹500 notes, the rest in coins. */
+const cashFor = (amount: string) => JSON.stringify({ "500": Math.floor(Number(amount) / 500), coins: (Number(amount) % 500).toFixed(2) });
 const form = (o: Record<string, string>) => {
   const f = new FormData();
-  Object.entries(o).forEach(([k, v]) => f.set(k, v));
+  const withCash = o.mode === "Cash" && o.denominations === undefined && o.amount ? { ...o, denominations: cashFor(o.amount) } : o;
+  Object.entries(withCash).forEach(([k, v]) => f.set(k, v));
   return f;
 };
 const base = { policyId: "", reference: "", notes: "", slipIds: "", mode: "Cash" };

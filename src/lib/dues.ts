@@ -45,6 +45,9 @@ export function payableDues(policy: DuePolicy, stored: StoredDue[], today: Date)
   return [...open, ...advance];
 }
 
+/** Bills the owner can pay on a customer's behalf: every product with bills except mutual funds (owner, 19 Oct 2026). */
+export const OWNER_PAYABLE = { productType: { not: "MutualFund" }, frequency: { not: "OneTime" } } satisfies Prisma.PolicyWhereInput;
+
 /** Serialises everyone paying dues on this policy, so an advance month can't be created twice. */
 export async function lockPolicyDues(tx: Tx, policyId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dues:${policyId}`}))`;

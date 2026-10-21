@@ -8,6 +8,7 @@ import { payableDues } from "@/lib/dues";
 import { billEnd } from "@/lib/policies";
 import { maskMobile } from "@/lib/lead-labels";
 import { canActOn, ownerScope } from "@/lib/leads";
+import { payOptions } from "@/lib/payment-options";
 import { requirePermission } from "@/lib/session";
 import { ReceiptForm, type PolicyOption } from "./receipt-form";
 
@@ -26,7 +27,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
             include: { renewals: true, product: { select: { invoiceRule: true } } },
             orderBy: { productType: "asc" },
           },
-          ownerPaidSlips: { where: { status: "CustomerOwes" }, include: { policy: { select: { policyNumber: true } } }, orderBy: { month: "asc" } },
+          ownerPaidSlips: { where: { status: "CustomerOwes" }, include: { policy: { select: { policyNumber: true } }, renewalItem: { select: { billNo: true } } }, orderBy: { month: "asc" } },
         },
       })
     : null;
@@ -40,19 +41,22 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
       id: p.id,
       label: p.productType === "PoRd" ? `${p.policyNumber} · Post office RD` : `${p.partner} ${p.productName} · ${p.policyNumber}`,
       dues: dues.map((d) => ({
+        billNo: p.renewals.find((r) => r.id === d.itemId)?.billNo ?? null,
         amount: d.amount.toFixed(2),
         label: p.frequency === "Monthly" ? monthLabel(d.dueDate) : fmtDate(d.dueDate),
         tag: d.dueDate < today ? "Overdue" : d.dueDate > monthEnd ? "Advance" : "Due",
       })),
     }));
+    const opts = await payOptions(db, user.tenantId);
     return (
       <>
         <PageHeader title="New receipt" user={user} />
         <ReceiptForm
+          modes={opts.modes} banks={opts.banks} receivedBy={user.name}
           customer={{ id: customer.id, name: customer.name, mobile: customer.mobile }}
           policies={policies}
           openSlips={customer.ownerPaidSlips.map((s) => ({
-            id: s.id, slipNo: s.slipNo, account: s.policy.policyNumber, month: monthLabel(s.month), amount: s.amount.toFixed(2), poReceiptNo: s.poReceiptNo,
+            id: s.id, slipNo: s.slipNo, account: s.policy.policyNumber, month: s.renewalItem ? `${s.renewalItem.billNo} · ${monthLabel(s.month)}` : monthLabel(s.month), amount: s.amount.toFixed(2), poReceiptNo: s.poReceiptNo,
           }))}
         />
       </>
