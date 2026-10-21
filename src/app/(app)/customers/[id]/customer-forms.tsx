@@ -75,7 +75,8 @@ export function EditCustomerButton({ customer }: { customer: Details }) {
 export type HoldingRow = {
   id: string; customerId: string; kind: string; plan: string; cover: string | null; policyNumber: string; amount: string; per: string; rate: string; commenced: string;
   tenure: string; lockIn: string; maturity: string; status: [string, Tone]; closedNote: string | null; details: [string, string][];
-  close: { label: string; isMf: boolean; today: string; startDate: string; lockInUntil: string | null } | null;
+  /** Premature closure button: hidden ("Not allowed"), greyed out during the lock-in, or active. */
+  close: { state: "hidden" | "locked"; text: string } | { state: "active"; label: string; isMf: boolean; today: string; startDate: string; lockInUntil: string | null } | null;
 };
 
 /** Products invested: one row per policy/account; "Details" opens nominee, custom fields and masked bank details. */
@@ -115,7 +116,11 @@ export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
                 <StatusBadge tone={r.status[1]}>{r.status[0]}</StatusBadge>
                 {r.closedNote && <div className="text-xs text-muted-foreground">{r.closedNote}</div>}
               </TableCell>
-              <TableCell className="text-right">{r.close && <ClosePolicyButton policyId={r.id} {...r.close} />}</TableCell>
+              <TableCell className="text-right">
+                {r.close?.state === "active" && <ClosePolicyButton policyId={r.id} {...r.close} />}
+                {r.close?.state === "locked" && <Button type="button" size="xs" variant="outline" disabled title={r.close.text}>Close early</Button>}
+                {r.close && r.close.state !== "active" && <div className="text-xs text-muted-foreground">{r.close.text}</div>}
+              </TableCell>
             </TableRow>
             {open.includes(r.id) && (
               <TableRow className="bg-slate-50 hover:bg-slate-50">

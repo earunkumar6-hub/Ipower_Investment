@@ -188,6 +188,8 @@ model Call {
   policy      Policy?      @relation(fields: [policyId], references: [id])
   proposalId  String?
   proposal    Proposal?    @relation(fields: [proposalId], references: [id])
+  customerId  String? // a general follow-up on a customer (not about one renewal or proposal)
+  customer    Customer?    @relation(fields: [customerId], references: [id])
   ownerId     String
   dueAt       DateTime
   note        String?
@@ -341,6 +343,8 @@ model Consent {
 model Customer {
   id           String   @id @default(cuid())
   tenantId     String
+  cifNo        String   @default(dbgenerated("next_cif_no()")) // CIF-000124: one customer ID per person
+  photoPath    String? // storage/photos/<id>.<ext>
   name         String
   mobile       String
   email        String?
@@ -358,7 +362,9 @@ model Customer {
   proposals      Proposal[]
   mobiles        CustomerMobile[]
   directBills    DirectBill[]
+  calls          Call[]
 
+  @@unique([tenantId, cifNo])
   @@index([tenantId, mobile])
 }
 

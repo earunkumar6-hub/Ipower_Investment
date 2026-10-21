@@ -2,7 +2,8 @@ import type { Frequency, Prisma } from "@prisma/client";
 import { decryptJson, maskAccount } from "@/lib/crypto";
 import { addDays, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { OUTCOME_LABEL } from "@/lib/lead-labels";
+import { callInclude, callParty, canActOn, userNames, type CallKind } from "@/lib/leads";
 import { sum, ZERO } from "@/lib/money";
 import { maturityOf } from "@/lib/policies";
 import { lockInUntil } from "@/lib/products";
@@ -29,6 +30,8 @@ function bankLine(enc: string | null) {
 
 export const HOLDING_KIND = { Insurance: "Insurance", MutualFund: "Mutual fund", PoRd: "Post office RD", PoTd: "Post office TD", PoKvp: "KVP", PoNsc: "NSC", PoMis: "Post office MIS", PoScss: "SCSS", PoSsa: "SSA", PoPpf: "PPF" } as const;
 
+const FOLLOWUP_TYPE: Record<CallKind, string> = { lead: "Lead", renewal: "Renewal", proposal: "Proposal", customer: "Customer" };
+
 /** Customer 360 data for the screen and its exports; null when missing or not this user's customer. */
 export async function loadCustomer360(user: SessionUser, id: string) {
   const today = istToday();
@@ -38,7 +41,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     include: {
       policies: {
         orderBy: [{ productType: "asc" }, { startDate: "asc" }],
-        include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, invoiceRule: true } }, scheme: { select: { name: true } } },
+        include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, closeDuringLockIn: true, invoiceRule: true } }, scheme: { select: { name: true } } },
       },
       mobiles: { orderBy: { sort: "asc" } },
       receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } } } },
@@ -78,7 +81,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
   const oneTime = active.filter((p) => p.frequency === "OneTime");
   const paidInstalments = c.receipts.filter((r) => r.status === "Saved" && r.policyId && active.some((p) => p.id === r.policyId && p.frequency !== "OneTime" && INVESTMENT_TYPES.includes(p.productType)));
   const nextDue = renewals.filter((r) => r.status === "Due" || r.status === "Overdue")[0] ?? null;
-  const [services, directBills, messages, changes] = await Promise.all([
+  const [services, directBills, messages, changes, calls, users] = await Promise.all([
     // E-Sevai entries linked by any of the customer's mobile numbers
     db.serviceTransaction.findMany({ where: { tenantId: user.tenantId, customerMobile: { in: numbers } }, include: { serviceType: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
     // Direct bills linked to the customer, or paid from one of their numbers (walk-in before they became a customer)
@@ -88,7 +91,21 @@ export async function loadCustomer360(user: SessionUser, id: string) {
       where: { tenantId: user.tenantId, OR: [{ entity: "Customer", entityId: c.id }, { entity: "Policy", entityId: { in: c.policies.map((p) => p.id) } }] } satisfies Prisma.AuditLogWhereInput,
       orderBy: { createdAt: "desc" }, take: 10,
     }),
+    // Follow-ups on the customer, their renewals and their proposals (open ones also count in "calls open").
+    db.call.findMany({
+      where: { tenantId: user.tenantId, OR: [{ customerId: c.id }, { policy: { customerId: c.id } }, { proposal: { customerId: c.id } }] },
+      include: callInclude, orderBy: { dueAt: "desc" }, take: 30,
+    }),
+    userNames(user.tenantId),
   ]);
+  const now = new Date();
+  const followUps = calls.map((call) => ({
+    id: call.id, dueAt: call.dueAt, type: FOLLOWUP_TYPE[callParty(call).kind], forLabel: callParty(call).forLabel,
+    owner: users.find((u) => u.id === call.ownerId)?.name ?? "—", note: call.note, outcomeNote: call.outcomeNote,
+    status: call.outcome ? (call.outcome === "NoAnswer" ? "No answer – rescheduled" : OUTCOME_LABEL[call.outcome]) : call.dueAt <= now ? "Overdue" : "Open",
+    open: !call.outcome,
+  }));
+  const nextFollowUp = followUps.filter((f) => f.open).sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime())[0] ?? null;
   const activity = [
     ...messages.map((m) => ({ at: m.createdAt, text: `${m.channel} sent – ${m.template.replaceAll("_", " ")}` })),
     ...changes.map((a) => ({ at: a.createdAt, text: a.summary })),
@@ -103,6 +120,8 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     holdings,
     services,
     directBills,
+    followUps,
+    nextFollowUp,
     activity,
     cards: {
       holdings: active.length,

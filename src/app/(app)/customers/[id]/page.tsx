@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { closureButton } from "@/lib/closure";
+import { initials } from "@/lib/photos";
+import { AddFollowUpForm, CustomerPhoto } from "./profile-forms";
 import { db } from "@/lib/db";
 import { ATTACHMENT_LIST, dropdownValues } from "@/lib/dropdowns";
 import { notFound } from "next/navigation";
@@ -36,7 +39,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const user = await requirePermission("Policy.View");
   const data = await loadCustomer360(user, (await params).id);
   if (!data) notFound();
-  const { c, owner, renewals, receiptNo, holdings, cards, services, directBills, activity, oneTimeTotal, regular, slipFor } = data;
+  const { c, owner, renewals, receiptNo, holdings, cards, services, directBills, followUps, nextFollowUp, activity, oneTimeTotal, regular, slipFor } = data;
   const today = istToday();
   const canEdit = hasPermission(user.role, "Policy.Create");
   const files = await attachmentRows(user, "Customer", c.id);
@@ -53,9 +56,12 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         </>
       } />
       <div className="mb-4 flex items-start justify-between gap-4 rounded-xl border bg-white p-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+        <CustomerPhoto customerId={c.id} name={c.name} initials={initials(c.name)} hasPhoto={!!c.photoPath} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{c.name}</h2>
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{c.cifNo}</span>
+            {nextFollowUp && <StatusBadge tone={nextFollowUp.dueAt <= new Date() ? "red" : "orange"}>Follow-up due {fmtDateTime(nextFollowUp.dueAt)}</StatusBadge>}
             {canEdit && <EditCustomerButton customer={{ id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) }} />}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -92,10 +98,14 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           status: POLICY_STATUS[p.status],
           closedNote: p.closedOn ? fmtDate(p.closedOn) : null,
           details: p.details,
-          close: canEdit && p.status === "Active" && (p.productType === "MutualFund" || p.product?.prematureClosure !== false) ? {
-            label: `${p.partner} ${p.productName} · ${p.policyNumber}`, isMf: p.productType === "MutualFund", today: isoDate(today), startDate: isoDate(p.startDate),
-            lockInUntil: p.lockIn && p.lockIn > p.startDate ? isoDate(p.lockIn) : null,
-          } : null,
+          close: canEdit && p.status === "Active" ? (() => {
+            const b = closureButton(p, p.lockIn && p.lockIn > p.startDate ? p.lockIn : null, today, fmtDate);
+            if (b.state !== "active") return { state: b.state, text: b.text };
+            return {
+              state: b.state, label: `${p.partner} ${p.productName} · ${p.policyNumber}`, isMf: b.withdraw, today: isoDate(today), startDate: isoDate(p.startDate),
+              lockInUntil: b.lockInUntil ? isoDate(b.lockInUntil) : null,
+            };
+          })() : null,
         }))} />
         <p className="mt-2 text-sm">
           Total invested in one-time schemes: <b>{fmtINR(oneTimeTotal)}</b>
@@ -152,6 +162,24 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                 {services.length + directBills.length === 0 && <TableRow><TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No E-Sevai entries or direct bills with this customer&apos;s numbers.</TableCell></TableRow>}
               </TableBody>
             </Table>
+          </Section>
+          <Section title="Follow-ups">
+            <Table>
+              <TableHeader><TableRow><TableHead>Date / time</TableHead><TableHead>Type</TableHead><TableHead>Owner</TableHead><TableHead>Notes</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {followUps.map((f) => (
+                  <TableRow key={f.id} className={cn(!f.open && "text-muted-foreground")}>
+                    <TableCell className="whitespace-nowrap">{fmtDateTime(f.dueAt)}</TableCell>
+                    <TableCell>{f.type}<span className="block text-xs text-muted-foreground">{f.forLabel}</span></TableCell>
+                    <TableCell>{f.owner}</TableCell>
+                    <TableCell className="text-sm whitespace-normal">{f.note ?? "—"}{f.outcomeNote && <span className="block text-xs text-muted-foreground">{f.outcomeNote}</span>}</TableCell>
+                    <TableCell><StatusBadge tone={f.status === "Overdue" ? "red" : f.open ? "orange" : "slate"}>{f.status}</StatusBadge></TableCell>
+                  </TableRow>
+                ))}
+                {followUps.length === 0 && <TableRow><TableCell colSpan={5} className="py-4 text-center text-muted-foreground">No follow-ups yet.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+            <AddFollowUpForm customerId={c.id} today={isoDate(today)} />
           </Section>
           <Section title="Recent activity">
             <ul className="space-y-1.5 text-sm">

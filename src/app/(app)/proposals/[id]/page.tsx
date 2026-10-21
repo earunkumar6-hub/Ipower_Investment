@@ -93,8 +93,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
               </TableRow>
               <TableRow>
                 <TableCell>KYC documents <span className="text-xs text-muted-foreground">(optional)</span></TableCell>
-                <TableCell><StatusBadge tone={kycDone === KYC_KINDS.length ? "green" : "slate"}>{kycDone} of {KYC_KINDS.length} uploaded</StatusBadge></TableCell>
-                <TableCell>{KYC_KINDS.filter((k) => !files.some((f) => f.kind === k)).map((k) => `${k} not uploaded`).join(" · ") || "All uploaded"}</TableCell>
+                <TableCell><StatusBadge tone={kycDone > 0 ? "green" : "slate"}>{kycDone} uploaded</StatusBadge></TableCell>
+                <TableCell>Not required to save or submit{kycDone < KYC_KINDS.length && <span className="block text-xs text-muted-foreground">{KYC_KINDS.filter((k) => !files.some((f) => f.kind === k)).join(", ")} not uploaded</span>}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Policy details (pay mode, term, start)</TableCell>

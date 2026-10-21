@@ -22,6 +22,7 @@ const OUTCOMES = {
   lead: [["Interested", "Interested"], ["NotInterested", "Not interested"], ["NoAnswer", "No answer / call back"]],
   renewal: [["Done", "Done"], ["NoAnswer", "No answer / call back"]],
   proposal: [["Done", "Done"], ["NoAnswer", "No answer / call back"]],
+  customer: [["Done", "Done"], ["NoAnswer", "No answer / call back"]],
 } as const;
 
 /** Opens the reminder; with a call id it shows that call. */

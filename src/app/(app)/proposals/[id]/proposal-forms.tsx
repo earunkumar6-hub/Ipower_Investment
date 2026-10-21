@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useConfirmBeforeSave } from "@/components/confirm-save";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
@@ -77,9 +78,19 @@ export function PolicyDetailsForm({ proposalId, payModes, schemes, initial, show
     if (r.ok) toast.success("Policy details saved");
     return r;
   }, { ok: false });
+  // Save at the top and the bottom: both open the same check-before-saving pop-up.
+  const confirm = useConfirmBeforeSave(action, (form) => [
+    ["Scheme / plan", schemes.find((s) => s.id === form.get("schemeId"))?.name ?? ""],
+    ["Pay mode", payModes.find((m) => m.value === form.get("frequency"))?.label ?? ""],
+    ["Term", form.get("term") ? `${form.get("term")} years` : ""],
+    ["Premium paying term", form.get("premiumPayingTerm") ? `${form.get("premiumPayingTerm")} years` : ""],
+    ["Start date", String(form.get("startDate") ?? "")],
+  ]);
+  const saveButton = <Button type="submit" variant="outline" disabled={pending}>{pending ? "Saving…" : "Save details"}</Button>;
   return (
-    <form onSubmit={submitKeepingValues(action)} className="grid grid-cols-5 items-end gap-2">
+    <form onSubmit={confirm.onSubmit} className="grid grid-cols-5 items-end gap-2">
       <input type="hidden" name="proposalId" value={proposalId} />
+      <div className="col-span-5 flex justify-end">{saveButton}</div>
       {schemes.length > 0 ? (
         <div className="space-y-1.5">
           <Label htmlFor="schemeId">Scheme / plan</Label>
@@ -101,8 +112,9 @@ export function PolicyDetailsForm({ proposalId, payModes, schemes, initial, show
         ? <div className="space-y-1.5"><Label htmlFor="premiumPayingTerm">Premium paying term (years)</Label><Input id="premiumPayingTerm" name="premiumPayingTerm" inputMode="decimal" defaultValue={initial.ppt} /></div>
         : <input type="hidden" name="premiumPayingTerm" value="" />}
       <div className="space-y-1.5"><Label htmlFor="startDate">Start date</Label><Input id="startDate" name="startDate" type="date" defaultValue={initial.startDate} /></div>
-      <Button type="submit" variant="outline" disabled={pending}>{pending ? "Saving…" : "Save details"}</Button>
+      {saveButton}
       {state.error && <p className="col-span-5 text-sm text-destructive">{state.error}</p>}
+      {confirm.dialog}
     </form>
   );
 }

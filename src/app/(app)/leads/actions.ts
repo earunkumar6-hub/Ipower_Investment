@@ -264,7 +264,7 @@ export async function saveCallOutcome(_: ActionResult, form: FormData): Promise<
     if (closed.count === 0) return fail("This call was already saved");
     if (nextAt) {
       await tx.call.create({
-        data: { tenantId: user.tenantId, leadId: call.leadId, policyId: call.policyId, proposalId: call.proposalId, ownerId: call.ownerId, dueAt: nextAt, note: v.note || call.note },
+        data: { tenantId: user.tenantId, leadId: call.leadId, policyId: call.policyId, proposalId: call.proposalId, customerId: call.customerId, ownerId: call.ownerId, dueAt: nextAt, note: v.note || call.note },
       });
     }
     if (lead) {
@@ -281,7 +281,7 @@ export async function saveCallOutcome(_: ActionResult, form: FormData): Promise<
 }
 
 const scheduleSchema = z.object({
-  kind: z.enum(["lead", "policy", "proposal"]),
+  kind: z.enum(["lead", "policy", "proposal", "customer"]),
   refId: z.string().min(1, "Pick who to call"),
   callDate: z.string(),
   callTime: z.string(),
@@ -300,6 +300,7 @@ export async function scheduleCall(_: ActionResult, form: FormData): Promise<Act
   const where = { id: v.refId, tenantId: user.tenantId };
   const record = v.kind === "lead" ? await db.lead.findFirst({ where })
     : v.kind === "policy" ? await db.policy.findFirst({ where })
+    : v.kind === "customer" ? await db.customer.findFirst({ where })
     : await db.proposal.findFirst({ where });
   if (!record) return fail("Not found; reload and try again");
   if (!canActOn(user, record.ownerId)) return fail("This belongs to another user");
@@ -310,7 +311,7 @@ export async function scheduleCall(_: ActionResult, form: FormData): Promise<Act
     await tx.call.create({
       data: {
         tenantId: user.tenantId, ownerId: record.ownerId, dueAt: at, note: v.note || null,
-        ...(v.kind === "lead" ? { leadId: record.id } : v.kind === "policy" ? { policyId: record.id } : { proposalId: record.id }),
+        ...(v.kind === "lead" ? { leadId: record.id } : v.kind === "policy" ? { policyId: record.id } : v.kind === "customer" ? { customerId: record.id } : { proposalId: record.id }),
       },
     });
     if (v.kind === "lead") await tx.lead.update({ where: { id: record.id }, data: { status: "CallBack" } });

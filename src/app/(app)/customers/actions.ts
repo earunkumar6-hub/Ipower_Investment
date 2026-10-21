@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
+import { photoProblem, savePhoto } from "@/lib/photos";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { BANK_FIELDS, lockInUntil, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
@@ -222,5 +223,25 @@ export async function editCustomer(_: ActionResult, form: FormData): Promise<Act
   });
   revalidatePath(`/customers/${c.id}`);
   revalidatePath("/customers");
+  return { ok: true };
+}
+
+/** "Change photo" on the customer record: JPG / PNG up to 2 MB, logged. */
+export async function changeCustomerPhoto(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Policy.View");
+  const customerId = String(form.get("customerId") ?? "");
+  const file = form.get("photo");
+  const photo = file instanceof File ? file : null;
+  const problem = photoProblem(photo);
+  if (problem) return fail(problem, { photo: problem });
+  const c = await db.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } });
+  if (!c) return fail("Customer not found");
+  if (!canActOn(user, c.ownerId)) return fail("This customer belongs to another user");
+  const name = await savePhoto(photo!, c.id, c.photoPath);
+  await db.$transaction(async (tx) => {
+    await tx.customer.update({ where: { id: c.id }, data: { photoPath: name } });
+    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Photo", summary: `${c.cifNo} ${c.name}: photo ${c.photoPath ? "changed" : "added"}` });
+  });
+  revalidatePath(`/customers/${c.id}`);
   return { ok: true };
 }

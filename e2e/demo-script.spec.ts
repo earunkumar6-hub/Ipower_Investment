@@ -90,7 +90,8 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     // Pay mode comes from the quotation (Yearly); enter the term and start date.
     await arun.getByLabel("Term (years)").fill("1");
     await arun.getByLabel("Start date").fill(new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10));
-    await arun.getByRole("button", { name: "Save details" }).click();
+    await arun.getByRole("button", { name: "Save details" }).last().click(); // Save is at the top and bottom
+    await arun.getByRole("button", { name: "Yes, save" }).click();
     await expect(arun.getByText("Policy details saved")).toBeVisible();
     await arun.getByLabel("Policy number (leave blank until issued)").fill("STAR-P-700123");
     await arun.getByRole("button", { name: "Save policy number" }).click();
