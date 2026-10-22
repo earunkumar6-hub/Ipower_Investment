@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fmtDateTime } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { nameLookup } from "@/lib/deposit-status";
+import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { SettingsTabs } from "../settings-tabs";
@@ -17,7 +18,14 @@ export default async function ChangeLogPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const entity = ENTITIES.find(([k]) => k === sp.entity)?.[0] ?? "all";
   const [rows, users] = await Promise.all([
-    db.auditLog.findMany({ where: { tenantId: user.tenantId, ...(entity !== "all" && { entity }) }, orderBy: { createdAt: "desc" }, take: 200 }),
+    db.auditLog.findMany({
+      where: {
+        tenantId: user.tenantId, ...(entity !== "all" && { entity }),
+        // Commission is the owner's only: its log lines stay hidden from Admins.
+        ...(!hasPermission(user.role, "Commission.View") && { NOT: { entity: "CommissionReceipt" } }),
+      },
+      orderBy: { createdAt: "desc" }, take: 200,
+    }),
     db.user.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true } }),
   ]);
   const nameOf = nameLookup(users);

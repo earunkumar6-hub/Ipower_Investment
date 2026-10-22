@@ -15,7 +15,7 @@ export const PERMISSIONS = [
   "DayBook.View", "DayBook.Create", "DayBook.Verify", "DayBook.Close",
   "DayBook.CloseLate", // close a day after its grace period (Super Admin)
   "Owner.Confirm", // confirm / reject owner withdrawals and contributions (Super Admin)
-  "Commission.View",
+  "Commission.View", // Commission received screen, its export and the P&L line (Super Admin)
   "PnL.View",
   "Message.View",
   "Report.Export",
@@ -35,7 +35,7 @@ const STAFF_DENIED: Permission[] = [
 ];
 
 /** Only the owner (Super Admin). */
-const OWNER_ONLY: Permission[] = ["PnL.View", "DayBook.CloseLate", "Owner.Confirm"];
+const OWNER_ONLY: Permission[] = ["PnL.View", "DayBook.CloseLate", "Owner.Confirm", "Commission.View"];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SuperAdmin: PERMISSIONS,

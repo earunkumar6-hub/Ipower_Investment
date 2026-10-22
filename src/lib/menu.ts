@@ -14,6 +14,7 @@ export const MENU: MenuItem[] = [
   { href: "/esevai", label: "E-Sevai", permission: "Service.Record" },
   { href: "/expenses", label: "Expenses", permission: "Expense.View" },
   { href: "/daybook", label: "Day Book", permission: "DayBook.View" },
+  { href: "/commission", label: "Commission", permission: "Commission.View" },
   { href: "/pnl", label: "Profit & Loss", permission: "PnL.View" },
   { href: "/messages", label: "Sent messages", permission: "Message.View" },
   { href: "/settings", label: "Settings", permission: "Settings.Edit" },

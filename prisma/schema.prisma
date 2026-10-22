@@ -939,9 +939,10 @@ model Account {
   accountKind         BankAccountKind?
   walletKind          WalletKind? // null for the older EB / PAN / certificate wallets
 
-  entries      DayBookEntry[]
-  dayCloses    DayClose[]
-  ownerEntries OwnerEntry[]
+  entries            DayBookEntry[]
+  dayCloses          DayClose[]
+  ownerEntries       OwnerEntry[]
+  commissionReceipts CommissionReceipt[]
 }
 
 enum ExpenseStatus {
@@ -1279,4 +1280,34 @@ model OwnerEntry {
   createdAt     DateTime         @default(now())
 
   @@index([tenantId, entryDate])
+}
+
+// ── Commission received (change set #18): Super Admin only ──
+
+enum CommissionReceiptStatus {
+  Saved
+  Cancelled
+}
+
+/// Commission money received from an insurer, the post office or an AMC. Owner-only ledger: never in the Day Book,
+/// so the bank balances and tallies Admins see leave it out (owner, 22 Oct 2026). Counted in P&L for `forMonth`.
+model CommissionReceipt {
+  id            String                  @id @default(cuid())
+  tenantId      String
+  source        String // LIC, Post Office, … or a typed name
+  forMonth      String // "2026-09": the month the commission is for
+  amount        Decimal                 @db.Decimal(12, 2)
+  accountId     String // bank account it was received into
+  account       Account                 @relation(fields: [accountId], references: [id])
+  reference     String // UTR / transaction no.
+  receivedOn    DateTime                @db.Date
+  note          String?
+  status        CommissionReceiptStatus @default(Saved)
+  cancelReason  String?
+  cancelledById String?
+  cancelledAt   DateTime?
+  createdById   String
+  createdAt     DateTime                @default(now())
+
+  @@index([tenantId, forMonth])
 }

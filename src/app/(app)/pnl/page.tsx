@@ -47,6 +47,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
               <Section title="Income" />
               {pnl.serviceLines.map((l) => <Line key={l.label} label={`Service charges – ${l.label}`} value={fmtINR(l.amount)} prev={fmtINR(prevService(l.label) ?? 0)} indent />)}
               <Line label="Other income (entered in Day Book)" value={fmtINR(pnl.otherIncome)} prev={fmtINR(prev.otherIncome)} indent />
+              <Line label="Commission earned (consolidated)" value={fmtINR(pnl.commission)} prev={fmtINR(prev.commission)} indent />
               <Line label="Total income" value={fmtINR(pnl.income)} prev={fmtINR(prev.income)} strong />
               <Section title="Less: expenses by category" />
               {pnl.expenseLines.map((l) => <Line key={l.label} label={l.label} value={fmtINR(l.amount)} prev={fmtINR(prevExpense(l.label) ?? 0)} indent />)}
@@ -91,7 +92,8 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           <p>Service charges are what customers paid minus the provider cost (EB ₹10/₹20 slab, PAN ₹100, certificate ₹88).</p>
           <p>Expenses count on the date they were spent, whoever paid (company, employee or owner). Waiting, rejected and cancelled expenses are left out.</p>
           <p>Other income is what an Admin records in the Day Book as Other income (interest, incentives…), less any reversals.</p>
-          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid bills; owner withdrawals and contributions (see the Owner statement). Commission is not counted.</p>
+          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid bills; owner withdrawals and contributions (see the Owner statement).</p>
+          <p>Commission earned is what you record under Commission, for the month it is for (cancelled entries left out).</p>
           <p className="font-medium text-foreground">Visible to the Super Admin only.</p>
         </div>
       </div>

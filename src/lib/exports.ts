@@ -20,6 +20,7 @@ import {
 import { fmtINR, sum } from "@/lib/money";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { seesAll, type Permission } from "@/lib/permissions";
+import { commissionSummary, fyOfMonth, monthName } from "@/lib/commission-received";
 import { monthKey, monthRange, ownerStatement, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
 import { quotationStatus } from "@/lib/quotation";
@@ -580,6 +581,7 @@ export const REPORTS: Record<string, Report> = {
         ["INCOME", null, null],
         ...pnl.serviceLines.map((l): Cell[] => [`Service charges – ${l.label}`, l.amount, prevOf(prev.serviceLines, l.label)]),
         ["Other income (entered in Day Book)", pnl.otherIncome, prev.otherIncome],
+        ["Commission earned (consolidated)", pnl.commission, prev.commission],
         ["Total income", pnl.income, prev.income],
         ["LESS: EXPENSES BY CATEGORY", null, null],
         ...pnl.expenseLines.map((l): Cell[] => [l.label, l.amount, prevOf(prev.expenseLines, l.label)]),
@@ -604,6 +606,40 @@ export const REPORTS: Record<string, Report> = {
             ["Total (rejected left out)", null, null, null, null, null, owner.withdrawn, owner.contributed],
           ],
         }],
+      };
+    },
+  },
+
+  commission: {
+    permission: "Commission.View", // Super Admin only
+    async build(user, sp) {
+      const month = monthKey(istToday());
+      const fy = sp.fy && /^\d{4}-\d{2}$/.test(sp.fy) ? sp.fy : fyOfMonth(month);
+      const s = await commissionSummary(user.tenantId, month, fy);
+      return {
+        file: `commission-${fy}.xlsx`,
+        title: `Commission received – FY ${fy}`,
+        sheets: [
+          {
+            name: "Entries",
+            totals: true,
+            columns: [{ header: "For month" }, { header: "Source", width: 22 }, { header: "Amount", type: "money" }, { header: "Received into", width: 22 }, { header: "UTR / txn no.", width: 20 },
+              { header: "Date received", type: "date" }, { header: "Note", width: 28 }, { header: "Status" }, { header: "Cancel reason", width: 24 }],
+            // Cancelled entries are listed without an amount so the total matches the screen.
+            rows: s.entries.map((e) => [monthName(e.forMonth), e.source, e.status === "Saved" ? e.amount : null, accountLabel(e.account), e.reference, e.receivedOn, e.note, e.status, e.cancelReason]),
+          },
+          {
+            name: "By month",
+            totals: true,
+            columns: [{ header: "Month" }, { header: "Entries" }, { header: "Commission", type: "money" }],
+            rows: s.byMonth.map((m) => [monthName(m.month), m.entries, m.amount]),
+          },
+          {
+            name: "By financial year",
+            columns: [{ header: "FY (Apr–Mar)" }, { header: "Entries" }, { header: "Commission", type: "money" }],
+            rows: s.byFy.map((y) => [y.fy, y.entries, y.amount]),
+          },
+        ],
       };
     },
   },

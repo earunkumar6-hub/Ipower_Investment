@@ -1,11 +1,13 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { commissionForMonth } from "@/lib/commission-received";
 import { sum, ZERO } from "@/lib/money";
 
 // Profit and Loss is a read model: it owns no tables. Income = E-Sevai service charges + other income entered
-// in the Day Book; expenses count on the date they were spent, whoever paid. Commission is still recorded on
-// receipts but is not shown or counted (owner's decision, 19 Oct 2026). Premiums and bills collected on behalf
-// of others, wallet recharges and transfers between own accounts are not income or expense.
+// in the Day Book + commission received (#18, one consolidated line, counted for the month it is for); expenses
+// count on the date they were spent, whoever paid. The expected RD commission on receipts is still not counted.
+// Premiums and bills collected on behalf of others, wallet recharges and transfers between own accounts are not
+// income or expense.
 
 export type MonthRange = { from: Date; to: Date; label: string; key: string };
 
@@ -44,13 +46,15 @@ export async function profitAndLoss(tenantId: string, range: MonthRange) {
 
   const serviceCharges = total(serviceLines);
   const otherIncome = otherEntries.reduce((t, e) => (e.direction === "In" ? t.plus(e.amount) : t.minus(e.amount)), ZERO);
-  const income = serviceCharges.plus(otherIncome);
+  const commission = await commissionForMonth(tenantId, range.key);
+  const income = serviceCharges.plus(otherIncome).plus(commission);
   const expenseTotal = total(expenseLines);
   return {
     range,
     serviceLines,
     serviceCharges,
     otherIncome,
+    commission,
     income,
     expenseLines,
     expenseTotal,
