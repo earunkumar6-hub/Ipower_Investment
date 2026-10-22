@@ -16,6 +16,7 @@ import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { PaidTable, type PaidRow } from "./paid-table";
 import { RenewalFilters } from "./renewal-filters";
+import { PoCheck, PoCheckAll, PoSelection, type TickItem } from "./po-select";
 import { MaturityRowActions, RenewalRowActions } from "./row-actions";
 
 type Search = { tab?: string; product?: string; company?: string; scheme?: string; paidto?: string; within?: string; range?: string; from?: string; to?: string };
@@ -81,10 +82,14 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
 
         {tab === "paid" && <PaidTable rows={paidRows} accounts={accounts} today={isoDate(today)} canPay={canPay} />}
 
-        {(tab === "due" || tab === "overdue") && (
+        {(tab === "due" || tab === "overdue") && (() => {
+          // Post office schemes: tick rows (or all) to send reminders or take one combined receipt.
+          const ticks = product === "po";
+          const table = (
           <Table>
             <TableHeader>
               <TableRow>
+                {ticks && <TableHead className="w-8"><PoCheckAll /></TableHead>}
                 <TableHead>Customer</TableHead><TableHead>Product</TableHead><TableHead>Policy / account</TableHead><TableHead>Due date</TableHead>
                 <TableHead className="text-right">Amount</TableHead><TableHead>{tab === "overdue" ? "Overdue" : "Status"}</TableHead>
                 <TableHead>Reminders sent</TableHead><TableHead />
@@ -97,6 +102,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
                 const maturity = i.kind === "maturity";
                 return (
                   <TableRow key={i.id}>
+                    {ticks && <TableCell><PoCheck k={i.id} label={`${p.customer.name} ${p.policyNumber}`} /></TableCell>}
                     <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link></TableCell>
                     <TableCell className="max-w-48 whitespace-normal">{p.productType === "PoRd" ? "Post office RD" : p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}</TableCell>
                     <TableCell><Link href={`/customers/${p.customer.id}/schedule/${p.id}`} className="hover:underline" title="View schedule">{p.policyNumber}</Link></TableCell>
@@ -111,10 +117,14 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
                   </TableRow>
                 );
               })}
-              {rows.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">Nothing here.</TableCell></TableRow>}
+              {rows.length === 0 && <TableRow><TableCell colSpan={ticks ? 9 : 8} className="py-6 text-center text-muted-foreground">Nothing here.</TableCell></TableRow>}
             </TableBody>
           </Table>
-        )}
+          );
+          if (!ticks) return table;
+          const items: TickItem[] = rows.map((i) => (i.kind === "maturity" ? { key: i.id, kind: "maturity", id: i.policy.id } : { key: i.id, kind: "bill", id: i.id }));
+          return <PoSelection items={items} canReceipt={hasPermission(user.role, "Receipt.Create")}>{table}</PoSelection>;
+        })()}
 
         {tab === "notrenewed" && (
           <Table>

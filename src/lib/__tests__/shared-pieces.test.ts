@@ -67,8 +67,8 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("Overdue in days, then months", () => {
-  it.each([[0, "0 days"], [1, "1 day"], [9, "9 days"], [30, "30 days"], [31, "1 month"], [59, "1 month"], [60, "2 months"], [61, "2 months"], [65, "2 months"], [400, "13 months"]])(
+describe("Overdue in days, then months and days", () => {
+  it.each([[0, "0 days"], [1, "1 day"], [9, "9 days"], [30, "30 days"], [31, "1 month 1 day"], [35, "1 month 5 days"], [59, "1 month 29 days"], [60, "2 months"], [61, "2 months 1 day"], [65, "2 months 5 days"], [400, "13 months 10 days"]])(
     "%i days → %s", (days, text) => expect(overdueText(days)).toBe(text),
   );
 });

@@ -18,13 +18,15 @@ import { createGroupReceipt } from "./group-actions";
  * One receipt for many bills: a combined receipt (bills ticked across customers) or a bill group's receipt.
  * Made out to the person who paid ("Paid by"); every bill keeps its own line under its own customer.
  */
-export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, banks, accounts, receivedBy }: {
+export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, banks, accounts, receivedBy, preset }: {
   kind: "Combined" | "BillGroup"; billGroupId?: string; policies: PolicyOption[]; payer: { name: string; mobile: string };
   modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string;
+  /** Bills already ticked (e.g. from Renewals). */
+  preset?: Record<string, number>;
 }) {
   const router = useRouter();
   // A bill group starts with every overdue and due bill ticked; a combined receipt starts blank.
-  const [counts, setCounts] = useState<Record<string, number>>(kind === "BillGroup" ? unpaidCounts(policies) : {});
+  const [counts, setCounts] = useState<Record<string, number>>(preset ?? (kind === "BillGroup" ? unpaidCounts(policies) : {}));
   const [pay, setPay] = useState<PayValue>(emptyPay(modes, accounts));
   const [payerName, setPayerName] = useState(payer.name);
   const [payerMobile, setPayerMobile] = useState(payer.mobile);

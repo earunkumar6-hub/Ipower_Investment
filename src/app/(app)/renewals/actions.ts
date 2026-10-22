@@ -162,3 +162,21 @@ export async function sendMaturityReminder(policyId: string): Promise<ActionResu
   revalidatePath("/renewals");
   return { ok: true };
 }
+
+/** "Send reminder to ticked" (Post office schemes): the same reminder as "Send now", for every ticked row. */
+export async function sendRemindersBulk(renewalItemIds: string[], maturityPolicyIds: string[]): Promise<ActionResult> {
+  await authorize("Renewal.View");
+  if (renewalItemIds.length + maturityPolicyIds.length > 300) return { ok: false, error: "Tick at most 300 rows at a time" };
+  let sent = 0;
+  const skipped: string[] = [];
+  for (const id of renewalItemIds) {
+    const r = await sendRenewalReminder(id);
+    if (r.ok) sent++; else skipped.push(r.error ?? "skipped");
+  }
+  for (const id of maturityPolicyIds) {
+    const r = await sendMaturityReminder(id);
+    if (r.ok) sent++; else skipped.push(r.error ?? "skipped");
+  }
+  revalidatePath("/renewals");
+  return { ok: sent > 0 || skipped.length === 0, message: `${sent} reminder(s) sent${skipped.length ? ` · ${skipped.length} skipped` : ""}`, error: sent ? undefined : skipped[0] };
+}

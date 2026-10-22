@@ -11,7 +11,7 @@ export type DueTag = "Overdue" | "Due" | "Advance";
 /** `dues`: payable bills oldest first (unpaid, then advance up to 12 months ahead); advance bills get a BL- number when raised or paid. */
 export type PolicyOption = {
   id: string; label: string; customer: string;
-  dues: { billNo: string | null; label: string; date: string; amount: string; tag: DueTag }[];
+  dues: { itemId: string | null; billNo: string | null; label: string; date: string; amount: string; tag: DueTag }[];
 };
 
 type PolicyWithBills = Prisma.PolicyGetPayload<{ include: { customer: { select: { name: true } } } }> & {
@@ -30,6 +30,7 @@ export function policyOptions(policies: PolicyWithBills[], today: Date, openOnly
     customer: p.customer.name,
     label: p.productType === "PoRd" ? `${p.policyNumber} · Post office RD` : `${p.partner} ${p.productName} · ${p.policyNumber}`,
     dues: dues.map((d) => ({
+      itemId: d.itemId,
       billNo: p.renewals.find((r) => r.id === d.itemId)?.billNo ?? null,
       amount: d.amount.toFixed(2),
       date: isoDate(d.dueDate),
@@ -45,3 +46,13 @@ export const POLICY_BILLS_INCLUDE = {
   product: { select: { invoiceRule: true } },
   customer: { select: { name: true, ownerId: true } },
 } satisfies Prisma.PolicyInclude;
+
+/** Ticks for bills picked elsewhere (Renewals → "One combined receipt"): bills are paid oldest first per policy,
+ * so ticking a later bill ticks the older ones of that policy too. */
+export function presetCounts(policies: PolicyOption[], billIds: string[]): Record<string, number> {
+  const want = new Set(billIds);
+  return Object.fromEntries(policies.flatMap((p) => {
+    const last = p.dues.reduce((m, d, i) => (d.itemId && want.has(d.itemId) ? i : m), -1);
+    return last >= 0 ? [[p.id, last + 1] as const] : [];
+  }));
+}
