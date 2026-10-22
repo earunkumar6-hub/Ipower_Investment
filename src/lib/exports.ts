@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels";
+import { holdersLabel, proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels";
 import { accountLabel } from "@/lib/accounts";
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
@@ -169,6 +169,7 @@ export const REPORTS: Record<string, Report> = {
     async build(user) {
       const proposals = await db.proposal.findMany({
         where: { tenantId: user.tenantId, ...ownerScope(user) },
+        include: { secondHolder: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
       });
       return {
@@ -180,7 +181,7 @@ export const REPORTS: Record<string, Report> = {
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Partner", width: 32 },
             { header: "Premium", type: "money" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
           rows: proposals.map((p) => {
-            return [p.proposalNo, p.createdAt, p.customerName, `${p.insurer} – ${p.productName}`, p.premium,
+            return [p.proposalNo, p.createdAt, holdersLabel(p), `${p.insurer} – ${p.productName}`, p.premium,
               proposalStatusLabel(p)[0], p.policyNumber, proposalNext(p)];
           }),
         }],

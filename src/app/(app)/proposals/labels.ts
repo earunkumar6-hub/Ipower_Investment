@@ -20,3 +20,9 @@ export function proposalNext(p: NextInput) {
 }
 
 export const proposalStatusLabel = (p: { status: ProposalStatus }): [string, Tone] => PROPOSAL_STATUS[p.status];
+
+/** "Meena R + Ravi R (joint)" for a joint account, else the customer's name. */
+export function holdersLabel(p: { customerName: string; jointAccount: boolean; secondHolderName: string | null; secondHolder?: { name: string } | null }) {
+  const second = p.secondHolder?.name ?? p.secondHolderName;
+  return p.jointAccount && second ? `${p.customerName} + ${second} (joint)` : p.customerName;
+}

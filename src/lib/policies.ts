@@ -83,6 +83,9 @@ export function fullSchedule(p: SchedulePolicy & { premiumAmount: Prisma.Decimal
 
 export type PolicyInput = {
   tenantId: string; customerId: string; ownerId: string; proposalId?: string; policyNumber: string;
+  secondHolderId?: string | null; // joint account
+  firstHolderCif?: string | null; // CIFs given by the post office / insurer
+  secondHolderCif?: string | null;
   productType: ProductType; partner: string; productName: string; productId?: string | null; schemeId?: string | null;
   premiumAmount: Prisma.Decimal.Value; frequency: Frequency; startDate: Date; termMonths?: number | null; sumAssured?: Prisma.Decimal.Value | null;
   premiumPayingTermMonths?: number | null; nominee?: string | null; rateAtOpen?: Prisma.Decimal.Value | null;

@@ -279,8 +279,17 @@ model Proposal {
   quotationItemId         String?        @unique // one proposal per quoted product
   quotationItem           QuotationItem? @relation(fields: [quotationItemId], references: [id])
   customerId              String?
-  customer                Customer?      @relation(fields: [customerId], references: [id])
+  customer                Customer?      @relation("ProposalCustomer", fields: [customerId], references: [id])
   customerName            String
+  // Joint account (#12): the proposal's customer is the first holder; the second is an existing customer or a
+  // new person (name + mobile) who becomes a customer when the policy is issued.
+  jointAccount            Boolean        @default(false)
+  secondHolderId          String?
+  secondHolder            Customer?      @relation("ProposalSecondHolder", fields: [secondHolderId], references: [id])
+  secondHolderName        String?
+  secondHolderMobile      String?
+  firstHolderCif          String? // CIF given by the post office / insurer to each holder (typed, like the policy number)
+  secondHolderCif         String?
   mobile                  String
   insurer                 String
   productName             String
@@ -354,13 +363,15 @@ model Customer {
   ownerId      String
   createdAt    DateTime @default(now())
 
-  policies            Policy[]
+  policies            Policy[]             @relation("PolicyCustomer")
+  jointPolicies       Policy[]             @relation("PolicySecondHolder") // second holder of a joint account
   receipts            Receipt[]
   payments            Payment[]
   serviceTransactions ServiceTransaction[]
   ownerPaidSlips      OwnerPaidSlip[]
   quotations          Quotation[]
-  proposals           Proposal[]
+  proposals           Proposal[]           @relation("ProposalCustomer")
+  jointProposals      Proposal[]           @relation("ProposalSecondHolder")
   mobiles             CustomerMobile[]
   directBills         DirectBill[]
   calls               Call[]
@@ -418,7 +429,11 @@ model Policy {
   id                      String       @id @default(cuid())
   tenantId                String
   customerId              String
-  customer                Customer     @relation(fields: [customerId], references: [id])
+  customer                Customer     @relation("PolicyCustomer", fields: [customerId], references: [id])
+  secondHolderId          String? // joint account: the second holder (bills and receipts stay with the first)
+  secondHolder            Customer?    @relation("PolicySecondHolder", fields: [secondHolderId], references: [id])
+  firstHolderCif          String? // CIFs given by the post office / insurer (from the proposal)
+  secondHolderCif         String?
   proposalId              String?      @unique
   proposal                Proposal?    @relation(fields: [proposalId], references: [id])
   productType             ProductType

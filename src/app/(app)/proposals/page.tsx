@@ -7,12 +7,13 @@ import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
-import { proposalNext, proposalStatusLabel } from "./labels";
+import { holdersLabel, proposalNext, proposalStatusLabel } from "./labels";
 
 export default async function ProposalsPage() {
   const user = await requirePermission("Proposal.View");
   const proposals = await db.proposal.findMany({
     where: { tenantId: user.tenantId, ...ownerScope(user) },
+    include: { secondHolder: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -34,7 +35,7 @@ export default async function ProposalsPage() {
               return (
                 <TableRow key={p.id}>
                   <TableCell><Link href={`/proposals/${p.id}`} className="text-brand-700 hover:underline">{p.proposalNo}</Link></TableCell>
-                  <TableCell>{p.customerName}</TableCell>
+                  <TableCell>{holdersLabel(p)}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>

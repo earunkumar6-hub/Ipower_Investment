@@ -112,6 +112,27 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           {regular.length > 0 && <> · Regular premiums: {regular.map((r) => `${fmtINR(r.amount)} ${PER_LABEL[r.frequency]}`).join(" · ")}</>}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">Schemes, tenures, lock-in periods and rates come from Settings → Products and schemes; each account keeps the rate it was opened at. Click a policy number for its full renewal schedule.</p>
+        {c.jointPolicies.length > 0 && (
+          <div className="mt-3">
+            <h3 className="mb-1 text-sm font-medium">Joint accounts – second holder</h3>
+            <Table>
+              <TableHeader><TableRow><TableHead>Policy / account</TableHead><TableHead>Plan</TableHead><TableHead>First holder</TableHead><TableHead>Company CIF (first / second)</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {c.jointPolicies.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{p.policyNumber}</TableCell>
+                    <TableCell>{p.partner} · {p.productName}</TableCell>
+                    <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link> <span className="text-xs text-muted-foreground">{p.customer.cifNo}</span></TableCell>
+                    <TableCell>{p.firstHolderCif ?? "—"} / {p.secondHolderCif ?? "—"}</TableCell>
+                    <TableCell className="text-right">{fmtINR(p.premiumAmount)} {PER_LABEL[p.frequency]}</TableCell>
+                    <TableCell>{POLICY_STATUS[p.status]}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="mt-1 text-xs text-muted-foreground">Bills, receipts and renewals for these are on the first holder&apos;s page.</p>
+          </div>
+        )}
       </Section>
 
       <div className="grid grid-cols-2 gap-4">

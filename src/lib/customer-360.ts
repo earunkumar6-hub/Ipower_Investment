@@ -42,8 +42,13 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     include: {
       policies: {
         orderBy: [{ productType: "asc" }, { startDate: "asc" }],
-        include: { renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, closeDuringLockIn: true, invoiceRule: true } }, scheme: { select: { name: true } } },
+        include: {
+          renewals: { orderBy: { dueDate: "asc" } }, product: { select: { lockInMonths: true, prematureClosure: true, closeDuringLockIn: true, invoiceRule: true } }, scheme: { select: { name: true } },
+          secondHolder: { select: { id: true, name: true, cifNo: true } },
+        },
       },
+      // Joint accounts where this customer is the second holder (bills and receipts stay with the first holder).
+      jointPolicies: { orderBy: { startDate: "asc" }, include: { customer: { select: { id: true, name: true, cifNo: true } } } },
       mobiles: { orderBy: { sort: "asc" } },
       receipts: { orderBy: [{ receiptDate: "desc" }, { createdAt: "desc" }], include: { policy: { select: { policyNumber: true } }, payment: { select: { id: true, paymentNo: true } } } },
       ownerPaidSlips: { orderBy: { createdAt: "desc" }, include: { policy: { select: { policyNumber: true } }, closedByReceipt: { select: { receiptNo: true } } } },
@@ -69,6 +74,10 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     maturity: maturityOf(p, p.product?.invoiceRule),
     amountLabel: PER_LABEL[p.frequency],
     details: [
+      p.secondHolder && ["Joint account", `second holder ${p.secondHolder.name} (${p.secondHolder.cifNo})`],
+      p.secondHolder
+        ? (p.firstHolderCif || p.secondHolderCif) && ["Holder CIF (company)", `first ${p.firstHolderCif ?? "—"} · second ${p.secondHolderCif ?? "—"}`]
+        : p.firstHolderCif && ["Holder CIF (company)", p.firstHolderCif],
       p.nominee && ["Nominee", p.nominee],
       ...Object.entries((p.customValues ?? {}) as Record<string, string | number>).map(([k, v]) => [k, String(v)]),
       p.premiumPayingTermMonths && ["Premium paying term", `${p.premiumPayingTermMonths / 12} years`],
@@ -84,7 +93,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
   const nextDue = renewals.filter((r) => r.status === "Due" || r.status === "Overdue")[0] ?? null;
   const [services, directBills, messages, changes, calls, users] = await Promise.all([
     // E-Sevai entries linked by any of the customer's mobile numbers
-    db.serviceTransaction.findMany({ where: { tenantId: user.tenantId, customerMobile: { in: numbers } }, include: { serviceType: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+    db.serviceTransaction.findMany({ where: { tenantId: user.tenantId, OR: [{ customerMobile: { in: numbers } }, { customerId: c.id }] }, include: { serviceType: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
     // Direct bills linked to the customer, or paid from one of their numbers (walk-in before they became a customer)
     db.directBill.findMany({ where: { tenantId: user.tenantId, OR: [{ customerId: c.id }, { payerMobile: { in: numbers } }] }, orderBy: { createdAt: "desc" }, take: 20 }),
     db.messageLog.findMany({ where: { tenantId: user.tenantId, to: { in: numbers } }, orderBy: { createdAt: "desc" }, take: 10 }),

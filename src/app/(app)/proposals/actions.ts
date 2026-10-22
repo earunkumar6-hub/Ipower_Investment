@@ -8,7 +8,12 @@ import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { rateOn } from "@/lib/products";
+import { audit } from "@/lib/audit";
+import { maskMobile } from "@/lib/lead-labels";
 import { authorize, type SessionUser } from "@/lib/session";
+
+/** Refuses an issue inside its transaction, rolling back everything written so far. */
+class IssueRefused extends Error {}
 
 async function loadProposal(tx: Tx, user: SessionUser, proposalId: string) {
   const p = await tx.proposal.findFirst({
@@ -121,6 +126,25 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
             },
           },
         }));
+      // Joint account: the second holder is the customer picked, else the customer with that mobile, else a new one.
+      let secondHolderId: string | null = null;
+      if (p.jointAccount) {
+        const second =
+          (p.secondHolderId && (await tx.customer.findFirst({ where: { id: p.secondHolderId, tenantId: user.tenantId } }))) ||
+          (p.secondHolderMobile && (await customerByMobile(tx, user.tenantId, p.secondHolderMobile))) ||
+          (p.secondHolderName && p.secondHolderMobile
+            ? await tx.customer.create({
+                data: {
+                  tenantId: user.tenantId, name: p.secondHolderName, mobile: p.secondHolderMobile, ownerId: p.ownerId,
+                  mobiles: { create: [{ tenantId: user.tenantId, number: p.secondHolderMobile, isWhatsApp: false, sort: 0 }] },
+                },
+              })
+            : null);
+        // Thrown, not returned, so a first-holder customer created above is rolled back too.
+        if (!second) throw new IssueRefused("Pick the second holder, or untick Joint account");
+        if (second.id === customer.id) throw new IssueRefused("The second holder can't be the first holder");
+        secondHolderId = second.id;
+      }
       // Aadhaar / PAN are optional; copy whichever was entered.
       if (p.panMasked || p.aadhaarLast4) {
         await tx.customer.update({ where: { id: customer.id }, data: { panMasked: p.panMasked ?? customer.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4 } });
@@ -129,22 +153,125 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       const product = p.productId ? await tx.product.findUnique({ where: { id: p.productId } }) : null;
       const scheme = p.schemeId ? await tx.scheme.findUnique({ where: { id: p.schemeId }, include: { rates: true } }) : null;
       await createPolicyWithSchedule(tx, {
-        tenantId: user.tenantId, customerId: customer.id, ownerId: p.ownerId, proposalId: p.id, policyNumber,
+        tenantId: user.tenantId, customerId: customer.id, secondHolderId, ownerId: p.ownerId, proposalId: p.id, policyNumber,
+        firstHolderCif: p.firstHolderCif, secondHolderCif: p.jointAccount ? p.secondHolderCif : null,
         productType: p.productType, partner: p.insurer, productName: p.productName, productId: p.productId, schemeId: p.schemeId,
         premiumAmount: p.premium, frequency: p.frequency, startDate: p.startDate, termMonths: p.termMonths, sumAssured: p.sumInsured,
         premiumPayingTermMonths: p.premiumPayingTermMonths, nominee: p.nominee, customValues: (p.customValues ?? undefined) as Prisma.InputJsonValue | undefined,
         bankDetailsEnc: p.bankDetailsEnc, rateAtOpen: p.rateAtOpen ?? (scheme ? rateOn(scheme.rates, p.startDate)?.rate : null), invoiceRule: product?.invoiceRule,
       });
-      await tx.proposal.update({ where: { id: p.id }, data: { status: "Issued", policyNumber, customerId: customer.id } });
+      await tx.proposal.update({ where: { id: p.id }, data: { status: "Issued", policyNumber, customerId: customer.id, secondHolderId } });
       if (p.quotation?.leadId) await advanceStage(tx, p.quotation.leadId, "Customer");
       return { ok: true, id: customer.id };
     });
     revalidatePath("/", "layout");
     return res;
   } catch (e) {
+    if (e instanceof IssueRefused) return { ok: false, error: e.message };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { ok: false, error: `Policy number ${policyNumber} already exists` };
     }
     throw e;
   }
+}
+
+/** The customer whose main or extra mobile this is (oldest first). */
+function customerByMobile(tx: Tx, tenantId: string, mobile: string) {
+  return tx.customer.findFirst({ where: { tenantId, OR: [{ mobile }, { mobiles: { some: { number: mobile } } }] }, orderBy: { createdAt: "asc" } });
+}
+
+const jointSchema = z.object({
+  proposalId: z.string().min(1),
+  jointAccount: z.enum(["on", "off"]),
+  secondHolderId: z.string().trim().default(""),
+  secondHolderName: z.string().trim().max(80).default(""),
+  secondHolderMobile: z.union([z.literal(""), z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number")]).default(""),
+  // CIFs given by the post office / insurer to each holder (optional until issued, typed like the policy number)
+  firstHolderCif: z.string().trim().toUpperCase().max(40, "CIF is too long").default(""),
+  secondHolderCif: z.string().trim().toUpperCase().max(40, "CIF is too long").default(""),
+});
+
+/**
+ * Account holders: the holder's CIF from the company (single or joint), and for a joint account (#12):
+ * the proposal's customer is the first holder; the second is an existing customer, or a new
+ * person (name + mobile) – a customer with that mobile is linked instead. Editable until the policy is issued; logged.
+ */
+export async function saveJointAccount(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Proposal.Create");
+  const parsed = jointSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) {
+    const i = parsed.error.issues[0];
+    return { ok: false, error: i.message, fieldErrors: { [String(i.path[0])]: i.message } };
+  }
+  const v = parsed.data;
+  const res = await db.$transaction(async (tx): Promise<ActionResult> => {
+    const r = await loadProposal(tx, user, v.proposalId);
+    if ("error" in r) return { ok: false, error: r.error };
+    const { p } = r;
+    if (p.status === "Issued") return { ok: false, error: "Policy already issued; the holders can't be changed here" };
+
+    if (v.jointAccount === "off") {
+      // Single holder: only the holder's CIF from the company is kept.
+      const cif = v.firstHolderCif || null;
+      if (!p.jointAccount && p.firstHolderCif === cif) return { ok: true };
+      await tx.proposal.update({ where: { id: p.id }, data: { jointAccount: false, secondHolderId: null, secondHolderName: null, secondHolderMobile: null, firstHolderCif: cif, secondHolderCif: null } });
+      await audit(tx, user, {
+        entity: "Proposal", entityId: p.id, action: "Updated",
+        summary: `${p.proposalNo}: ${p.jointAccount ? "joint account removed · " : ""}holder CIF ${cif ?? "—"}`,
+        before: { cif: p.firstHolderCif }, after: { cif },
+      });
+      return { ok: true };
+    }
+
+    let second: { id: string; name: string; cifNo: string } | null = null;
+    let message: string | undefined;
+    if (v.secondHolderId) {
+      second = await tx.customer.findFirst({ where: { id: v.secondHolderId, tenantId: user.tenantId }, select: { id: true, name: true, cifNo: true } });
+      if (!second) return { ok: false, error: "Pick the second holder again" };
+    } else {
+      if (v.secondHolderName.length < 2) return { ok: false, error: "Enter the second holder's name", fieldErrors: { secondHolderName: "Required" } };
+      if (!v.secondHolderMobile) return { ok: false, error: "Enter the second holder's mobile", fieldErrors: { secondHolderMobile: "Required" } };
+      if (v.secondHolderMobile === p.mobile) return { ok: false, error: "That is the first holder's mobile", fieldErrors: { secondHolderMobile: "Same as first holder" } };
+      const match = await customerByMobile(tx, user.tenantId, v.secondHolderMobile);
+      if (match) {
+        second = { id: match.id, name: match.name, cifNo: match.cifNo };
+        message = `This mobile belongs to customer ${match.name} (${match.cifNo}); linked them as the second holder`;
+      }
+    }
+    if (second && second.id === p.customerId) return { ok: false, error: "The second holder can't be the first holder" };
+
+    if (v.firstHolderCif && v.firstHolderCif === v.secondHolderCif) return { ok: false, error: "The two holders can't have the same CIF", fieldErrors: { secondHolderCif: "Same CIF" } };
+    const cifs = { firstHolderCif: v.firstHolderCif || null, secondHolderCif: v.secondHolderCif || null };
+    await tx.proposal.update({
+      where: { id: p.id },
+      data: second
+        ? { jointAccount: true, secondHolderId: second.id, secondHolderName: null, secondHolderMobile: null, ...cifs }
+        : { jointAccount: true, secondHolderId: null, secondHolderName: v.secondHolderName, secondHolderMobile: v.secondHolderMobile, ...cifs },
+    });
+    await audit(tx, user, {
+      entity: "Proposal", entityId: p.id, action: "Updated",
+      summary: `${p.proposalNo}: joint account – second holder ${second ? `${second.name} (${second.cifNo})` : `${v.secondHolderName} (new customer on issue)`}`
+        + ` · company CIFs ${v.firstHolderCif || "—"} / ${v.secondHolderCif || "—"}`,
+    });
+    return { ok: true, message };
+  });
+  if (res.ok) revalidatePath(`/proposals/${v.proposalId}`);
+  return res;
+}
+
+/** Second-holder picker: customers matching a name, CIF or mobile (mobile shown masked). */
+export async function searchCustomers(q: string): Promise<{ id: string; name: string; cifNo: string; mobile: string }[]> {
+  const user = await authorize("Proposal.Create");
+  const text = q.trim();
+  if (text.length < 2) return [];
+  const rows = await db.customer.findMany({
+    where: {
+      tenantId: user.tenantId,
+      OR: [{ name: { contains: text, mode: "insensitive" } }, { cifNo: { contains: text, mode: "insensitive" } }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }],
+    },
+    select: { id: true, name: true, cifNo: true, mobile: true },
+    orderBy: { name: "asc" },
+    take: 8,
+  });
+  return rows.map((c) => ({ ...c, mobile: maskMobile(c.mobile) }));
 }

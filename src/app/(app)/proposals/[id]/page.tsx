@@ -13,6 +13,8 @@ import { fmtINR } from "@/lib/money";
 import { fmtTenure, PAY_MODE_LABEL, PAY_MODES } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
 import { proposalNext, proposalStatusLabel } from "../labels";
+import { maskMobile } from "@/lib/lead-labels";
+import { JointAccountPanel } from "./joint-account";
 import { IssuePolicyForm, KycForm, PolicyDetailsForm } from "./proposal-forms";
 
 const yearsText = (months: number | null) => (months ? String(months / 12) : "");
@@ -24,7 +26,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
     where: { id, tenantId: user.tenantId },
     include: {
       quotation: true, policy: { include: { renewals: { orderBy: { dueDate: "asc" } } } },
-      product: { include: { schemes: { where: { active: true }, orderBy: [{ tenureMonths: "asc" }, { name: "asc" }] } } }, scheme: true, customer: { select: { id: true } },
+      product: { include: { schemes: { where: { active: true }, orderBy: [{ tenureMonths: "asc" }, { name: "asc" }] } } }, scheme: true, customer: { select: { id: true, name: true, cifNo: true } },
+      secondHolder: { select: { id: true, name: true, cifNo: true, mobile: true, address: true, panMasked: true, aadhaarLast4: true } },
     },
   });
   if (!p || !canActOn(user, p.ownerId)) notFound();
@@ -38,6 +41,11 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const [statusLabel, statusTone] = proposalStatusLabel(p);
   const payModes = (p.product?.payModes.length ? p.product.payModes : PAY_MODES).map((m) => ({ value: m, label: PAY_MODE_LABEL[m] }));
   const showPpt = !p.product || p.product.fields.includes("premiumPayingTerm");
+  // First holder: the proposal's customer, else the customer the policy will be linked to by mobile on issue.
+  const firstCustomer = p.customer ?? (await db.customer.findFirst({
+    where: { tenantId: user.tenantId, OR: [{ mobile: p.mobile }, { mobiles: { some: { number: p.mobile } } }] }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, cifNo: true },
+  }));
+  const secondLabel = p.secondHolder ? `${p.secondHolder.name} (${p.secondHolder.cifNo})` : p.secondHolderName ? `${p.secondHolderName} (new customer on issue)` : "—";
 
   return (
     <>
@@ -78,6 +86,12 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
             )}
           </div>
 
+          <JointAccountPanel proposalId={p.id} issued={issued} joint={p.jointAccount}
+            first={{ name: p.customerName, cifNo: firstCustomer?.cifNo ?? null, note: !p.customer && firstCustomer ? `Same mobile as existing customer ${firstCustomer.name}: linked on issue` : null }}
+            second={p.secondHolder && { id: p.secondHolder.id, name: p.secondHolder.name, cifNo: p.secondHolder.cifNo, mobile: maskMobile(p.secondHolder.mobile), address: p.secondHolder.address, pan: p.secondHolder.panMasked, aadhaarLast4: p.secondHolder.aadhaarLast4 }}
+            newSecond={!p.secondHolder && p.secondHolderName && p.secondHolderMobile ? { name: p.secondHolderName, mobile: p.secondHolderMobile } : null}
+            cifs={{ first: p.firstHolderCif, second: p.secondHolderCif }} />
+
           <Table>
             <TableHeader><TableRow><TableHead>Step</TableHead><TableHead>Status</TableHead><TableHead>When / detail</TableHead></TableRow></TableHeader>
             <TableBody>
@@ -86,6 +100,23 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
                 <TableCell><StatusBadge tone="green">Done</StatusBadge></TableCell>
                 <TableCell>{fmtDateTime(p.createdAt)}</TableCell>
               </TableRow>
+              {!p.jointAccount && (
+                <TableRow>
+                  <TableCell>Holder CIF (company)</TableCell>
+                  <TableCell>{p.firstHolderCif ? <StatusBadge tone="green">Entered</StatusBadge> : <StatusBadge tone="slate">Not entered</StatusBadge>}</TableCell>
+                  <TableCell>{p.firstHolderCif ?? "—"}</TableCell>
+                </TableRow>
+              )}
+              {p.jointAccount && (
+                <TableRow>
+                  <TableCell>Joint account</TableCell>
+                  <TableCell><StatusBadge tone={p.secondHolderId || p.secondHolderName ? "green" : "orange"}>{p.secondHolderId || p.secondHolderName ? "Two holders" : "Second holder missing"}</StatusBadge></TableCell>
+                  <TableCell>
+                    {p.customerName}{firstCustomer && ` (${firstCustomer.cifNo})`} + {secondLabel}
+                    <span className="block text-xs text-muted-foreground">Company CIF: {p.firstHolderCif ?? "—"} / {p.secondHolderCif ?? "—"}</span>
+                  </TableCell>
+                </TableRow>
+              )}
               <TableRow>
                 <TableCell>Aadhaar and PAN <span className="text-xs text-muted-foreground">(optional)</span></TableCell>
                 <TableCell>{p.panMasked || p.aadhaarLast4 ? <StatusBadge tone="green">Entered – masked</StatusBadge> : <StatusBadge tone="slate">Not entered</StatusBadge>}</TableCell>
