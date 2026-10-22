@@ -26,7 +26,7 @@ export default async function ProposalsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>No.</TableHead><TableHead>Customer</TableHead><TableHead>Partner</TableHead>
-              <TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead><TableHead>Next</TableHead>
+              <TableHead className="text-right">Premium</TableHead><TableHead>Consent</TableHead><TableHead>Status</TableHead><TableHead>Next</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -38,13 +38,14 @@ export default async function ProposalsPage() {
                   <TableCell>{holdersLabel(p)}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
+                  <TableCell>{p.consentAt ? <StatusBadge tone="green">Taken</StatusBadge> : <StatusBadge tone="slate">Not ticked</StatusBadge>}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                   <TableCell className="text-muted-foreground">{proposalNext(p)}</TableCell>
                 </TableRow>
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
+import { DuplicateCustomerDialog } from "@/components/duplicate-customer-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,8 +41,10 @@ export function JointAccountPanel({ proposalId, issued, first, joint, second, ne
     return () => { live = false; clearTimeout(t); };
   }, [q, mode]);
 
+  const [dup, setDup] = useState<ActionResult["duplicate"]>();
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await saveJointAccount(prev, form);
+    setDup(r.duplicate);
     if (r.ok) {
       toast.success(r.message ?? "Account holders saved");
       router.refresh();
@@ -147,6 +150,7 @@ export function JointAccountPanel({ proposalId, issued, first, joint, second, ne
       <Button type="submit" size="sm" variant="outline" disabled={pending || (on && mode === "existing" && !picked)}>
         {pending ? "Saving…" : joint && !on ? "Save (remove joint account)" : "Save account holders"}
       </Button>
+      <DuplicateCustomerDialog duplicate={dup} onClose={() => setDup(undefined)} />
     </form>
   );
 }

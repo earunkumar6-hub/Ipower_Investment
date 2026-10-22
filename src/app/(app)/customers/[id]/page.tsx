@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { closureButton } from "@/lib/closure";
 import { initials } from "@/lib/photos";
-import { AddFollowUpForm, CustomerPhoto } from "./profile-forms";
+import { AddFollowUpForm, CustomerPhoto, IdentityButton } from "./profile-forms";
 import { db } from "@/lib/db";
 import { ATTACHMENT_LIST, dropdownValues } from "@/lib/dropdowns";
 import { notFound } from "next/navigation";
@@ -61,6 +61,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{c.name}</h2>
             <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{c.cifNo}</span>
+            {c.consentAt && <StatusBadge tone="green">Consent taken {fmtDate(c.consentAt)}</StatusBadge>}
             {nextFollowUp && <StatusBadge tone={nextFollowUp.dueAt <= new Date() ? "red" : "orange"}>Follow-up due {fmtDateTime(nextFollowUp.dueAt)}</StatusBadge>}
             {canEdit && <EditCustomerButton customer={{ id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) }} />}
           </div>
@@ -69,6 +70,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           </p>
           <p className="mt-1 text-sm">
             PAN {c.panMasked ?? <span className="text-muted-foreground">not collected</span>} · Aadhaar {c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : <span className="text-muted-foreground">not collected</span>}
+            {" "}<IdentityButton customerId={c.id} panMasked={c.panMasked} aadhaarLast4={c.aadhaarLast4}
+              consent={c.consentAt ? `By ${(await db.user.findUnique({ where: { id: c.consentById ?? "" }, select: { name: true } }))?.name ?? "—"}, ${fmtDate(c.consentAt)}` : null} />
           </p>
         </div>
         <div className="grid shrink-0 grid-cols-4 gap-3">

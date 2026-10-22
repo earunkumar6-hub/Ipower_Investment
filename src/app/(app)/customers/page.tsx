@@ -52,7 +52,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead><TableHead>CIF</TableHead><TableHead>Mobile</TableHead><TableHead>Holdings</TableHead>
+              <TableHead>Customer</TableHead><TableHead>Mobile</TableHead><TableHead>Holdings</TableHead>
               {f.filtered && <TableHead>Matching holdings</TableHead>}
               <TableHead>Next due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead />
             </TableRow>
@@ -65,7 +65,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               return (
                 <TableRow key={c.id}>
                   <TableCell><Link href={`/customers/${c.id}`} className="text-brand-700 hover:underline">{c.name}</Link></TableCell>
-                  <TableCell className="font-mono text-xs">{c.cifNo}</TableCell>
                   <TableCell>{maskMobile(c.mobile)}{c._count.mobiles > 1 && <span className="text-xs text-muted-foreground"> +{c._count.mobiles - 1}</span>}</TableCell>
                   <TableCell>{counts.map(([k, n]) => `${n} ${k}`).join(" · ") || "—"}</TableCell>
                   {f.filtered && (
@@ -79,7 +78,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                 </TableRow>
               );
             })}
-            {customers.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No customers found.</TableCell></TableRow>}
+            {customers.length === 0 && <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No customers found.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>

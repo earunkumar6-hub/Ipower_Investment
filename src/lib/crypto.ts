@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 
 // Field encryption for sensitive values (bank details): AES-256-GCM with DATA_ENCRYPTION_KEY
 // (32 random bytes, base64) from the environment. Stored as "v1:<iv>:<tag>:<ciphertext>" in base64 parts.
@@ -35,3 +35,11 @@ export function decryptJson<T>(stored: string): T {
 
 /** "XXXXXX1234" – how an account number is shown. */
 export const maskAccount = (n: string) => (n.length > 4 ? `${"X".repeat(Math.min(n.length - 4, 8))}${n.slice(-4)}` : n);
+
+/**
+ * Keyed fingerprint (HMAC-SHA256) of an identity number, for uniqueness and matching without storing it in clear.
+ * Keyed so a 12-digit Aadhaar can't be found by hashing every possible number.
+ */
+export function fingerprint(kind: "aadhaar" | "pan", value: string) {
+  return createHmac("sha256", key()).update(`${kind}:${value}`).digest("base64");
+}

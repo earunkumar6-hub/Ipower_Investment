@@ -8,6 +8,7 @@ import { audit, changedOnly } from "@/lib/audit";
 import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { AADHAAR_RE, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { canActOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
@@ -244,4 +245,57 @@ export async function changeCustomerPhoto(_: ActionResult, form: FormData): Prom
   });
   revalidatePath(`/customers/${c.id}`);
   return { ok: true };
+}
+
+const identitySchema = z.object({
+  customerId: z.string().min(1),
+  consent: z.string().default(""),
+  pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(PAN_RE, "PAN looks like ABCDE1234F")])),
+  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits")])),
+});
+
+/**
+ * Aadhaar / PAN on the customer page (#1, #13, #28): only after "Customer consent taken"; full numbers encrypted;
+ * one that already belongs to another customer is refused with their details for the pop-up.
+ */
+export async function saveCustomerIdentity(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("PII.Edit");
+  const parsed = identitySchema.safeParse({ customerId: form.get("customerId"), consent: form.get("consent") ?? "", pan: form.get("pan") ?? "", aadhaar: form.get("aadhaar") ?? "" });
+  if (!parsed.success) {
+    const i = parsed.error.issues[0];
+    return { ok: false, error: i.message, fieldErrors: { [String(i.path[0])]: i.message } };
+  }
+  const { customerId, pan, aadhaar } = parsed.data;
+  try {
+    const res = await db.$transaction(async (tx): Promise<ActionResult> => {
+      const c = await tx.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } });
+      if (!c) return { ok: false, error: "Customer not found" };
+      if (!canActOn(user, c.ownerId)) return { ok: false, error: "This customer belongs to another user" };
+      const consentNow = !c.consentAt && parsed.data.consent === "on";
+      if (!c.consentAt && !consentNow) return { ok: false, error: "Tick “Customer consent taken” first", fieldErrors: { consent: "Required" } };
+      const consent = consentNow ? { consentAt: new Date(), consentById: user.id } : {};
+      if (!pan && !aadhaar) {
+        if (!consentNow) return { ok: false, error: "Enter the Aadhaar or PAN to save" };
+        await tx.customer.update({ where: { id: c.id }, data: consent });
+        await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Consent", summary: `${c.name} (${c.cifNo}): customer consent taken` });
+        return { ok: true, message: "Consent recorded" };
+      }
+      const data = identityData(aadhaar, pan);
+      const duplicate = await duplicateIdentity(tx, user.tenantId, { aadhaarHash: data.aadhaarHash, panHash: data.panHash }, { customerId: c.id, mobile: c.mobile });
+      if (duplicate) return { ok: false, error: duplicateMessage(duplicate), duplicate };
+      await tx.customer.update({ where: { id: c.id }, data: { ...data, ...consent } });
+      await audit(tx, user, {
+        entity: "Customer", entityId: c.id, action: "Updated",
+        summary: `${c.name} (${c.cifNo}): ${[aadhaar && `Aadhaar XXXX-XXXX-${aadhaar.slice(-4)}`, pan && `PAN ${maskPan(pan)}`].filter(Boolean).join(" · ")}${consentNow ? " · consent taken" : ""}`,
+      });
+      return { ok: true };
+    });
+    if (res.ok) revalidatePath(`/customers/${customerId}`);
+    return res;
+  } catch (e) {
+    if (e instanceof EncryptionKeyMissing) return { ok: false, error: e.message.replace("Bank details", "Aadhaar / PAN") };
+    // Two people saving the same number at once: the database keeps only one.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, error: "That Aadhaar / PAN was just saved on another customer; reload and check" };
+    throw e;
+  }
 }

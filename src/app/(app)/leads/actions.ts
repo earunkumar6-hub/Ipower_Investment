@@ -1,5 +1,7 @@
 "use server";
 
+import type { Duplicate } from "@/lib/identity";
+
 import { Gender, LeadSource, LeadStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -13,7 +15,11 @@ import { nextNumber } from "@/lib/numbering";
 import { seesAll } from "@/lib/permissions";
 import { authorize, type SessionUser } from "@/lib/session";
 
-export type ActionResult = { ok: boolean; error?: string; message?: string; fieldErrors?: Record<string, string>; id?: string; href?: string };
+export type ActionResult = {
+  ok: boolean; error?: string; message?: string; fieldErrors?: Record<string, string>; id?: string; href?: string;
+  /** Aadhaar / PAN / company CIF already belongs to someone else (#28 pop-up). */
+  duplicate?: Duplicate;
+};
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
 

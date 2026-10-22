@@ -45,6 +45,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const firstCustomer = p.customer ?? (await db.customer.findFirst({
     where: { tenantId: user.tenantId, OR: [{ mobile: p.mobile }, { mobiles: { some: { number: p.mobile } } }] }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, cifNo: true },
   }));
+  const consentBy = p.consentById ? (await db.user.findUnique({ where: { id: p.consentById }, select: { name: true } }))?.name : null;
   const secondLabel = p.secondHolder ? `${p.secondHolder.name} (${p.secondHolder.cifNo})` : p.secondHolderName ? `${p.secondHolderName} (new customer on issue)` : "—";
 
   return (
@@ -118,6 +119,11 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
                 </TableRow>
               )}
               <TableRow>
+                <TableCell>Customer consent taken</TableCell>
+                <TableCell>{p.consentAt ? <StatusBadge tone="green">Ticked</StatusBadge> : <StatusBadge tone="slate">Not ticked</StatusBadge>}</TableCell>
+                <TableCell>{p.consentAt ? `By ${consentBy ?? "—"}, ${fmtDate(p.consentAt)}` : "Needed before Aadhaar / PAN can be saved"}</TableCell>
+              </TableRow>
+              <TableRow>
                 <TableCell>Aadhaar and PAN <span className="text-xs text-muted-foreground">(optional)</span></TableCell>
                 <TableCell>{p.panMasked || p.aadhaarLast4 ? <StatusBadge tone="green">Entered – masked</StatusBadge> : <StatusBadge tone="slate">Not entered</StatusBadge>}</TableCell>
                 <TableCell>{[p.aadhaarLast4 && `XXXX-XXXX-${p.aadhaarLast4}`, p.panMasked].filter(Boolean).join(" · ")}</TableCell>
@@ -157,7 +163,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </div>
         <aside className="w-80 shrink-0 rounded-xl border bg-white p-4">
           <h2 className="mb-3 font-semibold">Aadhaar and PAN <span className="text-xs font-normal text-muted-foreground">(optional)</span></h2>
-          <KycForm key={`${issued}-${p.panMasked}-${p.aadhaarLast4}`} proposalId={p.id} unlocked={!issued} panMasked={p.panMasked} aadhaarLast4={p.aadhaarLast4} />
+          <KycForm key={`${issued}-${p.panMasked}-${p.aadhaarLast4}-${!!p.consentAt}`} proposalId={p.id} unlocked={!issued} panMasked={p.panMasked} aadhaarLast4={p.aadhaarLast4}
+            consent={p.consentAt ? `By ${consentBy ?? "—"}, ${fmtDate(p.consentAt)}` : null} />
         </aside>
       </div>
     </>

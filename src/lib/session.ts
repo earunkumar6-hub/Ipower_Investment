@@ -2,7 +2,9 @@ import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { loadAccess } from "@/lib/access";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { hasPermission, type Permission } from "@/lib/permissions";
 
 export type SessionUser = { id: string; name: string; username: string; role: Role; tenantId: string };
@@ -10,8 +12,11 @@ export type SessionUser = { id: string; name: string; username: string; role: Ro
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-  const u = session.user as typeof session.user & { username: string; role: Role; tenantId: string };
-  return { id: u.id, name: u.name, username: u.username, role: u.role, tenantId: u.tenantId };
+  // Role and "switched off" are read fresh, so a change in Settings → Users applies on the next click.
+  const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, username: true, role: true, tenantId: true, active: true } });
+  if (!u || !u.active) return null;
+  await loadAccess(u.tenantId);
+  return { id: u.id, name: u.name, username: u.username ?? "", role: u.role, tenantId: u.tenantId };
 });
 
 /** For pages: redirect to login when signed out. */

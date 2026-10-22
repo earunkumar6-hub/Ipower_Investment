@@ -9,7 +9,7 @@ import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { SettingsTabs } from "../settings-tabs";
 
-const ENTITIES = [["all", "All"], ["Product", "Products"], ["Scheme", "Schemes and rates"], ["Policy", "Policies"], ["DayBook", "Day Book"], ["Account", "Bank accounts and wallets"], ["PaymentOption", "Payment modes"], ["DropdownOption", "Dropdown values"], ["Tenant", "Day Book settings"]] as const;
+const ENTITIES = [["all", "All"], ["Product", "Products"], ["Scheme", "Schemes and rates"], ["Policy", "Policies"], ["DayBook", "Day Book"], ["Account", "Bank accounts and wallets"], ["PaymentOption", "Payment modes"], ["DropdownOption", "Dropdown values"], ["Tenant", "Day Book settings"], ["Access", "Roles and access"], ["User", "Users"]] as const;
 const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
 
 /** Change log: who changed what and when, with old and new values (latest 200). */

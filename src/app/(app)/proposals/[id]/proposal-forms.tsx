@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useConfirmBeforeSave } from "@/components/confirm-save";
+import { DuplicateCustomerDialog } from "@/components/duplicate-customer-dialog";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
@@ -11,28 +12,40 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { submitKeepingValues } from "@/lib/form";
 import { issuePolicy, savePolicyDetails, saveKyc } from "../actions";
 
-export function KycForm({ proposalId, unlocked, panMasked, aadhaarLast4 }: { proposalId: string; unlocked: boolean; panMasked: string | null; aadhaarLast4: string | null }) {
+export function KycForm({ proposalId, unlocked, panMasked, aadhaarLast4, consent }: {
+  proposalId: string; unlocked: boolean; panMasked: string | null; aadhaarLast4: string | null;
+  /** "Customer consent taken" already recorded: "By R. Murali, 22 Oct 2026". */
+  consent: string | null;
+}) {
+  const [ticked, setTicked] = useState(!!consent);
+  const [dup, setDup] = useState<ActionResult["duplicate"]>();
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await saveKyc(prev, form);
-    if (r.ok) toast.success("Aadhaar and PAN saved (masked)");
+    if (r.ok) toast.success(r.message ?? "Aadhaar and PAN saved (masked)");
+    setDup(r.duplicate);
     return r;
   }, { ok: false });
+  const open = unlocked && ticked;
 
   return (
     <form onSubmit={submitKeepingValues(action)} className="space-y-3">
       <input type="hidden" name="proposalId" value={proposalId} />
+      <label className="flex items-start gap-2 text-sm font-medium">
+        <input type="checkbox" name="consent" checked={ticked} disabled={!!consent || !unlocked} onChange={(e) => setTicked(e.target.checked)} className="mt-0.5" />
+        <span>Customer consent taken{consent && <span className="block text-xs font-normal text-muted-foreground">{consent}</span>}</span>
+      </label>
       <div className="space-y-1.5">
         <Label htmlFor="aadhaar">Aadhaar</Label>
-        <Input id="aadhaar" name="aadhaar" readOnly={!unlocked} inputMode="numeric" maxLength={14}
+        <Input id="aadhaar" name="aadhaar" readOnly={!open} disabled={!open} inputMode="numeric" maxLength={14}
           placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : unlocked ? "12 digits (optional)" : "Not entered"} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="pan">PAN</Label>
-        <Input id="pan" name="pan" readOnly={!unlocked} maxLength={10} className="not-placeholder-shown:uppercase"
+        <Input id="pan" name="pan" readOnly={!open} disabled={!open} maxLength={10} className="not-placeholder-shown:uppercase"
           placeholder={panMasked ?? (unlocked ? "ABCDE1234F (optional)" : "Not entered")} />
       </div>
       <p className="rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
-        Optional. Only masked values are stored and shown (PAN ABCxxxxx4M, Aadhaar last 4 digits).{!unlocked && " The policy is issued; they can't be changed here."}
+        Optional; needs the consent tick. Stored encrypted, shown masked (PAN ABCxxxxx4M, Aadhaar last 4). A number that already belongs to another customer is refused.{!unlocked && " The policy is issued; they can't be changed here."}
       </p>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       {unlocked && (
@@ -40,6 +53,7 @@ export function KycForm({ proposalId, unlocked, panMasked, aadhaarLast4 }: { pro
           {pending ? "Saving…" : "Save Aadhaar / PAN"}
         </Button>
       )}
+      <DuplicateCustomerDialog duplicate={dup} onClose={() => setDup(undefined)} />
     </form>
   );
 }

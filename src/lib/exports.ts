@@ -179,10 +179,10 @@ export const REPORTS: Record<string, Report> = {
           name: "Proposals",
           totals: true,
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Partner", width: 32 },
-            { header: "Premium", type: "money" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
+            { header: "Premium", type: "money" }, { header: "Consent" }, { header: "Status" }, { header: "Policy no." }, { header: "Next", width: 22 }],
           rows: proposals.map((p) => {
             return [p.proposalNo, p.createdAt, holdersLabel(p), `${p.insurer} – ${p.productName}`, p.premium,
-              proposalStatusLabel(p)[0], p.policyNumber, proposalNext(p)];
+              p.consentAt ? "Taken" : "Not ticked", proposalStatusLabel(p)[0], p.policyNumber, proposalNext(p)];
           }),
         }],
       };
@@ -211,7 +211,7 @@ export const REPORTS: Record<string, Report> = {
         title: `Partners / Customers${[filterLabel, q && `"${q}"`].filter(Boolean).map((x) => ` – ${x}`).join("")}`,
         sheets: [{
           name: "Customers",
-          columns: [{ header: "Customer", width: 24 }, { header: "CIF" }, { header: "Mobile" }, { header: "Holdings", width: 24 },
+          columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Holdings", width: 24 },
             ...(filtered ? [{ header: "Matching holdings", width: 40 }] : []), { header: "Next due", type: "date" as const },
             { header: "Amount", type: "money" as const }, { header: "Overdue" }],
           rows: customers.map((c) => {
@@ -219,7 +219,7 @@ export const REPORTS: Record<string, Report> = {
             const next = c.policies.flatMap((p) => p.renewals).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
             const mine = matching.filter((p) => p.customerId === c.id)
               .map((p) => `${p.policyNumber} · ${p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}`).join(", ");
-            return [c.name, c.cifNo, maskMobile(c.mobile), counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
+            return [c.name, maskMobile(c.mobile), counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
           }),
         }],
       };

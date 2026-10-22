@@ -134,9 +134,10 @@ describe("Proposal policy details", () => {
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: "CARE-T-1" }))).error).toMatch(/pay mode and start date/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "1", premiumPayingTerm: "2", startDate: today }))).error).toMatch(/longer than the term/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today }))).ok).toBe(true);
-    // Aadhaar / PAN can be saved any time, one without the other
+    // Aadhaar / PAN: only after "Customer consent taken" (#1); then any time, one without the other
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "1234 5678 9012" }))).fieldErrors).toHaveProperty("consent");
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "1234 5678 9012" }))).ok).toBe(true);
     expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "" }))).error).toMatch(/both are optional/);
-    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "1234 5678 9012" }))).ok).toBe(true);
     // Yearly × 3 years → renewals in years 2 and 3 (the 12-month horizon stores the first); no PAN needed
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: `CARE-T-${Date.now() % 100000}` }))).ok).toBe(true);
     const policy = await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id }, include: { renewals: true, customer: true } });
