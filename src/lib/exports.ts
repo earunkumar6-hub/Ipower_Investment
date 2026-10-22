@@ -7,7 +7,7 @@ import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db, prisma } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
-import { esevaiEntries, walletSummary } from "@/lib/esevai-day";
+import { esevaiEntries, serviceTime, walletSummary } from "@/lib/esevai-day";
 import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
 import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
@@ -448,7 +448,7 @@ export const REPORTS: Record<string, Report> = {
       const [{ txns, recharges }, wallets, accounts] = await Promise.all([
         esevaiEntries(user, today),
         walletSummary(user.tenantId, today),
-        db.account.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true } }),
+        db.account.findMany({ where: { tenantId: user.tenantId } }).then((rows) => rows.map((a) => ({ id: a.id, name: accountLabel(a) }))),
       ]);
       const account = nameIn(accounts);
       return {
@@ -458,23 +458,24 @@ export const REPORTS: Record<string, Report> = {
           {
             name: "Entries",
             totals: true,
-            columns: [{ header: "Time", type: "datetime", width: 20 }, { header: "No." }, { header: "Service" }, { header: "Customer", width: 22 }, { header: "Reference" },
-              { header: "Bill amount", type: "money" }, { header: "Bill / cost", type: "money" }, { header: "Collected", type: "money" }, { header: "Profit", type: "money" },
-              { header: "Mode" }, { header: "Payment ref." }, { header: "Paid from" }],
-            rows: txns.map((t) => [t.createdAt, t.txnNo, t.serviceType.name, t.customerName, t.providerRef, t.baseAmount, t.walletCost, t.customerAmount, t.profit,
-              t.paymentMode, t.reference, account(t.paidFromAccountId)]),
+            columns: [{ header: "Date", type: "date" }, { header: "Time" }, { header: "No." }, { header: "Service" }, { header: "Customer", width: 22 }, { header: "CIF" }, { header: "Mobile" },
+              { header: "Service no." }, { header: "Transaction no." }, { header: "Paid / deducted", type: "money" }, { header: "Collected", type: "money" }, { header: "Service charge", type: "money" },
+              { header: "Mode" }, { header: "Payment ref." }, { header: "Paid from" }, { header: "Notes", width: 24 }],
+            rows: txns.map((t) => [t.txnDate, serviceTime(t), t.txnNo, t.serviceName ?? t.serviceType.name, t.customer?.name ?? t.customerName, t.customer?.cifNo, t.customerMobile,
+              t.providerRef, t.providerTxnNo, t.walletCost, t.customerAmount, t.profit,
+              t.paymentMode, t.reference, `${t.paidVia === "Wallet" ? "" : t.paidVia === "GPay" ? "GPay direct · " : "Net banking direct · "}${account(t.paidFromAccountId)}`, t.notes]),
           },
           {
             name: "Wallet recharges",
             totals: true,
-            columns: [{ header: "Time", type: "datetime", width: 20 }, { header: "Wallet" }, { header: "Amount", type: "money" }, { header: "Mode" }],
-            rows: recharges.map((r) => [r.createdAt, account(r.accountId), r.amount, r.mode]),
+            columns: [{ header: "Date", type: "date" }, { header: "Time", type: "datetime", width: 20 }, { header: "Wallet" }, { header: "Amount", type: "money" }, { header: "Mode" }],
+            rows: recharges.map((r) => [r.entryDate, r.createdAt, account(r.accountId), r.amount, r.mode]),
           },
           {
             name: "Wallets",
-            columns: [{ header: "Wallet" }, { header: "Opening", type: "money" }, { header: "Recharge", type: "money" }, { header: "Deducted", type: "money" },
+            columns: [{ header: "Date", type: "date" }, { header: "Wallet" }, { header: "Opening", type: "money" }, { header: "Recharge", type: "money" }, { header: "Deducted", type: "money" },
               { header: "Closing", type: "money" }, { header: "Low balance" }],
-            rows: wallets.map((w) => [w.name, w.opening, w.recharge, w.deducted, w.closing, w.lowThreshold && w.closing.lt(w.lowThreshold) ? "Yes" : ""]),
+            rows: wallets.map((w) => [today, w.name, w.opening, w.recharge, w.deducted, w.closing, w.lowThreshold && w.closing.lt(w.lowThreshold) ? "Yes" : ""]),
           },
         ],
       };

@@ -134,9 +134,6 @@ describe("Bank accounts and wallets", () => {
     expect(w).toMatchObject({ type: "Wallet", walletKind: "Other", isDefault: false });
     expect(w.lowBalanceThreshold?.toFixed(2)).toBe("500.00");
     expect(await m.setAccountActive(w.id, false)).toEqual({ ok: true });
-    // A wallet E-Sevai still pays from can't be switched off.
-    const eb = await prisma.account.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, name: "EB wallet" } });
-    expect((await m.setAccountActive(eb.id, false)).error).toMatch(/still used by E-Sevai/);
   });
 });
 

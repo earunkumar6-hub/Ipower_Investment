@@ -5,29 +5,43 @@ import { revalidatePath } from "next/cache";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
-import { cashAndBank, receivingAccountId } from "@/lib/accounts";
+import { accountLabel, receivingAccount } from "@/lib/accounts";
+import { audit } from "@/lib/audit";
 import { balanceAt } from "@/lib/daybook";
-import { istToday } from "@/lib/dates";
+import { istNowHHMM, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { priceService, RateNotConfiguredError, ratesInForce } from "@/lib/esevai";
 import { D, fmtINR } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
+import { checkDenominations, denominationsField } from "@/lib/payment-options";
 import { postServiceTransaction, postWalletRecharge } from "@/lib/posting";
+import { closedDayError, dateOrToday, pastOrTodayField } from "@/lib/receipt-lines";
 import { authorize } from "@/lib/session";
+
+const money = (msg: string) => z.string().trim().regex(/^\d+(\.\d{1,2})?$/, msg).refine((v) => Number(v) > 0, "Amount must be more than 0");
 
 const entrySchema = z
   .object({
-    serviceCode: z.enum(["EB", "PAN", "CERT"]),
-    baseAmount: z.string().trim(),
-    paidFrom: z.enum(["wallet", "bank"]),
+    txnDate: pastOrTodayField, // "" = today; earlier days allowed until the last closed Day Book day
+    txnTime: z.union([z.literal(""), z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick the time")]).default(""), // "" = now
+    serviceCode: z.enum(["EB", "PAN", "CERT", "OTHER"], "Pick the service"),
+    serviceName: z.string().trim().max(60).default(""), // Other: the service typed
+    providerRef: z.string().trim().max(40).default(""), // service no. / application no.
+    customerMobile: z.union([z.literal(""), z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number")]).default(""),
+    customerName: z.string().trim().max(80).default(""),
+    gender: z.union([z.literal(""), z.enum(["Female", "Male", "Other"])]).default(""),
+    paidAmount: money("Enter the amount paid / deducted"),
+    paidVia: z.enum(["Wallet", "GPay", "NetBanking"]),
+    paidFromAccountId: z.string().min(1, "Pick where it was paid from"),
+    providerTxnNo: z.string().trim().min(2, "Enter the transaction number").max(40),
+    collected: money("Enter the amount collected from the customer"),
     mode: z.enum(["Cash", "UPI"]),
-    reference: z.string().trim().max(40), // UTR when the customer paid by UPI
-    providerRef: z.string().trim().max(40),
-    customerName: z.string().trim().max(80),
-    customerMobile: z.union([z.literal(""), z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number")]),
+    intoAccountId: z.string().trim().default(""), // UPI: the bank account it came into
+    reference: z.string().trim().max(40).default(""), // UPI: UTR (optional)
+    denominations: denominationsField, // cash notes / coins collected
+    notes: z.string().trim().max(200).default(""),
   })
-  .refine((v) => v.serviceCode !== "EB" || /^\d+(\.\d{1,2})?$/.test(v.baseAmount), { message: "Enter the EB bill amount", path: ["baseAmount"] })
-  .refine((v) => v.serviceCode !== "EB" || v.providerRef, { message: "Enter the EB consumer / reference no.", path: ["providerRef"] });
+  .refine((v) => v.serviceCode !== "OTHER" || v.serviceName.length >= 2, { message: "Type the service name", path: ["serviceName"] })
+  .refine((v) => v.serviceCode !== "EB" || v.providerRef, { message: "Enter the EB consumer / service no.", path: ["providerRef"] });
 
 /** Wallet or bank too low: refuse the entry and tell the Admins (mocked WhatsApp). */
 async function alertLowBalance(tenantId: string, accountName: string, balance: string, needed: string, userId: string) {
@@ -40,6 +54,11 @@ async function alertLowBalance(tenantId: string, accountName: string, balance: s
   });
 }
 
+/**
+ * E-Sevai / CSC entry (#7). Staff type what was paid to the provider and what the customer paid (the rate table only
+ * prefills it); service charge = collected − paid, counted in P&L. Paid from any active wallet, or straight from a bank
+ * account (GPay / net banking) where the service allows it. A mobile that belongs to a customer links the entry to them.
+ */
 async function createServiceEntryUnguarded(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Service.Record");
   const parsed = entrySchema.safeParse(Object.fromEntries(form));
@@ -48,51 +67,67 @@ async function createServiceEntryUnguarded(_: ActionResult, form: FormData): Pro
     return { ok: false, error: i.message, fieldErrors: { [String(i.path[0])]: i.message } };
   }
   const v = parsed.data;
-  const today = istToday();
+  const date = dateOrToday(v.txnDate);
+  const now = istNowHHMM();
+  const time = v.txnTime || now;
+  if (date.getTime() === istToday().getTime() && time > now) return { ok: false, error: "Time can't be later than now", fieldErrors: { txnTime: "Future" } };
+  const paid = new D(v.paidAmount), collected = new D(v.collected);
+  if (collected.lt(paid)) return { ok: false, error: "Collected from the customer can't be less than the amount paid", fieldErrors: { collected: "Too low" } };
+  const cash = v.mode === "Cash" ? checkDenominations(v.denominations, collected) : null;
+  if (cash && "error" in cash) return { ok: false, error: cash.error, fieldErrors: { denominations: cash.error } };
   let lowAlert: Parameters<typeof alertLowBalance> | null = null;
 
-  try {
-    const result = await db.$transaction(async (tx): Promise<ActionResult> => {
-      const type = await tx.serviceType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: user.tenantId, code: v.serviceCode } } });
-      if (v.paidFrom === "bank" && !type.allowBankPay) return { ok: false, error: `${type.name} is always paid from its wallet` };
-      const price = priceService(type.code, await ratesInForce(tx, type.id, today), v.baseAmount || 0);
-      const accounts = await cashAndBank(tx, user.tenantId);
-      const payFrom = v.paidFrom === "bank" ? accounts.bank : await tx.account.findUniqueOrThrow({ where: { id: type.walletAccountId } });
+  const result = await db.$transaction(async (tx): Promise<ActionResult> => {
+    const closed = await closedDayError(tx, user.tenantId, date);
+    if (closed) return { ok: false, error: closed, fieldErrors: { txnDate: closed } };
+    const type = await tx.serviceType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: user.tenantId, code: v.serviceCode } } });
+    const direct = v.paidVia !== "Wallet";
+    if (direct && !type.allowBankPay) return { ok: false, error: `${type.name} is paid from a wallet`, fieldErrors: { paidFromAccountId: "Wallet only" } };
+    const payFrom = await tx.account.findFirst({ where: { id: v.paidFromAccountId, tenantId: user.tenantId, active: true, type: direct ? "Bank" : "Wallet" } });
+    if (!payFrom) return { ok: false, error: direct ? "Pick the bank account it was paid from" : "Pick an active wallet", fieldErrors: { paidFromAccountId: "Required" } };
+    const into = await receivingAccount(tx, user.tenantId, v.mode, v.intoAccountId);
+    if ("error" in into) return { ok: false, error: into.error, fieldErrors: { intoAccountId: into.error } };
 
-      const balance = await balanceAt(tx, payFrom.id, today);
-      if (balance.lt(price.walletCost)) {
-        lowAlert = [user.tenantId, payFrom.name, fmtINR(balance), fmtINR(price.walletCost), user.id];
-        return { ok: false, error: `${payFrom.name} has only ${fmtINR(balance)}; ${fmtINR(price.walletCost)} is needed. Recharge first — Admin has been alerted.` };
-      }
+    const balance = await balanceAt(tx, payFrom.id, date);
+    if (balance.lt(paid)) {
+      lowAlert = [user.tenantId, accountLabel(payFrom), fmtINR(balance), fmtINR(paid), user.id];
+      return { ok: false, error: `${accountLabel(payFrom)} has only ${fmtINR(balance)}; ${fmtINR(paid)} is needed. Recharge first — Admin has been alerted.` };
+    }
+    const customer = v.customerMobile
+      ? await tx.customer.findFirst({
+          where: { tenantId: user.tenantId, OR: [{ mobile: v.customerMobile }, { mobiles: { some: { number: v.customerMobile } } }] },
+          orderBy: { createdAt: "asc" }, select: { id: true, name: true },
+        })
+      : null;
 
-      const txn = await tx.serviceTransaction.create({
-        data: {
-          tenantId: user.tenantId, txnNo: await nextNumber(tx, user.tenantId, "service"), txnDate: today, serviceTypeId: type.id,
-          customerName: v.customerName || null, customerMobile: v.customerMobile || null,
-          paidFromAccountId: payFrom.id, receivedAccountId: receivingAccountId(v.mode, accounts),
-          ...price, providerRef: v.providerRef || null, paymentMode: v.mode, reference: v.reference || null, createdById: user.id,
-        },
-      });
-      await postServiceTransaction(tx, txn, { serviceCode: type.code, serviceName: type.name });
-      return { ok: true, id: txn.id };
+    const profit = collected.minus(paid);
+    const txn = await tx.serviceTransaction.create({
+      data: {
+        tenantId: user.tenantId, txnNo: await nextNumber(tx, user.tenantId, "service"), txnDate: date, txnTime: time, serviceTypeId: type.id,
+        serviceName: v.serviceCode === "OTHER" ? v.serviceName : null,
+        customerName: v.customerName || customer?.name || null, customerMobile: v.customerMobile || null, customerId: customer?.id ?? null,
+        gender: v.gender || null, paidVia: v.paidVia, paidFromAccountId: payFrom.id, receivedAccountId: into.ok.id,
+        baseAmount: paid, walletCost: paid, serviceCharge: profit, customerAmount: collected, profit,
+        providerRef: v.providerRef || null, providerTxnNo: v.providerTxnNo, paymentMode: v.mode, reference: v.mode === "UPI" ? v.reference || null : null,
+        denominations: cash?.ok, notes: v.notes || null, createdById: user.id,
+      },
     });
-    if (lowAlert) await alertLowBalance(...(lowAlert as Parameters<typeof alertLowBalance>));
-    if (result.ok) revalidatePath("/esevai");
-    return result;
-  } catch (e) {
-    if (e instanceof RateNotConfiguredError) return { ok: false, error: e.message, fieldErrors: { baseAmount: "No rate" } };
-    throw e;
-  }
+    await postServiceTransaction(tx, txn, { serviceCode: type.code, serviceName: txn.serviceName ?? type.name });
+    return { ok: true, id: txn.id, href: `/api/esevai/${txn.id}/pdf` };
+  });
+  if (lowAlert) await alertLowBalance(...(lowAlert as Parameters<typeof alertLowBalance>));
+  if (result.ok) revalidatePath("/esevai");
+  return result;
 }
 
 const rechargeSchema = z.object({
   walletId: z.string().min(1, "Pick a wallet"),
-  amount: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0"),
-  from: z.enum(["Bank", "Cash"]),
-  reference: z.string().trim().max(40),
+  amount: money("Enter an amount"),
+  bankAccountId: z.string().min(1, "Pick the bank account"),
+  reference: z.string().trim().min(2, "Enter the transaction number").max(40),
 });
 
-/** Admin / Super Admin: top up a provider wallet from the bank or cash. */
+/** Admin / Super Admin (#6): top up a wallet from a company bank account – a bank → wallet transfer, never an expense. */
 async function rechargeWalletUnguarded(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Wallet.Recharge");
   const parsed = rechargeSchema.safeParse(Object.fromEntries(form));
@@ -104,14 +139,16 @@ async function rechargeWalletUnguarded(_: ActionResult, form: FormData): Promise
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const wallet = await tx.account.findFirst({ where: { id: v.walletId, tenantId: user.tenantId, type: "Wallet", active: true } });
     if (!wallet) return { ok: false, error: "Wallet not found" };
-    const accounts = await cashAndBank(tx, user.tenantId);
-    const from = v.from === "Bank" ? accounts.bank : accounts.cash;
-    const balance = await balanceAt(tx, from.id, today);
-    if (balance.lt(amount)) return { ok: false, error: `${from.name} has only ${fmtINR(balance)}` };
+    const bank = await tx.account.findFirst({ where: { id: v.bankAccountId, tenantId: user.tenantId, type: "Bank", active: true } });
+    if (!bank) return { ok: false, error: "Pick an active bank account" };
+    const balance = await balanceAt(tx, bank.id, today);
+    if (balance.lt(amount)) return { ok: false, error: `${accountLabel(bank)} has only ${fmtINR(balance)}` };
+    const id = randomUUID();
     await postWalletRecharge(tx, {
-      id: randomUUID(), tenantId: user.tenantId, walletId: wallet.id, walletName: wallet.name, fromAccountId: from.id,
-      amount, mode: v.from, date: today, reference: v.reference || undefined, createdById: user.id,
+      id, tenantId: user.tenantId, walletId: wallet.id, walletName: wallet.name, fromAccountId: bank.id,
+      amount, mode: "Bank", date: today, reference: v.reference, createdById: user.id,
     });
+    await audit(tx, user, { entity: "Account", entityId: wallet.id, action: "Recharge", summary: `${wallet.name} recharged ${fmtINR(amount)} from ${accountLabel(bank)} · Txn ${v.reference}` });
     return { ok: true };
   });
   if (result.ok) revalidatePath("/esevai");
@@ -124,4 +161,14 @@ export async function createServiceEntry(_: ActionResult, form: FormData): Promi
 
 export async function rechargeWallet(_: ActionResult, form: FormData): Promise<ActionResult> {
   return refuseOnClosedDay(() => rechargeWalletUnguarded(_, form));
+}
+
+/** "Matches customer {name} (CIF)" on the entry form: the customer whose main or extra mobile this is. */
+export async function findCustomerByMobile(mobile: string): Promise<{ id: string; name: string; cifNo: string } | null> {
+  const user = await authorize("Service.Record");
+  if (!/^[6-9]\d{9}$/.test(mobile)) return null;
+  return db.customer.findFirst({
+    where: { tenantId: user.tenantId, OR: [{ mobile }, { mobiles: { some: { number: mobile } } }] },
+    orderBy: { createdAt: "asc" }, select: { id: true, name: true, cifNo: true },
+  });
 }

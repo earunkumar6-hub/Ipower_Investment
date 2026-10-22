@@ -106,11 +106,6 @@ export async function setAccountActive(id: string, active: boolean): Promise<Act
     if (!a) return fail("Account not found");
     if (!active && a.isDefault) return fail(`${a.name} is the default ${a.type === "Cash" ? "cash account" : "bank account"}; make another one the default first`);
     if (!active && a.type === "Cash") return fail("Office cash can't be switched off");
-    if (!active && a.type === "Wallet") {
-      // Until E-Sevai lets staff pick the wallet, each service type pays from a fixed wallet.
-      const services = await tx.serviceType.findMany({ where: { tenantId: user.tenantId, walletAccountId: id }, select: { name: true } });
-      if (services.length) return fail(`${a.name} is still used by E-Sevai (${services.map((x) => x.name).join(", ")}); it can be switched off once E-Sevai entries pick their wallet`);
-    }
     await tx.account.update({ where: { id }, data: { active } });
     await audit(tx, user, { entity: "Account", entityId: id, action: active ? "Activated" : "Deactivated", summary: `${a.name} ${active ? "switched on" : "switched off"}` });
     return done();

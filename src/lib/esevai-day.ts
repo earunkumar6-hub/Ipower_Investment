@@ -1,4 +1,5 @@
 import { accountDay } from "@/lib/daybook";
+import { fmtHHMM, fmtTime } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { ZERO } from "@/lib/money";
 import { seesAll } from "@/lib/permissions";
@@ -6,13 +7,16 @@ import type { SessionUser } from "@/lib/session";
 
 // What the E-Sevai screen lists for one day; shared with its Excel export.
 
+/** An entry's time: as entered on the form, else when it was saved (older entries). */
+export const serviceTime = (t: { txnTime: string | null; createdAt: Date }) => (t.txnTime ? fmtHHMM(t.txnTime) : fmtTime(t.createdAt));
+
 /** Saved service entries (staff see their own) and wallet recharges for `date`. */
 export async function esevaiEntries(user: SessionUser, date: Date) {
   const mine = seesAll(user.role) ? {} : { createdById: user.id };
   const [txns, recharges] = await Promise.all([
     db.serviceTransaction.findMany({
-      where: { tenantId: user.tenantId, txnDate: date, status: "Saved", ...mine },
-      include: { serviceType: true },
+      where: { tenantId: user.tenantId, status: "Saved", ...mine, OR: [{ txnDate: date }, { createdAt: { gte: date, lt: new Date(date.getTime() + 86_400_000) } }] },
+      include: { serviceType: true, customer: { select: { id: true, name: true, cifNo: true } } },
       orderBy: { createdAt: "asc" },
     }),
     db.dayBookEntry.findMany({ where: { tenantId: user.tenantId, entryDate: date, sourceType: "WalletRecharge", direction: "In" }, orderBy: { createdAt: "asc" } }),

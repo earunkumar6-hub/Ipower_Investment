@@ -30,6 +30,16 @@ export const fmtDate = (date: Date) =>
 export const fmtTime = (date: Date) =>
   date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });
 
+/** Current IST wall-clock time as "14:05" (for <input type="time">). */
+export const istNowHHMM = (d: Date = new Date()) =>
+  new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: IST }).format(d);
+
+/** "14:05" → "2:05 pm". */
+export function fmtHHMM(hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
+
 /** "12 Oct, 3:42 pm" in IST. */
 export const fmtDateTime = (date: Date) =>
   date.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });

@@ -354,15 +354,16 @@ model Customer {
   ownerId      String
   createdAt    DateTime @default(now())
 
-  policies       Policy[]
-  receipts       Receipt[]
-  payments       Payment[]
-  ownerPaidSlips OwnerPaidSlip[]
-  quotations     Quotation[]
-  proposals      Proposal[]
-  mobiles        CustomerMobile[]
-  directBills    DirectBill[]
-  calls          Call[]
+  policies            Policy[]
+  receipts            Receipt[]
+  payments            Payment[]
+  serviceTransactions ServiceTransaction[]
+  ownerPaidSlips      OwnerPaidSlip[]
+  quotations          Quotation[]
+  proposals           Proposal[]
+  mobiles             CustomerMobile[]
+  directBills         DirectBill[]
+  calls               Call[]
 
   @@unique([tenantId, cifNo])
   @@index([tenantId, mobile])
@@ -852,6 +853,13 @@ model ServiceRate {
   effectiveFrom       DateTime    @db.Date
 }
 
+/// How the provider was paid for an E-Sevai service (change set #7).
+enum ServicePaidVia {
+  Wallet // CSC / E-Sevai / other wallet
+  GPay // GPay direct from a bank account
+  NetBanking // net banking direct from a bank account
+}
+
 enum ServiceTxnStatus {
   Saved
   Cancelled
@@ -862,6 +870,7 @@ model ServiceTransaction {
   tenantId          String
   txnNo             String
   txnDate           DateTime         @db.Date
+  txnTime           String? // "14:05" (IST) as entered; older entries use createdAt
   serviceTypeId     String
   serviceType       ServiceType      @relation(fields: [serviceTypeId], references: [id])
   customerName      String?
@@ -873,7 +882,15 @@ model ServiceTransaction {
   walletCost        Decimal          @db.Decimal(12, 2)
   customerAmount    Decimal          @db.Decimal(12, 2)
   profit            Decimal          @db.Decimal(12, 2)
-  providerRef       String?
+  providerRef       String? // service no. / application no. (EB consumer no.)
+  providerTxnNo     String? // provider / wallet transaction number (required for new entries)
+  serviceName       String? // "Other" services: the name typed
+  customerId        String? // linked when the mobile belongs to a customer
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  gender            Gender?
+  paidVia           ServicePaidVia   @default(Wallet)
+  denominations     Json? // cash notes / coins collected
+  notes             String?
   paymentMode       PaymentMode
   reference         String? // UTR when paid by UPI / bank
   status            ServiceTxnStatus @default(Saved)

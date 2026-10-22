@@ -30,9 +30,9 @@ const ACCOUNTS = [
   { key: "cash", type: "Cash", name: "Cash", opening: "12000.00" },
   { key: "sbi", type: "Bank", name: "SBI current ••1234", last4: "1234", opening: "150000.00",
     bank: { bankName: "SBI", branch: "Walajapet", ifsc: "SBIN0000963", micr: "632002011", accountKind: "Current" } },
-  { key: "eb", type: "Wallet", name: "EB wallet", opening: "10110.00", low: "3000.00" },
-  { key: "pan", type: "Wallet", name: "PAN wallet", opening: "2000.00", low: "500.00" },
-  { key: "cert", type: "Wallet", name: "Certificate wallet", opening: "1296.00", low: "200.00" },
+  { key: "eb", type: "Wallet", name: "EB wallet", opening: "10110.00", low: "3000.00", walletKind: "Other" },
+  { key: "pan", type: "Wallet", name: "PAN wallet", opening: "2000.00", low: "500.00", walletKind: "Other" },
+  { key: "cert", type: "Wallet", name: "Certificate wallet", opening: "1296.00", low: "200.00", walletKind: "CSC" },
 ] as const;
 type AccountKey = (typeof ACCOUNTS)[number]["key"];
 
@@ -80,7 +80,7 @@ async function main() {
       data: {
         tenantId, type: a.type, name: a.name, last4: "last4" in a ? a.last4 : null,
         openingBalance: a.opening, openingDate: today, lowBalanceThreshold: "low" in a ? a.low : null,
-        isDefault: a.type !== "Wallet", ...("bank" in a ? a.bank : {}), // account number not stored: the seed may run without DATA_ENCRYPTION_KEY
+        isDefault: a.type !== "Wallet", ...("bank" in a ? a.bank : {}), ...("walletKind" in a ? { walletKind: a.walletKind } : {}), // account number not stored: the seed may run without DATA_ENCRYPTION_KEY
       },
     });
     acc[a.key] = row.id;
@@ -112,6 +112,8 @@ async function main() {
       rates: { create: { fixedCustomerAmount: "100.00", walletCost: "12.00", effectiveFrom: fyStart } },
     },
   });
+  // "Other" services: name typed on each entry, no rate (staff type what was collected).
+  await prisma.serviceType.create({ data: { tenantId, code: "OTHER", name: "Other service", walletAccountId: acc.cert, allowBankPay: true } });
 
   // ── Customers ──
   const NAMED = [
