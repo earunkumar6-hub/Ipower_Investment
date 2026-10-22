@@ -71,6 +71,12 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/** ATM withdrawal form: default bank, a transaction no., withdrawn by Arun, notes adding up. */
+const atmForm = async (amount: string, reason = "for UPI-paid RD") => {
+  const bank = await prisma.account.findFirstOrThrow({ where: { type: "Bank", isDefault: true } });
+  return form({ date, bankAccountId: bank.id, amount, reference: "ATM-VT-1", withdrawnById: users.arun.id, reason, denominations: cashFor(amount) });
+};
+
 const cashDay = async () => {
   const cash = await prisma.account.findFirstOrThrow({ where: { type: "Cash" } });
   return (await accountDay(db as unknown as Tx, users.admin.tenantId, today)).find((d) => d.accountId === cash.id)!;
@@ -94,7 +100,7 @@ describe("Day Book: ATM, PO deposit, tally, verify, close", () => {
     const total = sum(receipts.map((x) => x.amount));
     const before = await cashDay();
 
-    expect(await recordAtmWithdrawal({ ok: false }, form({ date, amount: upi.toFixed(2), notes: "for UPI-paid RD" }))).toEqual({ ok: true });
+    expect(await recordAtmWithdrawal({ ok: false }, await atmForm(upi.toFixed(2)))).toEqual({ ok: true });
     expect(await depositToPostOffice({ ok: false }, form({ date, receiptIds: collectedIds.join(","), poReceiptNo: "7781 2290", amount: total.toFixed(2), denominations: cashFor(total.toFixed(2)) }))).toEqual({ ok: true });
 
     const after = await prisma.receipt.findMany({ where: { id: { in: collectedIds } } });
@@ -134,7 +140,7 @@ describe("Day Book: ATM, PO deposit, tally, verify, close", () => {
 
   it("step 9: a closed day is read-only", async () => {
     as("arun");
-    const atm = await recordAtmWithdrawal({ ok: false }, form({ date, amount: "100", notes: "" }));
+    const atm = await recordAtmWithdrawal({ ok: false }, await atmForm("100", "late"));
     expect(atm.error).toMatch(/is closed; closed days are read-only/);
     expect((await saveCashCount({ ok: false }, form({ date, GRM: "1", PostOffice: "", ESevai: "", PAN: "", Others: "" }))).error).toMatch(/closed/);
     as("admin");

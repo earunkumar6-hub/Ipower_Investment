@@ -1,5 +1,6 @@
 import type { DayBookEntry, LeadSource, Prisma } from "@prisma/client";
 import { accountDay, earliestOpenDayBefore } from "@/lib/daybook";
+import { daysPastGrace } from "@/lib/daybook-grace";
 import { addDays, fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { canApprove } from "@/lib/expenses";
@@ -90,6 +91,11 @@ export async function adminDashboard(user: SessionUser) {
     })).map((e) => e.sourceId),
   );
   const earlierOpen = await earliestOpenDayBefore(db as unknown as Tx, tenantId, today);
+  const [{ dayCloseGraceDays }, ownerPending] = await Promise.all([
+    db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { dayCloseGraceDays: true } }),
+    db.ownerEntry.findMany({ where: { tenantId, status: "Pending" }, select: { amount: true } }),
+  ]);
+  const pastGrace = await daysPastGrace(db as unknown as Tx, tenantId, today, dayCloseGraceDays);
   const counted = cashClose?.physical ?? null;
   const oldestRd = collectedRd.reduce<Date | null>((m, r) => (!m || r.receiptDate < m ? r.receiptDate : m), null);
   const sumAmt = <T extends { amount: Prisma.Decimal }>(xs: T[]) => (xs.length ? sum(xs.map((x) => x.amount)) : ZERO);
@@ -122,6 +128,9 @@ export async function adminDashboard(user: SessionUser) {
       toApprove: waiting.filter((e) => canApprove(user, e)),
       toPay: approvedUnpaid.filter((e) => !paidIds.has(e.id)).length,
       earlierOpen,
+      pastGrace, // alert: days past the grace period, not closed (Super Admin only can close them)
+      graceDays: dayCloseGraceDays,
+      ownerPending: { count: ownerPending.length, amount: sumAmt(ownerPending) },
       todayStatus: cashClose?.status === "Closed" ? "Closed" : counted === null ? "Open – not counted" : "Open – counted",
       rdNotDeposited: { count: collectedRd.length, amount: sumAmt(collectedRd), oldestDays: oldestRd ? Math.round((today.getTime() - oldestRd.getTime()) / 86_400_000) : 0 },
     },
@@ -137,6 +146,13 @@ export function actionItems(a: Awaited<ReturnType<typeof adminDashboard>>["actio
   if (a.ownerOwes.count || a.toReturn.count) actions.push({ item: "Owner-paid RD", detail: `${a.ownerOwes.count} customers owe ${fmtINR(a.ownerOwes.amount)} · ${fmtINR(a.toReturn.amount)} to return to owner`, who: "Admin", href: "/receipts?tab=owner" });
   for (const e of a.toApprove) actions.push({ item: `Expense ${e.expenseNo}`, detail: `${e.description} ${fmtINR(e.amount)}`, who: e.approvalLevel === "SuperAdmin" ? "Super Admin" : "Admin", href: "/expenses?tab=approve" });
   if (a.toPay) actions.push({ item: "Expenses to pay", detail: `${a.toPay} approved, not yet paid`, who: "Admin", href: "/expenses" });
+  if (a.pastGrace.length) {
+    actions.push({
+      item: "Day Book past grace period", detail: `${a.pastGrace.length} day(s) not closed within ${a.graceDays} days (oldest ${fmtDate(a.pastGrace[0])}) – only the Super Admin can close them`,
+      who: "Super Admin", href: `/daybook?date=${isoDate(a.pastGrace[0])}`,
+    });
+  }
+  if (a.ownerPending.count) actions.push({ item: "Owner entries to confirm", detail: `${a.ownerPending.count} · ${fmtINR(a.ownerPending.amount)}`, who: "Super Admin", href: "/daybook" });
   if (a.earlierOpen) actions.push({ item: "Previous Day Book open", detail: `${fmtDate(a.earlierOpen)} is not closed`, who: "Admin", href: `/daybook?date=${isoDate(a.earlierOpen)}` });
   actions.push({ item: "Day Book today", detail: a.todayStatus, who: "Admin", href: "/daybook" });
   if (a.rdNotDeposited.count) actions.push({ item: "RD collected, not deposited", detail: `${a.rdNotDeposited.count} receipts · ${fmtINR(a.rdNotDeposited.amount)} · oldest ${a.rdNotDeposited.oldestDays ? `${a.rdNotDeposited.oldestDays} d` : "today"}`, who: "Users", href: "/daybook" });

@@ -8,7 +8,9 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { cashAndBank } from "@/lib/accounts";
 import { audit } from "@/lib/audit";
 import { refuseOnClosedDay } from "@/lib/action-guard";
-import { accountDay, assertDayOpen, balanceAt, earliestOpenDayBefore, lockDay, post } from "@/lib/daybook";
+import { accountLabel } from "@/lib/accounts";
+import { accountDay, assertDayOpen, balanceAt, earliestOpenDayBefore, lockDay, post, reverseSource } from "@/lib/daybook";
+import { graceState } from "@/lib/daybook-grace";
 import { CASH_SOURCES, UPI_ADJUSTMENT_REASONS } from "@/lib/daybook-labels";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
@@ -34,28 +36,164 @@ async function guarded(fn: () => Promise<ActionResult>): Promise<ActionResult> {
   return r;
 }
 
-const atmSchema = z.object({ date: isoDay, amount: money.refine((v) => Number(v) > 0, "Amount must be more than 0"), notes: z.string().trim().max(200) });
+const positive = money.refine((v) => Number(v) > 0, "Amount must be more than 0");
+const ref = (label: string) => z.string().trim().min(2, `Enter the ${label}`).max(60);
 
-/** ATM / bank withdrawal for UPI-paid RD: bank out, cash in. A transfer, never an expense. */
+/** The active bank account picked on a Day Book form. */
+const pickBank = (tx: Tx, tenantId: string, id: string) => tx.account.findFirst({ where: { id, tenantId, type: "Bank", active: true } });
+const cashAccount = (tx: Tx, tenantId: string) =>
+  tx.account.findFirstOrThrow({ where: { tenantId, type: "Cash", active: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] });
+
+const atmSchema = z.object({
+  date: isoDay, bankAccountId: z.string().min(1, "Pick the bank account"), amount: positive,
+  reference: ref("transaction number"), withdrawnById: z.string().min(1, "Pick who withdrew the cash"),
+  reason: z.string().trim().min(2, "Enter the reason").max(200), denominations: denominationsField,
+});
+
+/** ATM / bank withdrawal (#9): bank out, cash in – a transfer, never an expense. Notes counted must equal the amount. */
 export async function recordAtmWithdrawal(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("DayBook.Create");
   const parsed = atmSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return fail(parsed.error.issues[0].message);
-  const { date, amount, notes } = parsed.data;
+  const { date, bankAccountId, amount, reference, withdrawnById, reason, denominations } = parsed.data;
   if (checkDate(date)) return fail(checkDate(date)!);
+  const a = new D(amount);
+  const notes = checkDenominations(denominations, a);
+  if ("error" in notes) return fail(notes.error);
   return guarded(() =>
     db.$transaction(async (tx) => {
-      const { cash, bank } = await cashAndBank(tx, user.tenantId);
-      const a = new D(amount);
+      const bank = await pickBank(tx, user.tenantId, bankAccountId);
+      if (!bank) return fail("Pick an active bank account");
+      const by = await tx.user.findFirst({ where: { id: withdrawnById, tenantId: user.tenantId }, select: { name: true, role: true } });
+      if (!by) return fail("Pick who withdrew the cash");
+      const cash = await cashAccount(tx, user.tenantId);
       const balance = await balanceAt(tx, bank.id, date);
-      if (balance.lt(a)) return fail(`${bank.name} has only ${fmtINR(balance)}`);
-      const particulars = `ATM withdrawal${notes ? ` · ${notes}` : ""}`;
+      if (balance.lt(a)) return fail(`${accountLabel(bank)} has only ${fmtINR(balance)}`);
+      const particulars = `ATM withdrawal · ${fmtINR(a)} cash / ${fmtINR(a)} bank · Txn ${reference} · by ${by.name}${by.role === "SuperAdmin" ? " (owner)" : ""}`;
       await post(tx, {
-        tenantId: user.tenantId, entryDate: date, sourceType: "Contra", sourceId: randomUUID(), createdById: user.id,
+        tenantId: user.tenantId, entryDate: date, sourceType: "Contra", sourceId: randomUUID(), sourceNo: reference, createdById: user.id,
         lines: [
-          { key: "out", accountId: bank.id, direction: "Out", amount: a, entryType: "Withdrawal", mode: "Bank", particulars, notes },
-          { key: "in", accountId: cash.id, direction: "In", amount: a, entryType: "Withdrawal", mode: "Cash", particulars, notes },
+          { key: "out", accountId: bank.id, direction: "Out", amount: a, entryType: "Withdrawal", mode: "Bank", particulars, notes: reason },
+          { key: "in", accountId: cash.id, direction: "In", amount: a, entryType: "Withdrawal", mode: "Cash", particulars, notes: reason, denominations: notes.ok },
         ],
+      });
+      return { ok: true };
+    }),
+  );
+}
+
+const bankDepositSchema = z.object({
+  date: isoDay, bankAccountId: z.string().min(1, "Pick the bank account"), amount: positive,
+  reference: ref("deposit slip / transaction no."), denominations: denominationsField, notes: z.string().trim().max(200).default(""),
+});
+
+/** Deposit to bank (#16): cash down, bank up – a transfer, not income. Notes handed over must equal the amount. */
+export async function depositToBank(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("DayBook.Create");
+  const parsed = bankDepositSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const { date, bankAccountId, amount, reference, denominations, notes: remark } = parsed.data;
+  if (checkDate(date)) return fail(checkDate(date)!);
+  const a = new D(amount);
+  const notes = checkDenominations(denominations, a);
+  if ("error" in notes) return fail(notes.error);
+  return guarded(() =>
+    db.$transaction(async (tx) => {
+      const bank = await pickBank(tx, user.tenantId, bankAccountId);
+      if (!bank) return fail("Pick an active bank account");
+      const cash = await cashAccount(tx, user.tenantId);
+      const balance = await balanceAt(tx, cash.id, date);
+      if (balance.lt(a)) return fail(`Cash in hand is only ${fmtINR(balance)}`);
+      const particulars = `Deposit to bank · ${fmtINR(a)} cash / ${fmtINR(a)} bank · Slip ${reference} · into ${accountLabel(bank)}`;
+      await post(tx, {
+        tenantId: user.tenantId, entryDate: date, sourceType: "Contra", sourceId: randomUUID(), sourceNo: reference, createdById: user.id,
+        lines: [
+          { key: "out", accountId: cash.id, direction: "Out", amount: a, entryType: "DepositToBank", mode: "Cash", particulars, notes: remark || undefined, denominations: notes.ok },
+          { key: "in", accountId: bank.id, direction: "In", amount: a, entryType: "DepositToBank", mode: "Bank", particulars, notes: remark || undefined },
+        ],
+      });
+      return { ok: true };
+    }),
+  );
+}
+
+const ownerSchema = z.object({
+  kind: z.enum(["Withdrawal", "Contribution"]), date: isoDay, accountId: z.string().min(1, "Pick office cash or a bank account"),
+  amount: positive, reference: z.string().trim().max(60).default(""), reason: z.string().trim().min(3, "Enter the reason").max(200),
+  denominations: denominationsField,
+});
+
+/**
+ * Owner withdrawal / contribution (#19, #20): recorded by anyone, posted to the Day Book at once (the money moved),
+ * Pending until the Super Admin confirms. Never an expense or income; listed in the P&L Owner statement.
+ */
+export async function recordOwnerEntry(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("DayBook.Create");
+  const parsed = ownerSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const v = parsed.data;
+  if (checkDate(v.date)) return fail(checkDate(v.date)!);
+  const a = new D(v.amount);
+  return guarded(() =>
+    db.$transaction(async (tx) => {
+      const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
+      if (!account) return fail("Pick office cash or an active bank account");
+      const isCash = account.type === "Cash";
+      if (!isCash && !v.reference) return fail("Enter the bank transaction no.");
+      const notes = isCash ? checkDenominations(v.denominations, a) : null;
+      if (notes && "error" in notes) return fail(notes.error);
+      const out = v.kind === "Withdrawal";
+      if (out) {
+        const balance = await balanceAt(tx, account.id, v.date);
+        if (balance.lt(a)) return fail(`${accountLabel(account)} has only ${fmtINR(balance)}`);
+      }
+      const entry = await tx.ownerEntry.create({
+        data: {
+          tenantId: user.tenantId, kind: v.kind, entryDate: v.date, accountId: account.id, amount: a, reference: isCash ? null : v.reference,
+          reason: v.reason, denominations: notes?.ok, createdById: user.id,
+        },
+      });
+      const label = out ? "Owner withdrawal" : "Owner contribution";
+      await post(tx, {
+        tenantId: user.tenantId, entryDate: v.date, sourceType: "OwnerEntry", sourceId: entry.id, sourceNo: entry.reference ?? undefined, createdById: user.id,
+        lines: [{
+          key: out ? "out" : "in", accountId: account.id, direction: out ? "Out" : "In", amount: a, entryType: out ? "OwnerWithdrawal" : "OwnerContribution",
+          mode: isCash ? "Cash" : "Bank", particulars: `${label} · ${v.reason}${entry.reference ? ` · Txn ${entry.reference}` : ""}`,
+          notes: v.reason, denominations: notes?.ok,
+        }],
+      });
+      await audit(tx, user, { entity: "OwnerEntry", entityId: entry.id, action: "Create", summary: `${label} ${fmtINR(a)} · ${accountLabel(account)} · ${fmtDate(v.date)}`, reason: v.reason });
+      return { ok: true };
+    }),
+  );
+}
+
+const decideSchema = z.object({ ownerEntryId: z.string().min(1), decision: z.enum(["Confirm", "Reject"]), reason: z.string().trim().max(200).default("") });
+
+/** Super Admin only: confirm an owner entry (final), or reject it – a reversing Day Book entry dated today. */
+export async function decideOwnerEntry(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("Owner.Confirm");
+  const parsed = decideSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const { ownerEntryId, decision, reason } = parsed.data;
+  if (decision === "Reject" && reason.length < 3) return fail("Enter why it is rejected");
+  const today = istToday();
+  return guarded(() =>
+    db.$transaction(async (tx) => {
+      const e = await tx.ownerEntry.findFirst({ where: { id: ownerEntryId, tenantId: user.tenantId } });
+      if (!e) return fail("Not found");
+      if (e.status !== "Pending") return fail(`Already ${e.status.toLowerCase()}`);
+      const done = await tx.ownerEntry.updateMany({
+        where: { id: e.id, status: "Pending" },
+        data: { status: decision === "Confirm" ? "Confirmed" : "Rejected", decidedById: user.id, decidedAt: new Date(), rejectReason: decision === "Reject" ? reason : null },
+      });
+      if (done.count !== 1) return fail("Someone else just decided this entry; reload");
+      if (decision === "Reject") {
+        await reverseSource(tx, { tenantId: user.tenantId, sourceType: "OwnerEntry", sourceId: e.id, entryDate: today, createdById: user.id, reason });
+      }
+      await audit(tx, user, {
+        entity: "OwnerEntry", entityId: e.id, action: decision === "Confirm" ? "Confirmed" : "Rejected",
+        summary: `Owner ${e.kind.toLowerCase()} ${fmtINR(e.amount)} of ${fmtDate(e.entryDate)} ${decision === "Confirm" ? "confirmed" : "rejected"}`, reason: reason || null,
       });
       return { ok: true };
     }),
@@ -251,6 +389,12 @@ export async function closeDayBook(_: ActionResult, form: FormData): Promise<Act
       const { cash } = await cashAndBank(tx, user.tenantId);
       const rows = await tx.dayClose.findMany({ where: { tenantId: user.tenantId, date } });
       if (rows.some((r) => r.status === "Closed")) return fail("This day is already closed");
+      // Past the grace period only the Super Admin can close the day.
+      const { dayCloseGraceDays } = await tx.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { dayCloseGraceDays: true } });
+      const grace = graceState(date, istToday(), dayCloseGraceDays);
+      if (grace.state === "locked" && !hasPermission(user.role, "DayBook.CloseLate")) {
+        return fail(`${fmtDate(date)} is past the ${dayCloseGraceDays}-day grace period and is locked; only the Super Admin can close it now`);
+      }
       const earlier = await earliestOpenDayBefore(tx, user.tenantId, date);
       if (earlier) return fail(`Close ${fmtDate(earlier)} first; earlier days must be closed before this one`);
       const cashRow = rows.find((r) => r.accountId === cash.id);

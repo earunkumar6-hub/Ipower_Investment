@@ -20,7 +20,7 @@ import {
 import { fmtINR, sum } from "@/lib/money";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { seesAll, type Permission } from "@/lib/permissions";
-import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
+import { monthKey, monthRange, ownerStatement, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
 import { quotationStatus } from "@/lib/quotation";
 import { loadRenewals, refreshOverdue, renewalStatus } from "@/lib/renewals";
@@ -569,9 +569,10 @@ export const REPORTS: Record<string, Report> = {
     permission: "PnL.View",
     async build(user, sp) {
       const key = pnlMonth(sp, monthKey(istToday()));
-      const [pnl, prev] = await Promise.all([
+      const [pnl, prev, owner] = await Promise.all([
         profitAndLoss(user.tenantId, monthRange(key)),
         profitAndLoss(user.tenantId, monthRange(previousMonthKey(key))),
+        ownerStatement(user.tenantId, monthRange(key)),
       ]);
       const prevOf = (lines: { label: string; amount: Prisma.Decimal }[], l: string) => lines.find((x) => x.label === l)?.amount ?? 0;
       const rows: Cell[][] = [
@@ -591,6 +592,16 @@ export const REPORTS: Record<string, Report> = {
           name: "Profit & Loss",
           columns: [{ header: "", width: 50 }, { header: pnl.range.label, type: "money", width: 18 }, { header: prev.range.label, type: "money", width: 18 }],
           rows,
+        }, {
+          // Not part of profit.
+          name: "Owner statement",
+          columns: [{ header: "Date", type: "date" }, { header: "Entry", width: 20 }, { header: "From / into", width: 22 }, { header: "Txn no." }, { header: "Reason", width: 36 },
+            { header: "Status" }, { header: "Out", type: "money" }, { header: "In", type: "money" }],
+          rows: [
+            ...owner.entries.map((e): Cell[] => [e.entryDate, e.kind === "Withdrawal" ? "Owner withdrawal" : "Owner contribution", accountLabel(e.account), e.reference, e.reason, e.status,
+              e.kind === "Withdrawal" ? e.amount : null, e.kind === "Contribution" ? e.amount : null]),
+            ["Total (rejected left out)", null, null, null, null, null, owner.withdrawn, owner.contributed],
+          ],
         }],
       };
     },

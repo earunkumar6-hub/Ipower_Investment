@@ -13,7 +13,8 @@ import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { AtmForm, CashCountForm, OtherIncomeForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
+import { graceBadge } from "@/lib/daybook-grace";
+import { AtmForm, BankDepositForm, CashCountForm, OtherIncomeForm, OwnerEntriesPanel, OwnerEntryForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
 import { DayBookTabs } from "./daybook-tabs";
 
 export default async function DayBookPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
@@ -25,6 +26,8 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
   const s = (v: { toFixed(n: number): string }) => v.toFixed(2);
   const nameOf = (id: string | null) => d.admins.find((a) => a.id === id)?.name ?? "—";
   const canAddIncome = hasPermission(user.role, "DayBook.Close");
+  const canCloseLate = hasPermission(user.role, "DayBook.CloseLate");
+  const locked = d.grace.state === "locked";
   const incomeAccounts = canAddIncome
     ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] })
     : [];
@@ -36,11 +39,20 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
           <Link href={`/daybook?date=${isoDate(addDays(date, -1))}`} className={buttonVariants({ variant: "outline", size: "sm" })}>←</Link>
           <span className="px-2 text-sm font-medium">{fmtDate(date)}</span>
           {date < today && <Link href={`/daybook?date=${isoDate(addDays(date, 1))}`} className={buttonVariants({ variant: "outline", size: "sm" })}>→</Link>}
-          <StatusBadge tone={d.closed ? "slate" : "orange"}>{d.closed ? "CLOSED" : "OPEN"}</StatusBadge>
+          <StatusBadge tone={d.closed ? "slate" : locked ? "red" : "orange"}>{d.closed ? "CLOSED" : graceBadge(d.grace)}</StatusBadge>
           <ExportButton report="daybook" user={user} params={{ date: iso }} />
         </div>
       } />
 
+      {d.pastGrace.length > 0 && hasPermission(user.role, "DayBook.Close") && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          {d.pastGrace.length === 1 ? "One day is" : `${d.pastGrace.length} days are`} past the {d.graceDays}-day grace period and not closed:{" "}
+          {d.pastGrace.slice(0, 5).map((day, i) => (
+            <span key={day.toISOString()}>{i > 0 && ", "}<Link href={`/daybook?date=${isoDate(day)}`} className="font-medium underline">{fmtDate(day)}</Link></span>
+          ))}
+          {d.pastGrace.length > 5 && ` and ${d.pastGrace.length - 5} more`}. {canCloseLate ? "Only you (Super Admin) can close them now." : "Only the Super Admin can close them now."}
+        </div>
+      )}
       {d.earlierOpen && (
         <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
           <span>The Day Book for {fmtDate(d.earlierOpen)} is still open. This day can&apos;t be closed until earlier days are closed.</span>
@@ -89,23 +101,27 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
             d.tally.counted === null ? "bg-slate-100 text-slate-700" : d.tally.tallied ? "bg-green-100 text-green-900" : "bg-red-100 text-red-900")}>
             {d.tally.counted === null ? "Count the cash by source to tally." : d.tally.tallied ? "TALLIED – counted cash matches the Day Book." : `NOT TALLIED – difference ${fmtINR(d.tally.difference!)}.`}
           </div>
-          {d.bankLine && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              {d.bankLine.name}: {fmtINR(d.bankLine.opening)}
-              {d.bankLine.lines.map((l) => ` ${l.amount.isNegative() ? "−" : "+"} ${fmtINR(l.amount.abs())} ${l.label.slice(2)}`).join("")} = <b>{fmtINR(d.bankLine.closing)}</b>
+          {d.bankLines.map((b) => (
+            <p key={b.name} className="mt-3 text-xs text-muted-foreground">
+              {b.name}: {fmtINR(b.opening)}
+              {b.lines.map((l) => ` ${l.amount.isNegative() ? "−" : "+"} ${fmtINR(l.amount.abs())} ${l.label.slice(2)}`).join("")} = <b>{fmtINR(b.closing)}</b>
             </p>
-          )}
+          ))}
           <p className="mt-2 text-xs text-muted-foreground">Only cash movements count here. UPI, bank and cheque change the bank balance; an ATM withdrawal moves bank → cash and is never an expense.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-[1fr_2fr] gap-4">
         <div className="space-y-4">
-          <AtmForm date={iso} closed={d.closed} />
+          <AtmForm date={iso} closed={d.closed} banks={d.bankOptions} staff={d.staff} me={user.id} />
+          <BankDepositForm date={iso} closed={d.closed} banks={d.bankOptions} />
+          <OwnerEntryForm date={iso} closed={d.closed} cashAccountId={d.cashAccountId} banks={d.bankOptions} />
           <CashCountForm date={iso} closed={d.closed} initial={Object.fromEntries(CASH_SOURCES.map((k) => [k, d.cashBySource?.[k] ?? ""]))} />
           {canAddIncome && <OtherIncomeForm date={iso} closed={d.closed} accounts={incomeAccounts} />}
         </div>
         <div className="space-y-4">
+          <OwnerEntriesPanel canDecide={hasPermission(user.role, "Owner.Confirm")}
+            rows={d.ownerEntries.map((o) => ({ ...o, date: fmtDate(o.date), amount: o.amount.toFixed(2) }))} />
           <PoDepositForm date={iso} closed={d.closed} receipts={d.collectedRd} atmToday={d.atmToday} isAdmin={hasPermission(user.role, "DayBook.Close")} />
           <VerifyCloseForm
             date={iso}
@@ -115,6 +131,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
             canVerify={hasPermission(user.role, "DayBook.Verify")}
             canClose={hasPermission(user.role, "DayBook.Close")}
             ready={d.tally.tallied && !!d.verifiedById && !d.earlierOpen}
+            locked={locked && !canCloseLate ? `Past the ${d.graceDays}-day grace period: only the Super Admin can close this day now.` : null}
           />
         </div>
       </div>

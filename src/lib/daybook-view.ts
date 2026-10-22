@@ -1,5 +1,8 @@
 import type { DayBookEntry, EntryType, Prisma } from "@prisma/client";
+import { accountLabel } from "@/lib/accounts";
 import { accountDay, earliestOpenDayBefore } from "@/lib/daybook";
+import { daysPastGrace, graceState } from "@/lib/daybook-grace";
+import { istToday } from "@/lib/dates";
 import type { CashSource } from "@/lib/daybook-labels";
 import { db, type Tx } from "@/lib/db";
 import { sum, ZERO } from "@/lib/money";
@@ -25,6 +28,8 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
   OwnerReturn: "Return to owner",
   Adjustment: "Adjustment",
   OtherIncome: "Other income",
+  OwnerWithdrawal: "Owner withdrawal",
+  OwnerContribution: "Owner contribution",
 };
 
 const COLLECTION: EntryType[] = ["Collection", "ServiceCollection"];
@@ -54,14 +59,19 @@ export async function loadDayBook(user: SessionUser, date: Date) {
     }),
     db.user.findMany({ where: { tenantId, role: { in: ["Admin", "SuperAdmin"] }, active: true }, select: { id: true, name: true } }),
   ]);
+  const [tenant, staff, ownerEntries] = await Promise.all([
+    db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { dayCloseGraceDays: true } }),
+    db.user.findMany({ where: { tenantId, active: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    // Owner withdrawals / contributions waiting for the Super Admin, and the ones on this day.
+    db.ownerEntry.findMany({ where: { tenantId, OR: [{ status: "Pending" }, { entryDate: date }] }, orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }] }),
+  ]);
+  const today = istToday();
   const days = await accountDay(db as unknown as Tx, tenantId, date);
   const accountOf = (id: string) => accounts.find((a) => a.id === id)!;
   const cash = accounts.find((a) => a.type === "Cash")!;
-  const bank = accounts.find((a) => a.type === "Bank")!;
+  const banks = accounts.filter((a) => a.type === "Bank" && (a.active || entries.some((e) => e.accountId === a.id)));
   const cashDay = days.find((d) => d.accountId === cash.id)!;
-  const bankDay = days.find((d) => d.accountId === bank.id)!;
   const cashEntries = entries.filter((e) => e.accountId === cash.id);
-  const bankEntries = entries.filter((e) => e.accountId === bank.id);
 
   // Cash tally: opening + each kind of cash movement = computed; compare with the count.
   const cashClose = closes.find((c) => c.accountId === cash.id) ?? null;
@@ -78,6 +88,16 @@ export async function loadDayBook(user: SessionUser, date: Date) {
 
   const closed = closes.some((c) => c.status === "Closed");
   const earlierOpen = await earliestOpenDayBefore(db as unknown as Tx, tenantId, date);
+  const pastGrace = await daysPastGrace(db as unknown as Tx, tenantId, today, tenant.dayCloseGraceDays);
+
+  // A transfer between own accounts (ATM withdrawal, deposit to bank) is two lines; the list shows it as one row.
+  const rows: typeof entries[number][][] = [];
+  for (const e of entries) {
+    const pair = e.sourceType === "Contra" && e.sourceId ? rows.find((r) => r[0].sourceType === "Contra" && r[0].sourceId === e.sourceId) : undefined;
+    if (pair) pair.push(e);
+    else rows.push([e]);
+  }
+  const accountName = (id: string) => accountLabel(accountOf(id));
   const showBalances = seesAll(user.role); // bank and wallet balances are hidden from staff
 
   return {
@@ -108,24 +128,38 @@ export async function loadDayBook(user: SessionUser, date: Date) {
       difference,
       tallied: difference !== null && difference.isZero(),
     },
-    bankLine: showBalances
-      ? { name: bank.name, opening: bankDay.opening, lines: groupNet(bankEntries, (e) => `${e.direction === "In" ? "+" : "−"} ${ENTRY_LABEL[e.entryType]}`), closing: bankDay.closing }
-      : null,
+    bankLines: showBalances
+      ? banks.map((b) => {
+          const day = days.find((d) => d.accountId === b.id)!;
+          return { name: accountLabel(b), opening: day.opening, lines: groupNet(entries.filter((e) => e.accountId === b.id), (e) => `${e.direction === "In" ? "+" : "−"} ${ENTRY_LABEL[e.entryType]}`), closing: day.closing };
+        })
+      : [],
     accounts: showBalances ? days : days.filter((d) => d.type === "Cash"),
-    transactions: entries.map((e) => ({
-      id: e.id,
-      time: e.createdAt,
-      type: ENTRY_LABEL[e.entryType],
-      entryType: e.entryType,
-      reversal: e.reversalOfId !== null,
-      particulars: e.particulars,
-      product: [e.productCategory, e.scheme].filter(Boolean).join(" · "),
-      account: accountOf(e.accountId).name,
-      mode: e.mode && MODE_LABEL[e.mode],
-      inAmount: e.direction === "In" ? e.amount : null,
-      outAmount: e.direction === "Out" ? e.amount : null,
-      notes: e.notes,
-    })),
+    transactions: rows.map((r) => {
+      const e = r[0];
+      if (r.length === 2) {
+        const from = r.find((x) => x.direction === "Out")!, to = r.find((x) => x.direction === "In")!;
+        return {
+          id: e.id, time: e.createdAt, type: ENTRY_LABEL[e.entryType], entryType: e.entryType, reversal: e.reversalOfId !== null,
+          particulars: e.particulars, product: "", account: `${accountName(from.accountId)} → ${accountName(to.accountId)}`, mode: null,
+          inAmount: to.amount, outAmount: from.amount, notes: e.notes,
+        };
+      }
+      return {
+        id: e.id,
+        time: e.createdAt,
+        type: ENTRY_LABEL[e.entryType],
+        entryType: e.entryType,
+        reversal: e.reversalOfId !== null,
+        particulars: e.particulars,
+        product: [e.productCategory, e.scheme].filter(Boolean).join(" · "),
+        account: accountName(e.accountId),
+        mode: e.mode && MODE_LABEL[e.mode],
+        inAmount: e.direction === "In" ? e.amount : null,
+        outAmount: e.direction === "Out" ? e.amount : null,
+        notes: e.notes,
+      };
+    }),
     byProduct: groupNet(collections, (e) => e.productCategory ?? "Other"),
     byScheme: groupNet(collections, (e) => e.scheme ?? "Other"),
     byCustomer: (() => {
@@ -144,6 +178,18 @@ export async function loadDayBook(user: SessionUser, date: Date) {
       ageDays: Math.round((date.getTime() - r.receiptDate.getTime()) / 86_400_000),
     })),
     atmToday: net(atm).toFixed(2),
+    // A day with no entries has nothing to close, so no grace count either.
+    grace: entries.length ? graceState(date, today, tenant.dayCloseGraceDays) : graceState(today, today, tenant.dayCloseGraceDays),
+    graceDays: tenant.dayCloseGraceDays,
+    pastGrace,
+    // For the ATM / deposit / owner forms.
+    cashAccountId: cash.id,
+    bankOptions: accounts.filter((a) => a.type === "Bank" && a.active).sort((a, b) => Number(b.isDefault) - Number(a.isDefault)).map((a) => ({ id: a.id, label: accountLabel(a) })),
+    staff: staff.map((u) => ({ id: u.id, label: `${u.name}${u.role === "SuperAdmin" ? " (owner)" : ""}` })),
+    ownerEntries: ownerEntries.map((o) => ({
+      id: o.id, kind: o.kind, date: o.entryDate, amount: o.amount, account: accountName(o.accountId), reference: o.reference, reason: o.reason,
+      status: o.status, by: staff.find((u) => u.id === o.createdById)?.name ?? "—",
+    })),
   };
 }
 

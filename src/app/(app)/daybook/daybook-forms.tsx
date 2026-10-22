@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { CASH_SOURCE_LABEL, CASH_SOURCES, UPI_ADJUSTMENT_REASONS, type CashSource } from "@/lib/daybook-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { cn } from "@/lib/utils";
-import { closeDayBook, depositToPostOffice, recordAtmWithdrawal, recordOtherIncome, saveCashCount, saveVerification } from "./actions";
+import { closeDayBook, decideOwnerEntry, depositToBank, depositToPostOffice, recordAtmWithdrawal, recordOtherIncome, recordOwnerEntry, saveCashCount, saveVerification } from "./actions";
 
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v.trim()) ? Math.round(Number(v) * 100) : 0);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
@@ -38,22 +38,164 @@ function Panel({ title, closed, children }: { title: string; closed: boolean; ch
   );
 }
 
-export function AtmForm({ date, closed }: { date: string; closed: boolean }) {
+type Opt = { id: string; label: string };
+
+/** ATM withdrawal (#9): bank account, amount, reason, transaction no., who withdrew it, cash notes received. */
+export function AtmForm({ date, closed, banks, staff, me }: { date: string; closed: boolean; banks: Opt[]; staff: Opt[]; me: string }) {
   const [key, setKey] = useState(0);
-  const [state, action, pending] = useDayBookAction(recordAtmWithdrawal, "ATM withdrawal posted (bank → cash)", () => setKey((k) => k + 1));
+  const [amount, setAmount] = useState("");
+  const [state, action, pending] = useDayBookAction(recordAtmWithdrawal, "ATM withdrawal posted (bank → cash)", () => {
+    setAmount("");
+    setKey((k) => k + 1);
+  });
   return (
     <Panel title="Withdrawal · ATM" closed={closed}>
       <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
         <input type="hidden" name="date" value={date} />
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5"><Label htmlFor="atmAmount">Amount</Label><Input id="atmAmount" name="amount" inputMode="decimal" placeholder="18000" /></div>
-          <div className="space-y-1.5"><Label htmlFor="atmNotes">Notes</Label><Input id="atmNotes" name="notes" placeholder="For UPI-paid RD" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="atmBank">Bank account</Label>
+            <NativeSelect id="atmBank" name="bankAccountId" defaultValue={banks[0]?.id ?? ""} className="w-full">
+              {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="atmAmount">Amount</Label><Input id="atmAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="18000" /></div>
+          <div className="space-y-1.5"><Label htmlFor="atmRef">Transaction no.</Label><Input id="atmRef" name="reference" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="atmBy">Withdrawn by</Label>
+            <NativeSelect id="atmBy" name="withdrawnById" defaultValue={me} className="w-full">
+              {staff.map((u) => <NativeSelectOption key={u.id} value={u.id}>{u.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
         </div>
+        <div className="space-y-1.5"><Label htmlFor="atmReason">Reason</Label><Input id="atmReason" name="reason" placeholder="Cash for UPI-paid RD" /></div>
+        <CashDenominationGrid amount={paise(amount)} idPrefix="atm" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
-        <Button type="submit" variant="outline" disabled={pending} className="w-full">{pending ? "Saving…" : "Record ATM withdrawal"}</Button>
-        <p className="text-xs text-muted-foreground">SBI ••1234 → cash. A transfer, never an expense.</p>
+        <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : "Record ATM withdrawal"}</Button>
+        <p className="text-xs text-muted-foreground">Bank → cash. A transfer, never an expense.</p>
       </form>
     </Panel>
+  );
+}
+
+/** Deposit to bank (#16): bank account, amount, slip / transaction no., cash notes handed over. */
+export function BankDepositForm({ date, closed, banks }: { date: string; closed: boolean; banks: Opt[] }) {
+  const [key, setKey] = useState(0);
+  const [amount, setAmount] = useState("");
+  const [state, action, pending] = useDayBookAction(depositToBank, "Deposit to bank posted (cash → bank)", () => {
+    setAmount("");
+    setKey((k) => k + 1);
+  });
+  return (
+    <Panel title="Deposit to · Bank" closed={closed}>
+      <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
+        <input type="hidden" name="date" value={date} />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="bdBank">Bank account</Label>
+            <NativeSelect id="bdBank" name="bankAccountId" defaultValue={banks[0]?.id ?? ""} className="w-full">
+              {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="bdAmount">Amount</Label><Input id="bdAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></div>
+          <div className="space-y-1.5"><Label htmlFor="bdRef">Slip / transaction no.</Label><Input id="bdRef" name="reference" /></div>
+          <div className="space-y-1.5"><Label htmlFor="bdNotes">Notes</Label><Input id="bdNotes" name="notes" /></div>
+        </div>
+        <CashDenominationGrid amount={paise(amount)} idPrefix="bd" />
+        {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+        <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : "Record deposit to bank"}</Button>
+        <p className="text-xs text-muted-foreground">Cash → bank. A transfer, not income.</p>
+      </form>
+    </Panel>
+  );
+}
+
+/** Owner withdrawal / contribution (#19, #20): recorded by anyone, confirmed by the Super Admin. */
+export function OwnerEntryForm({ date, closed, cashAccountId, banks }: { date: string; closed: boolean; cashAccountId: string; banks: Opt[] }) {
+  const [key, setKey] = useState(0);
+  const [amount, setAmount] = useState("");
+  const [kind, setKind] = useState<"Withdrawal" | "Contribution">("Withdrawal");
+  const [accountId, setAccountId] = useState(cashAccountId);
+  const [state, action, pending] = useDayBookAction(recordOwnerEntry, "Recorded – waiting for the owner's confirmation", () => {
+    setAmount("");
+    setKey((k) => k + 1);
+  });
+  const isCash = accountId === cashAccountId;
+  return (
+    <Panel title="Owner money" closed={closed}>
+      <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
+        <input type="hidden" name="date" value={date} />
+        <input type="hidden" name="kind" value={kind} />
+        <div className="flex gap-2">
+          {(["Withdrawal", "Contribution"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setKind(k)}
+              className={cn("h-8 flex-1 rounded-lg border text-sm", kind === k ? "border-brand-600 bg-saffron-50 font-medium text-brand-700" : "hover:bg-slate-50")}>
+              {k === "Withdrawal" ? "Owner withdrawal" : "Owner contribution"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5"><Label htmlFor="owAmount">Amount</Label><Input id="owAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="owAccount">{kind === "Withdrawal" ? "From" : "Into"}</Label>
+            <NativeSelect id="owAccount" name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full">
+              <NativeSelectOption value={cashAccountId}>Office cash</NativeSelectOption>
+              {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+          {!isCash && <div className="space-y-1.5"><Label htmlFor="owRef">Transaction no.</Label><Input id="owRef" name="reference" /></div>}
+          <div className={cn("space-y-1.5", isCash && "col-span-2")}><Label htmlFor="owReason">Reason</Label><Input id="owReason" name="reason" /></div>
+        </div>
+        {isCash && <CashDenominationGrid amount={paise(amount)} idPrefix="ow" />}
+        {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+        <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : `Record owner ${kind.toLowerCase()}`}</Button>
+        <p className="text-xs text-muted-foreground">Not an expense or income: kept out of profit, listed in the P&amp;L Owner statement. The owner confirms it.</p>
+      </form>
+    </Panel>
+  );
+}
+
+type OwnerRow = { id: string; kind: string; date: string; amount: string; account: string; reference: string | null; reason: string; status: string; by: string };
+
+/** Owner entries waiting for the Super Admin (and this day's). Only the Super Admin sees Confirm / Reject. */
+export function OwnerEntriesPanel({ rows, canDecide }: { rows: OwnerRow[]; canDecide: boolean }) {
+  if (!rows.length) return null;
+  return (
+    <div className="rounded-xl border bg-white p-4">
+      <h2 className="mb-2 font-semibold">Owner withdrawals and contributions</h2>
+      <ul className="divide-y text-sm">
+        {rows.map((r) => <OwnerEntryRow key={r.id} r={r} canDecide={canDecide} />)}
+      </ul>
+    </div>
+  );
+}
+
+function OwnerEntryRow({ r, canDecide }: { r: OwnerRow; canDecide: boolean }) {
+  const [rejecting, setRejecting] = useState(false);
+  const [state, action, pending] = useDayBookAction(decideOwnerEntry, "Saved");
+  const tone = r.status === "Pending" ? "text-saffron-800" : r.status === "Confirmed" ? "text-green-700" : "text-muted-foreground";
+  return (
+    <li className="py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span>
+          <b>{r.kind === "Withdrawal" ? "Withdrawal" : "Contribution"} {inr(paise(r.amount))}</b> · {r.date} · {r.account}{r.reference && ` · Txn ${r.reference}`} · {r.reason}
+          <span className="text-muted-foreground"> · by {r.by}</span> · <span className={tone}>{r.status === "Pending" ? "Pending owner's confirmation" : r.status}</span>
+        </span>
+        {canDecide && r.status === "Pending" && (
+          <form onSubmit={submitKeepingValues(action)} className="flex items-center gap-2">
+            <input type="hidden" name="ownerEntryId" value={r.id} />
+            <input type="hidden" name="decision" value={rejecting ? "Reject" : "Confirm"} />
+            {rejecting && <Input name="reason" placeholder="Why rejected" className="h-7 w-48" aria-label="Reject reason" />}
+            <Button type="submit" size="xs" disabled={pending}
+              className={rejecting ? "" : "bg-brand-600 hover:bg-brand-700"} variant={rejecting ? "destructive" : "default"}>
+              {rejecting ? "Reject" : "Confirm"}
+            </Button>
+            <Button type="button" size="xs" variant="ghost" onClick={() => setRejecting(!rejecting)}>{rejecting ? "Back" : "Reject…"}</Button>
+          </form>
+        )}
+      </div>
+      {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+    </li>
   );
 }
 
@@ -197,7 +339,11 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-export function VerifyCloseForm(p: { date: string; closed: boolean; admins: { id: string; name: string }[]; verifiedById: string | null; canVerify: boolean; canClose: boolean; ready: boolean }) {
+export function VerifyCloseForm(p: {
+  date: string; closed: boolean; admins: { id: string; name: string }[]; verifiedById: string | null; canVerify: boolean; canClose: boolean; ready: boolean;
+  /** Past the grace period and this user can't close late: the button stays off and says why. */
+  locked: string | null;
+}) {
   const [vState, verify, verifying] = useDayBookAction(saveVerification, "Verification saved");
   const [cState, close, closing] = useDayBookAction(closeDayBook, "Day Book closed");
   return (
@@ -217,11 +363,12 @@ export function VerifyCloseForm(p: { date: string; closed: boolean; admins: { id
       <form onSubmit={submitKeepingValues(close)}>
         <input type="hidden" name="date" value={p.date} />
         {p.canClose && (
-          <Button type="submit" disabled={closing || p.closed || !p.ready} className="w-full bg-brand-600 hover:bg-brand-700">
+          <Button type="submit" disabled={closing || p.closed || !p.ready || !!p.locked} className="w-full bg-brand-600 hover:bg-brand-700">
             {p.closed ? "Closed" : closing ? "Closing…" : "Close Day Book"}
           </Button>
         )}
       </form>
+      {p.locked && !p.closed && <p className="mt-2 text-xs font-medium text-destructive">{p.locked}</p>}
       {cState.error && <p className="mt-2 text-xs text-destructive">{cState.error}</p>}
       <p className="mt-2 text-xs text-muted-foreground">
         Only Admin and Super Admin can verify and close. Closing is allowed only when TALLIED and verified, and earlier days are closed.

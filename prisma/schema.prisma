@@ -922,8 +922,9 @@ model Account {
   accountKind         BankAccountKind?
   walletKind          WalletKind? // null for the older EB / PAN / certificate wallets
 
-  entries   DayBookEntry[]
-  dayCloses DayClose[]
+  entries      DayBookEntry[]
+  dayCloses    DayClose[]
+  ownerEntries OwnerEntry[]
 }
 
 enum ExpenseStatus {
@@ -1014,6 +1015,8 @@ enum EntryType {
   OwnerReturn
   Adjustment
   OtherIncome // income entered in the Day Book (interest, incentives…); counted in P&L
+  OwnerWithdrawal // owner takes money out for personal use: not an expense, not in P&L
+  OwnerContribution // owner puts money in: not income, never repaid
 }
 
 enum SourceType {
@@ -1027,6 +1030,7 @@ enum SourceType {
   Contra
   WalletRecharge
   Manual
+  OwnerEntry
 }
 
 model DayBookEntry {
@@ -1222,4 +1226,40 @@ model BillGroupMember {
   policy      Policy    @relation(fields: [policyId], references: [id])
   addedById   String
   addedAt     DateTime  @default(now())
+}
+
+// ── Owner money (change set #19, #20): withdrawals and contributions, confirmed by the owner ──
+
+enum OwnerEntryKind {
+  Withdrawal
+  Contribution
+}
+
+enum OwnerEntryStatus {
+  Pending // recorded, waiting for the Super Admin
+  Confirmed
+  Rejected // reversed in the Day Book on the day it was rejected
+}
+
+/// Posted to the Day Book when recorded (the money really moved); the Super Admin confirms or rejects it.
+/// Never part of P&L; listed in the P&L "Owner statement".
+model OwnerEntry {
+  id            String           @id @default(cuid())
+  tenantId      String
+  kind          OwnerEntryKind
+  entryDate     DateTime         @db.Date
+  accountId     String // office cash or a bank account
+  account       Account          @relation(fields: [accountId], references: [id])
+  amount        Decimal          @db.Decimal(12, 2)
+  reference     String? // bank transaction no. (required for bank)
+  reason        String
+  denominations Json? // cash notes / coins
+  status        OwnerEntryStatus @default(Pending)
+  decidedById   String?
+  decidedAt     DateTime?
+  rejectReason  String?
+  createdById   String
+  createdAt     DateTime         @default(now())
+
+  @@index([tenantId, entryDate])
 }

@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   "Service.Record", "Wallet.View", "Wallet.Recharge",
   "Expense.View", "Expense.Create", "Expense.Approve",
   "DayBook.View", "DayBook.Create", "DayBook.Verify", "DayBook.Close",
+  "DayBook.CloseLate", // close a day after its grace period (Super Admin)
+  "Owner.Confirm", // confirm / reject owner withdrawals and contributions (Super Admin)
   "Commission.View",
   "PnL.View",
   "Message.View",
@@ -28,13 +30,16 @@ export type AppAbility = MongoAbility<[Action, Subject]>;
 
 const STAFF_DENIED: Permission[] = [
   "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
-  "DayBook.Verify", "DayBook.Close", "Commission.View", "PnL.View", "Report.Export",
+  "DayBook.Verify", "DayBook.Close", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "PnL.View", "Report.Export",
   "Settings.Edit", "Audit.View",
 ];
 
+/** Only the owner (Super Admin). */
+const OWNER_ONLY: Permission[] = ["PnL.View", "DayBook.CloseLate", "Owner.Confirm"];
+
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SuperAdmin: PERMISSIONS,
-  Admin: PERMISSIONS.filter((p) => p !== "PnL.View"),
+  Admin: PERMISSIONS.filter((p) => !OWNER_ONLY.includes(p)),
   User: PERMISSIONS.filter((p) => !STAFF_DENIED.includes(p)),
 };
 

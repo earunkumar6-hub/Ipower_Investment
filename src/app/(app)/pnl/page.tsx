@@ -6,7 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { istToday } from "@/lib/dates";
 import { pnlMonth } from "@/lib/lists";
 import { fmtINR } from "@/lib/money";
-import { monthKey, monthRange, previousMonthKey, profitAndLoss } from "@/lib/pnl";
+import { accountLabel } from "@/lib/accounts";
+import { fmtDate } from "@/lib/dates";
+import { monthKey, monthRange, ownerStatement, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +19,10 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   const user = await requirePermission("PnL.View");
   const current = monthKey(istToday());
   const key = pnlMonth(await searchParams, current);
-  const [pnl, prev] = await Promise.all([
+  const [pnl, prev, owner] = await Promise.all([
     profitAndLoss(user.tenantId, monthRange(key)),
     profitAndLoss(user.tenantId, monthRange(previousMonthKey(key))),
+    ownerStatement(user.tenantId, monthRange(key)),
   ]);
   const prevExpense = (label: string) => prev.expenseLines.find((l) => l.label === label)?.amount;
   const prevService = (label: string) => prev.serviceLines.find((l) => l.label === label)?.amount;
@@ -56,13 +59,39 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
               </TableRow>
             </TableBody>
           </Table>
+          <h2 className="mt-6 mb-1 font-semibold">Owner statement · {pnl.range.label}</h2>
+          <p className="mb-2 text-xs text-muted-foreground">Money the owner took out or put in. Not income, not an expense, not in the profit above.{owner.pending > 0 && ` ${owner.pending} waiting for your confirmation in the Day Book.`}</p>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>Date</TableHead><TableHead>Entry</TableHead><TableHead>From / into</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Out</TableHead><TableHead className="text-right">In</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
+              {owner.entries.map((e) => (
+                <TableRow key={e.id} className={cn(e.status === "Rejected" && "text-muted-foreground line-through")}>
+                  <TableCell>{fmtDate(e.entryDate)}</TableCell>
+                  <TableCell>{e.kind === "Withdrawal" ? "Owner withdrawal" : "Owner contribution"}</TableCell>
+                  <TableCell>{accountLabel(e.account)}{e.reference && <span className="block text-xs text-muted-foreground">Txn {e.reference}</span>}</TableCell>
+                  <TableCell className="whitespace-normal">{e.reason}</TableCell>
+                  <TableCell>{e.status}</TableCell>
+                  <TableCell className="text-right">{e.kind === "Withdrawal" ? fmtINR(e.amount) : ""}</TableCell>
+                  <TableCell className="text-right">{e.kind === "Contribution" ? fmtINR(e.amount) : ""}</TableCell>
+                </TableRow>
+              ))}
+              {owner.entries.length === 0 && <TableRow><TableCell colSpan={7} className="py-4 text-center text-muted-foreground">No owner withdrawals or contributions this month.</TableCell></TableRow>}
+              <TableRow className="font-semibold">
+                <TableCell colSpan={5}>Total (rejected left out) · net {owner.net.isNegative() ? "taken out" : "put in"} {fmtINR(owner.net.abs())}</TableCell>
+                <TableCell className="text-right">{fmtINR(owner.withdrawn)}</TableCell>
+                <TableCell className="text-right">{fmtINR(owner.contributed)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
         <div className="w-80 shrink-0 space-y-3 rounded-xl border bg-white p-4 text-xs text-muted-foreground">
           <h2 className="text-sm font-semibold text-foreground">How this is worked out</h2>
           <p>Service charges are what customers paid minus the provider cost (EB ₹10/₹20 slab, PAN ₹100, certificate ₹88).</p>
           <p>Expenses count on the date they were spent, whoever paid (company, employee or owner). Waiting, rejected and cancelled expenses are left out.</p>
           <p>Other income is what an Admin records in the Day Book as Other income (interest, incentives…), less any reversals.</p>
-          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid bills. Commission is not counted.</p>
+          <p>Not income: premiums and bills collected on behalf of insurers, the post office and the EB board; wallet recharges; transfers between own accounts; owner-paid bills; owner withdrawals and contributions (see the Owner statement). Commission is not counted.</p>
           <p className="font-medium text-foreground">Visible to the Super Admin only.</p>
         </div>
       </div>

@@ -20,6 +20,7 @@ type Props = {
 const TONE: Record<string, Tone> = {
   Collection: "blue", ServiceCollection: "blue", Withdrawal: "slate", DepositToBank: "slate", DepositToPo: "indigo", PaidToCompany: "indigo",
   Expense: "orange", ExpenseRepayment: "orange", ServiceCost: "purple", WalletRecharge: "purple", OwnerReturn: "green", Adjustment: "red", OtherIncome: "green",
+  OwnerWithdrawal: "orange", OwnerContribution: "green",
 };
 const inr = (v: string | null) => (v ? Number(v).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 }) : "");
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });

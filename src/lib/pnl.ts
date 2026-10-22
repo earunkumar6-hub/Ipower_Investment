@@ -59,3 +59,19 @@ export async function profitAndLoss(tenantId: string, range: MonthRange) {
 }
 
 export type ProfitAndLoss = Awaited<ReturnType<typeof profitAndLoss>>;
+
+/**
+ * Owner statement (#19, #20): money the owner took out or put in this month. Never part of income, expenses or profit.
+ * Rejected entries are listed but left out of the totals (their Day Book lines are reversed).
+ */
+export async function ownerStatement(tenantId: string, range: MonthRange) {
+  const entries = await db.ownerEntry.findMany({
+    where: { tenantId, entryDate: { gte: range.from, lt: range.to } },
+    include: { account: { select: { type: true, name: true, bankName: true, last4: true } } },
+    orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+  });
+  const counted = entries.filter((e) => e.status !== "Rejected");
+  const total = (kind: "Withdrawal" | "Contribution") => sum([ZERO, ...counted.filter((e) => e.kind === kind).map((e) => e.amount)]);
+  const withdrawn = total("Withdrawal"), contributed = total("Contribution");
+  return { entries, withdrawn, contributed, net: contributed.minus(withdrawn), pending: entries.filter((e) => e.status === "Pending").length };
+}
