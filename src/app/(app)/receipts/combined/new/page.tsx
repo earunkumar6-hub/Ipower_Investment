@@ -18,9 +18,11 @@ export default async function NewCombinedReceiptPage({ searchParams }: { searchP
   });
   const [opts, accounts] = await Promise.all([payOptions(db, user.tenantId), bankAccountOptions(db, user.tenantId)]);
   const all = policyOptions(policies, istToday(), true);
-  // From Renewals with ticked rows: show only the ticked customers' policies.
+  // From Renewals with ticked rows: show only the ticked customers' policies, without their unticked advance bills.
   const preset = billIds.length ? presetCounts(all, billIds) : undefined;
-  const options = preset ? all.filter((p) => p.id in preset) : all;
+  const options = preset
+    ? all.filter((p) => p.id in preset).map((p) => ({ ...p, dues: p.dues.filter((d, i) => i < preset[p.id] || d.tag !== "Advance") }))
+    : all;
   return (
     <>
       <PageHeader title="New combined receipt" user={user} />
