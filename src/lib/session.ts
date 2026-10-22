@@ -10,7 +10,8 @@ import { hasPermission, type Permission } from "@/lib/permissions";
 export type SessionUser = { id: string; name: string; username: string; role: Role; tenantId: string };
 
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  // Read only: pages can't renew the login cookie, so only SessionKeepAlive (real activity) extends the login.
+  const session = await auth.api.getSession({ headers: await headers(), query: { disableRefresh: true } });
   if (!session) return null;
   // Role and "switched off" are read fresh, so a change in Settings → Users applies on the next click.
   const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, username: true, role: true, tenantId: true, active: true } });
@@ -36,7 +37,8 @@ export async function requirePermission(permission: Permission): Promise<Session
 /** For server actions and route handlers: throw instead of redirecting. */
 export async function authorize(permission: Permission): Promise<SessionUser> {
   const user = await getSessionUser();
-  if (!user) throw new Error("Not signed in");
+  // Login timed out: a save goes to the login page instead of an error screen.
+  if (!user) redirect("/login");
   if (!hasPermission(user.role, permission)) throw new Error(`Not allowed: ${permission}`);
   return user;
 }
