@@ -114,7 +114,8 @@ export async function adminDashboard(user: SessionUser) {
     collectionsUpi: net(entries.filter((e) => e.account.type !== "Cash")),
     cashInHand: counted ?? cashDay.closing,
     cashStatus: counted === null ? "NOT COUNTED" : counted.equals(cashDay.closing) ? "TALLIED" : "NOT TALLIED",
-    bank: { name: bankDay.name, closing: bankDay.closing },
+    // A new live install has no bank account until the owner adds one in Settings.
+    bank: bankDay ? { name: bankDay.name, closing: bankDay.closing } : { name: "No bank account yet – add one in Settings", closing: ZERO },
     wallets,
     walletTotal: wallets.length ? sum(wallets.map((w) => w.closing)) : ZERO,
     waitingCount: waiting.length,

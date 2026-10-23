@@ -45,6 +45,8 @@ async function reset() {
 }
 
 async function main() {
+  // reset() wipes every table: never on a live install.
+  if (process.env.INSTALL_MODE === "live") throw new Error("Refused: INSTALL_MODE=live – the demo seed would erase all business data");
   await reset();
   const tenant = await prisma.tenant.create({ data: { name: "IPower Investments" } });
   const tenantId = tenant.id;

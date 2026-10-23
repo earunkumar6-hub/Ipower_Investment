@@ -8,7 +8,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: flcrm
-      POSTGRES_PASSWORD: flcrm
+      # Used only when the database is first created; changing it later locks the app out.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flcrm}
       POSTGRES_DB: flcrm
     # No ports: only the app container talks to the database.
     volumes:
@@ -26,7 +27,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://flcrm:flcrm@postgres:5432/flcrm
+      DATABASE_URL: postgresql://flcrm:${POSTGRES_PASSWORD:-flcrm}@postgres:5432/flcrm
+      INSTALL_MODE: ${INSTALL_MODE:-demo}
+      SETUP_OWNER_NAME: ${SETUP_OWNER_NAME:-}
+      SETUP_OWNER_USERNAME: ${SETUP_OWNER_USERNAME:-}
+      SETUP_OWNER_PASSWORD: ${SETUP_OWNER_PASSWORD:-}
+      SETUP_CASH_OPENING: ${SETUP_CASH_OPENING:-0}
+      SETUP_WALLET_OPENING: ${SETUP_WALLET_OPENING:-0}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-}

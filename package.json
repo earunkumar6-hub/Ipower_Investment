@@ -10,6 +10,7 @@
     "db:up": "docker compose up -d postgres",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:setup": "tsx prisma/setup.ts",
     "db:reset": "prisma migrate reset --force",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
