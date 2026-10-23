@@ -60,7 +60,7 @@ describe("Super Admin only", () => {
     expect(hasPermission("SuperAdmin", "Commission.View")).toBe(true);
     expect(hasPermission("Admin", "Commission.View")).toBe(false);
     expect(hasPermission("User", "Commission.View")).toBe(false);
-    expect(MENU.find((m) => m.href === "/commission")?.permission).toBe("Commission.View");
+    expect(MENU.find((m) => m.href === "/commission")).toBeUndefined(); // hidden from the menu for now (owner, 23 Oct 2026)
     expect(REPORTS.commission.permission).toBe("Commission.View");
   });
 

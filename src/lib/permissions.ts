@@ -39,8 +39,8 @@ const STAFF_DENIED: Permission[] = [
 /** Only the owner (Super Admin) by default. */
 const OWNER_ONLY: Permission[] = ["PnL.View", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "Access.Manage"];
 
-/** Can't be changed on the Roles and access screen. */
-export const LOCKED_PERMISSIONS: Permission[] = ["Access.Manage"];
+/** Can't be changed on the Roles and access screen. Commission received stays Super Admin only (owner, 23 Oct 2026). */
+export const LOCKED_PERMISSIONS: Permission[] = ["Access.Manage", "Commission.View"];
 
 /** Built-in defaults; the Super Admin can change Admin and User in Settings → Roles and access. */
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
