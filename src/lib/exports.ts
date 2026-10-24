@@ -582,7 +582,6 @@ export const REPORTS: Record<string, Report> = {
         ["INCOME", null, null],
         ...pnl.serviceLines.map((l): Cell[] => [`Service charges – ${l.label}`, l.amount, prevOf(prev.serviceLines, l.label)]),
         ["Other income (entered in Day Book)", pnl.otherIncome, prev.otherIncome],
-        ["Commission earned (consolidated)", pnl.commission, prev.commission],
         ["Total income", pnl.income, prev.income],
         ["LESS: EXPENSES BY CATEGORY", null, null],
         ...pnl.expenseLines.map((l): Cell[] => [l.label, l.amount, prevOf(prev.expenseLines, l.label)]),
