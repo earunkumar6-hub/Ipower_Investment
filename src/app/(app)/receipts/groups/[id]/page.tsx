@@ -11,7 +11,7 @@ import { hasPermission, seesAll } from "@/lib/permissions";
 import { PAY_MODE_LABEL } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { AddMemberForm, RemoveMemberButton } from "../group-forms";
+import { AddMemberForm, FindPoliciesToAdd, RemoveMemberButton } from "../group-forms";
 
 export default async function BillGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Receipt.View");
@@ -38,6 +38,7 @@ export default async function BillGroupPage({ params }: { params: Promise<{ id: 
             <p className="text-sm text-muted-foreground">Usually paid by: {[g.contactName, g.contactMobile].filter(Boolean).join(" · ") || "—"}</p>
             {canManage && <AddMemberForm billGroupId={g.id} />}
           </div>
+          {canManage && <div className="mb-3"><FindPoliciesToAdd billGroupId={g.id} /></div>}
           <Table>
             <TableHeader>
               <TableRow><TableHead>Customer</TableHead><TableHead>CIF</TableHead><TableHead>Policy / account</TableHead><TableHead>Product</TableHead><TableHead>Pay mode</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead>{canManage && <TableHead />}</TableRow>
@@ -55,7 +56,7 @@ export default async function BillGroupPage({ params }: { params: Promise<{ id: 
                   {canManage && <TableCell className="text-right"><RemoveMemberButton memberId={m.id} policyNumber={m.policy.policyNumber} /></TableCell>}
                 </TableRow>
               ))}
-              {g.members.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No policies yet{canManage ? " – add one by its number above." : "."}</TableCell></TableRow>}
+              {g.members.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No policies yet{canManage ? " – find them above, or add one by its number." : "."}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <p className="mt-2 text-xs text-muted-foreground">Closed or matured policies stay listed but get no more bills.</p>

@@ -1,14 +1,92 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { submitKeepingValues } from "@/lib/form";
-import { addBillGroupMember, createBillGroup, removeBillGroupMember } from "../group-actions";
+import { addBillGroupMember, addBillGroupMembers, createBillGroup, findPoliciesForGroup, type GroupPolicyHit, removeBillGroupMember } from "../group-actions";
+
+/** Admin / Super Admin: find a customer's policies by name, Customer ID, mobile or policy no., tick and add them. */
+export function FindPoliciesToAdd({ billGroupId }: { billGroupId: string }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<GroupPolicyHit[] | null>(null);
+  const [more, setMore] = useState(false);
+  const [error, setError] = useState("");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [searching, startSearch] = useTransition();
+  const [adding, startAdd] = useTransition();
+
+  function search(text = q) {
+    startSearch(async () => {
+      const r = await findPoliciesForGroup(billGroupId, text);
+      setPicked(new Set());
+      if ("error" in r) {
+        setError(r.error);
+        setHits(null);
+        return;
+      }
+      setError("");
+      setHits(r.hits);
+      setMore(r.more);
+    });
+  }
+
+  function add() {
+    startAdd(async () => {
+      const r = await addBillGroupMembers(billGroupId, [...picked]);
+      if (!r.ok) return void setError(r.error ?? "Could not add");
+      toast.success(r.message ?? "Added to the group");
+      search(); // refresh: the added ones now show "Already in this group"
+    });
+  }
+
+  const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed p-3">
+      <form onSubmit={(e) => { e.preventDefault(); search(); }} className="flex items-end gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="bg-find" className="text-xs">Find policies to add</Label>
+          <Input id="bg-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Customer name, Customer ID, mobile or policy no." className="h-8 w-96" />
+        </div>
+        <Button type="submit" size="sm" variant="outline" disabled={searching}>{searching ? "Searching…" : "Search"}</Button>
+      </form>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {hits && (hits.length === 0 ? <p className="text-sm text-muted-foreground">No active policies match.</p> : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead className="w-8" /><TableHead>Customer</TableHead><TableHead>Policy / account</TableHead><TableHead>Product</TableHead><TableHead>Pay mode</TableHead><TableHead /></TableRow>
+            </TableHeader>
+            <TableBody>
+              {hits.map((h) => (
+                <TableRow key={h.id} className={h.problem ? "text-muted-foreground" : undefined}>
+                  <TableCell>
+                    <input type="checkbox" aria-label={`Add ${h.policyNumber}`} disabled={!!h.problem} checked={picked.has(h.id)} onChange={(e) => toggle(h.id, e.target.checked)} />
+                  </TableCell>
+                  <TableCell>{h.customer}<span className="block text-xs text-muted-foreground">{h.cifNo}</span></TableCell>
+                  <TableCell>{h.policyNumber}</TableCell>
+                  <TableCell className="whitespace-normal">{h.product}</TableCell>
+                  <TableCell>{h.payMode}</TableCell>
+                  <TableCell className="text-xs">{h.problem}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {more && <p className="text-xs text-muted-foreground">Showing the first 40; type more to narrow it down.</p>}
+          <Button type="button" size="sm" disabled={adding || picked.size === 0} onClick={add} className="bg-brand-600 hover:bg-brand-700">
+            {adding ? "Adding…" : `Add selected${picked.size ? ` (${picked.size})` : ""}`}
+          </Button>
+        </>
+      ))}
+    </div>
+  );
+}
 
 /** Admin / Super Admin: a new bill group (name, and who usually pays). */
 export function CreateBillGroupForm() {

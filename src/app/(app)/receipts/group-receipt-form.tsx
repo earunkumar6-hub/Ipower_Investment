@@ -60,7 +60,7 @@ export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, ba
   return (
     <form onSubmit={onSave} className="max-w-5xl space-y-4 rounded-xl border bg-white p-4">
       <BillsPicker policies={policies} counts={counts} onChange={setCounts} showCustomer
-        scope={billGroupId ? { billGroupId } : undefined} search={kind === "Combined"} />
+        scope={billGroupId ? { billGroupId } : undefined} search={kind === "Combined"} showSettled={kind === "BillGroup"} />
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="payerName">Paid by</Label>

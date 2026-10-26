@@ -21,7 +21,7 @@ vi.mock("@/lib/session", async () => {
   };
 });
 
-const { createBillGroup, addBillGroupMember, removeBillGroupMember, createGroupReceipt, generateAdvanceBills } = await import("@/app/(app)/receipts/group-actions");
+const { createBillGroup, addBillGroupMember, addBillGroupMembers, findPoliciesForGroup, removeBillGroupMember, createGroupReceipt, generateAdvanceBills } = await import("@/app/(app)/receipts/group-actions");
 const { cancelPayment } = await import("@/app/(app)/receipts/actions");
 
 const form = (o: Record<string, string>) => {
@@ -111,6 +111,29 @@ describe("Bill groups (#21)", () => {
     const m = await prisma.billGroupMember.findFirstOrThrow({ where: { billGroupId: other.id!, policy: { policyNumber: "RD 3115-305" } } });
     expect((await removeBillGroupMember({ ok: false }, form({ memberId: m.id }))).ok).toBe(true);
     expect(await prisma.auditLog.count({ where: { entityId: g.id! } })).toBe(3);
+  });
+
+  it("find policies to add: by name, Customer ID or part of the number; ticked ones are added together with the same rules", async () => {
+    as("arun");
+    await expect(findPoliciesForGroup(groups[1], "3115")).rejects.toThrow(/Not allowed/);
+    await expect(addBillGroupMembers(groups[1], ["x"])).rejects.toThrow(/Not allowed/);
+    as("admin");
+    expect(await findPoliciesForGroup(groups[1], "3")).toEqual({ error: "Type at least 2 letters or digits" });
+
+    const found = await findPoliciesForGroup(groups[1], "3115");
+    if ("error" in found) throw new Error(found.error);
+    const rd = found.hits.find((h) => h.policyNumber === "RD 3115-305")!;
+    expect(rd).toMatchObject({ problem: null, payMode: "Monthly" });
+    const byCif = await findPoliciesForGroup(groups[1], (await prisma.customer.findFirstOrThrow({ where: { policies: { some: { id: rd.id } } } })).cifNo);
+    expect("hits" in byCif && byCif.hits.some((h) => h.id === rd.id)).toBe(true);
+    const taken = await findPoliciesForGroup(groups[1], "3105-235");
+    expect("hits" in taken && taken.hits[0].problem).toBe("Already in bill group Vitest family");
+
+    expect((await addBillGroupMembers(groups[1], [rd.id, ("hits" in taken && taken.hits[0].id) || ""])).error).toMatch(/Already in bill group Vitest family/);
+    expect(await prisma.billGroupMember.count({ where: { billGroupId: groups[1] } })).toBe(0); // all or none
+    expect(await addBillGroupMembers(groups[1], [rd.id])).toMatchObject({ ok: true, message: "1 policy added to Vitest other" });
+    const again = await findPoliciesForGroup(groups[1], "3115");
+    expect("hits" in again && again.hits.find((h) => h.id === rd.id)?.problem).toBe("Already in this group");
   });
 
   it("one receipt pays every member's bill, each under its own customer, with the same PAY- number", async () => {

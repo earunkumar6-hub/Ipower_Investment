@@ -4,7 +4,8 @@ import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { accountLabel } from "@/lib/accounts";
@@ -215,7 +216,7 @@ async function OwnerPaid({ user, f }: { user: SessionUser; f: Filter }) {
 
 /** Combined and Family grouped (bill-group) receipts: one row per PAY- receipt, made out to the payer. */
 async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string; f: Filter; kind: "Combined" | "BillGroup"; total: number }) {
-  const [payments, accounts, users] = await Promise.all([
+  const [payments, accounts, users, groupsWithPolicies] = await Promise.all([
     db.payment.findMany({
       where: f.paymentWhere(kind),
       include: { billGroup: { select: { id: true, name: true } }, receipts: { select: { accountId: true, customer: { select: { name: true } } } } },
@@ -224,6 +225,9 @@ async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string;
     }),
     db.account.findMany({ where: { tenantId }, select: { id: true, type: true, name: true, bankName: true, last4: true } }),
     userNames(tenantId),
+    kind === "BillGroup"
+      ? db.billGroup.findMany({ where: { tenantId, members: { some: {} } }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+      : Promise.resolve([]),
   ]);
   const accountName = (id?: string) => { const a = accounts.find((x) => x.id === id); return a ? accountLabel(a) : "—"; };
   const nameOf = nameLookup(users);
@@ -235,7 +239,23 @@ async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string;
           {family ? "Receipts for saved bill groups: every member's bill paid in one receipt." : "Bills ticked across customers, paid by one person in one receipt."}
         </span>
         {family
-          ? <Link href="/receipts/groups" className={buttonVariants({ size: "sm", variant: "outline" })}>Bill groups</Link>
+          ? (
+            <div className="flex items-center gap-2">
+              {groupsWithPolicies.length > 0 ? (
+                // Plain GET form: opens /receipts/new?groupId=… for the group picked.
+                <form action="/receipts/new" className="flex items-center gap-2">
+                  <NativeSelect name="groupId" size="sm" required aria-label="Bill group" defaultValue="">
+                    <NativeSelectOption value="" disabled>Pick a bill group</NativeSelectOption>
+                    {groupsWithPolicies.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}
+                  </NativeSelect>
+                  <Button type="submit" size="sm" className="bg-brand-600 hover:bg-brand-700">New family receipt</Button>
+                </form>
+              ) : (
+                <span className="text-xs text-muted-foreground">Add policies to a bill group to take its receipt.</span>
+              )}
+              <Link href="/receipts/groups" className={buttonVariants({ size: "sm", variant: "outline" })}>Bill groups</Link>
+            </div>
+          )
           : <Link href="/receipts/combined/new" className={cn(buttonVariants({ size: "sm" }), "bg-brand-600 hover:bg-brand-700")}>New combined receipt</Link>}
       </div>
       <Table>

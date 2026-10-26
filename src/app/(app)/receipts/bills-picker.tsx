@@ -34,9 +34,11 @@ export function ticked(policies: PolicyOption[], counts: Record<string, number>)
  * ones included, since bills are paid oldest first), "Generate late bill" (PDF of the overdue ones) and
  * "Generate advance bills" (raises the advance ones as Due bills, no payment).
  */
-export function BillsPicker({ policies, counts, onChange, scope, showCustomer = false, search = false }: {
+export function BillsPicker({ policies, counts, onChange, scope, showCustomer = false, search = false, showSettled = false }: {
   policies: PolicyOption[]; counts: Record<string, number>; onChange: (c: Record<string, number>) => void;
   scope?: { customerId: string } | { billGroupId: string }; showCustomer?: boolean; search?: boolean;
+  /** Also list policies with nothing to pay (e.g. paid 12 months ahead) as grey lines, instead of leaving them out. */
+  showSettled?: boolean;
 }) {
   const router = useRouter();
   const [from, setFrom] = useState("");
@@ -45,6 +47,7 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
   const [q, setQ] = useState("");
   const [raising, startRaise] = useTransition();
   const withDues = policies.filter((p) => p.dues.length);
+  const settled = showSettled ? policies.filter((p) => !p.dues.length) : [];
   const unpaid = unpaidCounts(withDues);
   const allUnpaidTicked = Object.keys(unpaid).length > 0 && Object.entries(unpaid).every(([id, n]) => (counts[id] ?? 0) >= n);
   const needle = q.trim().toLowerCase();
@@ -100,7 +103,7 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
         </div>
       )}
       {search && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find by customer, policy / account no. or bill no." className="h-8 max-w-md" aria-label="Find bills" />}
-      {withDues.length === 0 ? <p className="text-sm text-muted-foreground">No bills to pay.</p> : (
+      {withDues.length === 0 && settled.length === 0 ? <p className="text-sm text-muted-foreground">No bills to pay.</p> : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -129,6 +132,15 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
                 </TableRow>
               ));
             })}
+            {settled.map((p) => (
+              <TableRow key={p.id} className="text-muted-foreground">
+                <TableCell><input type="checkbox" disabled aria-label={`${p.label}: nothing to pay`} /></TableCell>
+                <TableCell>—</TableCell>
+                {showCustomer && <TableCell>{p.customer}</TableCell>}
+                <TableCell className="whitespace-normal">{p.label}</TableCell>
+                <TableCell colSpan={3} className="text-xs">Nothing to pay{p.paidUntil ? ` · paid up to ${p.paidUntil}` : ""}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       )}

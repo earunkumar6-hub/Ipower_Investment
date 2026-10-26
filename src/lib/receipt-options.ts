@@ -11,6 +11,8 @@ export type DueTag = "Overdue" | "Due" | "Advance";
 /** `dues`: payable bills oldest first (unpaid, then advance up to 12 months ahead); advance bills get a BL- number when raised or paid. */
 export type PolicyOption = {
   id: string; label: string; customer: string;
+  /** Last bill paid ("Sep 2027" / "7 Oct 2027"), shown when nothing is left to pay. */
+  paidUntil?: string | null;
   dues: { itemId: string | null; billNo: string | null; label: string; date: string; amount: string; tag: DueTag }[];
 };
 
@@ -25,16 +27,22 @@ export function policyOptions(policies: PolicyWithBills[], today: Date, openOnly
     p, dues: payableDues({ ...p, billUntil: billEnd(p, p.product?.invoiceRule) }, p.renewals, today).filter((d) => !openOnly || d.itemId),
   }));
   const firstDue = (x: (typeof withDues)[number]) => x.dues[0]?.dueDate.getTime() ?? Infinity;
+  const dateLabel = (p: PolicyWithBills, d: Date) => (p.frequency === "Monthly" ? monthLabel(d) : fmtDate(d));
+  const paidUntil = (p: PolicyWithBills) => {
+    const last = p.renewals.filter((r) => r.status === "Paid").reduce<Date | null>((m, r) => (!m || r.dueDate > m ? r.dueDate : m), null);
+    return last ? dateLabel(p, last) : null;
+  };
   return withDues.sort((a, b) => firstDue(a) - firstDue(b)).map(({ p, dues }) => ({
     id: p.id,
     customer: p.customer.name,
+    paidUntil: paidUntil(p),
     label: p.productType === "PoRd" ? `${p.policyNumber} · Post office RD` : `${p.partner} ${p.productName} · ${p.policyNumber}`,
     dues: dues.map((d) => ({
       itemId: d.itemId,
       billNo: p.renewals.find((r) => r.id === d.itemId)?.billNo ?? null,
       amount: d.amount.toFixed(2),
       date: isoDate(d.dueDate),
-      label: p.frequency === "Monthly" ? monthLabel(d.dueDate) : fmtDate(d.dueDate),
+      label: dateLabel(p, d.dueDate),
       tag: d.dueDate < today ? "Overdue" : d.dueDate > monthEnd ? "Advance" : "Due",
     })),
   }));

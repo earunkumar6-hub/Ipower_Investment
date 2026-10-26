@@ -1,20 +1,22 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { audit } from "@/lib/audit";
 import { financialYear, fmtDate, istToday } from "@/lib/dates";
-import { db } from "@/lib/db";
+import { db, type Tx } from "@/lib/db";
 import { lockPolicyDues, payableDues } from "@/lib/dues";
 import { canActOn } from "@/lib/leads";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { checkPayment, MODE_LABEL, payFields } from "@/lib/payment-options";
 import { billEnd } from "@/lib/policies";
+import { PAY_MODE_LABEL } from "@/lib/products";
 import { closedDayError, dateOrToday, duesField, type LineCommon, moneyField, pastOrTodayField, payDueLine, pickDues, Refused } from "@/lib/receipt-lines";
-import { authorize } from "@/lib/session";
+import { authorize, type SessionUser } from "@/lib/session";
 
 const mobile = z.string().trim().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number");
 const firstIssue = (e: z.ZodError): ActionResult => {
@@ -51,7 +53,28 @@ export async function createBillGroup(_: ActionResult, form: FormData): Promise<
 
 const memberSchema = z.object({ billGroupId: z.string().min(1), policyNumber: z.string().trim().min(1, "Enter the policy / account no.") });
 
-/** Adds a policy / account to a group. A policy can be in only one group, so no bill is billed twice. */
+const MEMBER_INCLUDE = {
+  customer: { select: { name: true, cifNo: true } },
+  billGroup: { include: { billGroup: { select: { name: true } } } },
+} satisfies Prisma.PolicyInclude;
+type PolicyForGroup = Prisma.PolicyGetPayload<{ include: typeof MEMBER_INCLUDE }>;
+
+/** Why a policy can't join this group (null = it can). A policy can be in only one group, so no bill is billed twice. */
+function joinProblem(policy: PolicyForGroup, billGroupId: string): string | null {
+  if (policy.status !== "Active") return `${policy.policyNumber} is not active`;
+  if (policy.frequency === "OneTime") return `${policy.policyNumber} is a one-time deposit and has no bills`;
+  if (policy.billGroup) return policy.billGroup.billGroupId === billGroupId ? "Already in this group" : `Already in bill group ${policy.billGroup.billGroup.name}`;
+  return null;
+}
+
+async function addMembers(tx: Tx, user: SessionUser, group: { id: string; name: string }, policies: PolicyForGroup[]) {
+  for (const policy of policies) {
+    await tx.billGroupMember.create({ data: { billGroupId: group.id, policyId: policy.id, addedById: user.id } });
+    await audit(tx, user, { entity: "BillGroup", entityId: group.id, action: "AddPolicy", summary: `${policy.policyNumber} (${policy.customer.name}) added to ${group.name}` });
+  }
+}
+
+/** Adds a policy / account to a group by its exact number. */
 export async function addBillGroupMember(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("BillGroup.Manage");
   const parsed = memberSchema.safeParse(Object.fromEntries(form));
@@ -60,20 +83,64 @@ export async function addBillGroupMember(_: ActionResult, form: FormData): Promi
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const group = await tx.billGroup.findFirst({ where: { id: billGroupId, tenantId: user.tenantId } });
     if (!group) return { ok: false, error: "Bill group not found" };
-    const policy = await tx.policy.findFirst({
-      where: { tenantId: user.tenantId, policyNumber: { equals: policyNumber, mode: "insensitive" } },
-      include: { customer: { select: { name: true } }, billGroup: { include: { billGroup: { select: { name: true } } } } },
-    });
+    const policy = await tx.policy.findFirst({ where: { tenantId: user.tenantId, policyNumber: { equals: policyNumber, mode: "insensitive" } }, include: MEMBER_INCLUDE });
     if (!policy) return { ok: false, error: `No policy / account ${policyNumber}`, fieldErrors: { policyNumber: "Not found" } };
-    if (policy.status !== "Active") return { ok: false, error: `${policy.policyNumber} is not active`, fieldErrors: { policyNumber: "Not active" } };
-    if (policy.frequency === "OneTime") return { ok: false, error: `${policy.policyNumber} is a one-time deposit and has no bills`, fieldErrors: { policyNumber: "No bills" } };
-    if (policy.billGroup) {
-      const msg = policy.billGroup.billGroupId === group.id ? "Already in this group" : `Already in bill group ${policy.billGroup.billGroup.name}`;
-      return { ok: false, error: msg, fieldErrors: { policyNumber: msg } };
-    }
-    await tx.billGroupMember.create({ data: { billGroupId: group.id, policyId: policy.id, addedById: user.id } });
-    await audit(tx, user, { entity: "BillGroup", entityId: group.id, action: "AddPolicy", summary: `${policy.policyNumber} (${policy.customer.name}) added to ${group.name}` });
+    const problem = joinProblem(policy, group.id);
+    if (problem) return { ok: false, error: problem, fieldErrors: { policyNumber: problem } };
+    await addMembers(tx, user, group, [policy]);
     return { ok: true };
+  });
+  if (result.ok) revalidatePath(`/receipts/groups/${billGroupId}`);
+  return result;
+}
+
+/** A policy found by "Find policies to add", with the reason it can't join (if any). */
+export type GroupPolicyHit = { id: string; customer: string; cifNo: string; policyNumber: string; product: string; payMode: string; problem: string | null };
+
+/**
+ * "Find policies to add": active policies of customers matching a name, Customer ID or mobile, or whose policy /
+ * account no. contains the text. Policies that can't join show why instead of a tick box.
+ */
+export async function findPoliciesForGroup(billGroupId: string, q: string): Promise<{ hits: GroupPolicyHit[]; more: boolean } | { error: string }> {
+  const user = await authorize("BillGroup.Manage");
+  const text = q.trim();
+  if (text.length < 2) return { error: "Type at least 2 letters or digits" };
+  const contains = { contains: text, mode: "insensitive" as const };
+  const policies = await db.policy.findMany({
+    where: {
+      tenantId: user.tenantId, status: "Active",
+      OR: [
+        { policyNumber: contains },
+        { customer: { OR: [{ name: contains }, { cifNo: contains }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }] } },
+      ],
+    },
+    include: MEMBER_INCLUDE,
+    orderBy: [{ customer: { name: "asc" } }, { policyNumber: "asc" }],
+    take: 41,
+  });
+  return {
+    more: policies.length > 40,
+    hits: policies.slice(0, 40).map((p) => ({
+      id: p.id, customer: p.customer.name, cifNo: p.customer.cifNo, policyNumber: p.policyNumber,
+      product: `${p.partner} ${p.productName}`, payMode: PAY_MODE_LABEL[p.frequency], problem: joinProblem(p, billGroupId),
+    })),
+  };
+}
+
+/** Adds the policies ticked in "Find policies to add" – all or none, with the same rules as adding by number. */
+export async function addBillGroupMembers(billGroupId: string, policyIds: string[]): Promise<ActionResult> {
+  const user = await authorize("BillGroup.Manage");
+  const ids = [...new Set(policyIds)];
+  if (!ids.length) return { ok: false, error: "Tick the policies to add" };
+  const result = await db.$transaction(async (tx): Promise<ActionResult> => {
+    const group = await tx.billGroup.findFirst({ where: { id: billGroupId, tenantId: user.tenantId } });
+    if (!group) return { ok: false, error: "Bill group not found" };
+    const policies = await tx.policy.findMany({ where: { tenantId: user.tenantId, id: { in: ids } }, include: MEMBER_INCLUDE });
+    if (policies.length !== ids.length) return { ok: false, error: "A ticked policy was not found; search again" };
+    const problem = policies.map((p) => joinProblem(p, group.id)).find(Boolean);
+    if (problem) return { ok: false, error: `${problem}; search again` };
+    await addMembers(tx, user, group, policies);
+    return { ok: true, message: `${policies.length} ${policies.length === 1 ? "policy" : "policies"} added to ${group.name}` };
   });
   if (result.ok) revalidatePath(`/receipts/groups/${billGroupId}`);
   return result;
