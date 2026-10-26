@@ -214,9 +214,13 @@ describe("Attachments", () => {
     as(users.arun);
     expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "Payslip", file: png }))).error).toMatch(/what the file is/);
     expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: new File(["x"], "a.exe", { type: "application/x-msdownload" }) }))).error).toMatch(/PDF, JPG/);
-    expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: png }))).ok).toBe(true);
+    // Aadhaar / PAN copies: a JPG of 50 KB or smaller only (owner, 26 Oct 2026); other kinds keep PNG / PDF up to 5 MB.
+    const jpg = (bytes: number, name = "pan.jpg") => new File([new Uint8Array(bytes)], name, { type: "image/jpeg" });
+    expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: png }))).error).toMatch(/JPG photo of 50 KB/);
+    expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "Aadhaar", file: jpg(50 * 1024 + 1) }))).error).toMatch(/JPG photo of 50 KB/);
+    expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: jpg(50 * 1024) }))).ok).toBe(true);
     const a = await prisma.attachment.findFirstOrThrow({ where: { ownerId: rajesh.id, createdAt: { gte: started } } });
-    expect([a.kind, a.fileName, a.uploadedById]).toEqual(["PAN", "pan.png", users.arun.id]);
+    expect([a.kind, a.fileName, a.uploadedById]).toEqual(["PAN", "pan.jpg", users.arun.id]);
     as(users.admin);
     expect((await removeAttachment(a.id)).ok).toBe(true);
     expect(await prisma.attachment.count({ where: { id: a.id } })).toBe(0);

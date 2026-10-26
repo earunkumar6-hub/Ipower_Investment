@@ -9,6 +9,7 @@ import { advanceStage, canActOn } from "@/lib/leads";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { rateOn } from "@/lib/products";
 import { audit } from "@/lib/audit";
+import { EncryptionKeyMissing } from "@/lib/crypto";
 import { AADHAAR_RE, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { authorize, type SessionUser } from "@/lib/session";
@@ -64,7 +65,14 @@ export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionRe
       await audit(tx, user, { entity: "Proposal", entityId: p.id, action: "Consent", summary: `${p.proposalNo}: customer consent taken` });
       return { ok: true, message: "Consent recorded" };
     }
-    const data = identityData(aadhaar, pan);
+    let data: ReturnType<typeof identityData>;
+    try {
+      data = identityData(aadhaar, pan);
+    } catch (e) {
+      // No encryption key on the server: a message, as on the customer page, instead of an error screen.
+      if (e instanceof EncryptionKeyMissing) return { ok: false, error: e.message.replace("Bank details", "Aadhaar / PAN") };
+      throw e;
+    }
     const person = p.customerId ? { customerId: p.customerId, mobile: p.mobile } : { customerId: (await customerByMobile(tx, user.tenantId, p.mobile))?.id, mobile: p.mobile };
     const duplicate = await duplicateIdentity(tx, user.tenantId, { aadhaarHash: data.aadhaarHash, panHash: data.panHash }, person, p.id);
     if (duplicate) return { ok: false, error: duplicateMessage(duplicate), duplicate };

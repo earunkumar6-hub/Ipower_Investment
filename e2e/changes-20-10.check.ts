@@ -150,7 +150,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await owner.getByLabel("What is the file").selectOption("PAN");
     await owner.getByLabel("File", { exact: true }).setInputFiles({ name: "pan.png", mimeType: "image/png", buffer: PNG });
     await owner.getByRole("button", { name: "Attach file" }).click();
-    await expect(owner.getByText("pan.png").first()).toBeVisible();
+    await expect(owner.getByText("pan.jpg").first()).toBeVisible(); // Aadhaar / PAN copies are turned into a small JPG
     await shot(owner, "02");
     // #12 continued: the second holder's page lists the joint account
     await openCustomer(owner, "Karthik V");

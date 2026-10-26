@@ -4,6 +4,7 @@ import { AttachmentOwner } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/(app)/leads/actions";
+import { ID_COPY_RULE, isIdCopy, isSmallJpeg } from "@/lib/attachment-rules";
 import { attachmentOwner, deleteStoredFile, fileProblem, storeFile } from "@/lib/attachments";
 import { ATTACHMENT_LIST, resolveDropdown } from "@/lib/dropdowns";
 import { audit } from "@/lib/audit";
@@ -32,6 +33,7 @@ export async function uploadAttachment(_: ActionResult, form: FormData): Promise
   const resolved = await db.$transaction((tx) => resolveDropdown(tx, user, ATTACHMENT_LIST[ownerType], parsed.data.kind, String(form.get("kindOther") ?? "")));
   if ("error" in resolved) return { ok: false, error: resolved.error === "Pick a value from the list" ? "Pick what the file is" : resolved.error };
   const kind = resolved.value;
+  if (isIdCopy(kind) && !isSmallJpeg(file!)) return { ok: false, error: ID_COPY_RULE };
   const storedName = await storeFile(file!);
   await db.attachment.create({
     data: { tenantId: user.tenantId, ownerType, ownerId, kind, fileName: file!.name.slice(0, 120), storedName, contentType: file!.type, size: file!.size, uploadedById: user.id },

@@ -1,15 +1,54 @@
 "use client";
 
 import type { AttachmentOwner } from "@prisma/client";
-import { OtherOptionSelect } from "@/components/other-option-select";
+import { OTHER, OtherOptionSelect } from "@/components/other-option-select";
 import { PaperclipIcon } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
+import { type FormEvent, startTransition, useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { removeAttachment, uploadAttachment } from "@/app/(app)/attachments/actions";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { submitKeepingValues } from "@/lib/form";
+import { ID_COPY_MAX_BYTES, ID_COPY_RULE, isIdCopy, isSmallJpeg, MAX_ATTACHMENT_BYTES } from "@/lib/attachment-rules";
+
+/** A JPG of 50 KB or smaller from any photo: scaled down and re-compressed in the browser. */
+async function shrinkToJpeg(file: File): Promise<File | null> {
+  const img = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null); // phone photos stay upright
+  if (!img) return null;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  let scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+  for (let i = 0; i < 12; i++, scale *= 0.8) {
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    ctx.fillStyle = "#fff"; // transparent PNG areas become white, not black
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.8, 0.65, 0.5]) {
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, "image/jpeg", quality));
+      if (blob && blob.size <= ID_COPY_MAX_BYTES) return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg" });
+    }
+  }
+  return null;
+}
+
+/** Checks the file before it is sent: Aadhaar / PAN photos are shrunk to a small JPG; other files over 5 MB stop here. */
+async function prepareUpload(form: FormData): Promise<string | null> {
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return null; // the server says "Choose a file"
+  const kind = form.get("kind") === OTHER ? String(form.get("kindOther") ?? "") : String(form.get("kind") ?? "");
+  if (isIdCopy(kind)) {
+    if (isSmallJpeg(file)) return null;
+    const small = file.type.startsWith("image/") ? await shrinkToJpeg(file) : null;
+    if (!small) return ID_COPY_RULE;
+    form.set("file", small);
+    return null;
+  }
+  // The server only accepts uploads up to 6 MB; a bigger file would break the page instead of showing this.
+  if (file.size > MAX_ATTACHMENT_BYTES) return "File must be 5 MB or smaller";
+  return null;
+}
 
 export type AttachmentRow = { id: string; kind: string; fileName: string; size: number; added: string; by: string; canRemove: boolean };
 
@@ -26,6 +65,18 @@ export function AttachmentsPanel({ ownerType, ownerId, kinds, files, readOnly }:
     }
     return r;
   }, { ok: false });
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); // also keeps the input on an error (React 19 would reset the form)
+    const form = new FormData(e.currentTarget);
+    setPreparing(true);
+    const problem = await prepareUpload(form);
+    setPreparing(false);
+    setClientError(problem);
+    if (!problem) startTransition(() => action(form));
+  }
 
   return (
     <div className="space-y-2">
@@ -44,13 +95,13 @@ export function AttachmentsPanel({ ownerType, ownerId, kinds, files, readOnly }:
         </tbody>
       </table>
       {!readOnly && (
-        <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2">
+        <form key={key} onSubmit={onSubmit} className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-2">
           <input type="hidden" name="ownerType" value={ownerType} />
           <input type="hidden" name="ownerId" value={ownerId} />
           <OtherOptionSelect name="kind" options={kinds} placeholder="What is it?" label="What is the file" size="sm" className="w-44" />
           <Input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp" aria-label="File" className="h-7 max-w-56 text-xs" />
-          <Button type="submit" size="sm" variant="outline" disabled={pending}><PaperclipIcon />{pending ? "Uploading…" : "Attach file"}</Button>
-          {state.error && <p className="w-full text-xs text-destructive">{state.error}</p>}
+          <Button type="submit" size="sm" variant="outline" disabled={pending || preparing}><PaperclipIcon />{preparing ? "Preparing…" : pending ? "Uploading…" : "Attach file"}</Button>
+          {(clientError ?? state.error) && <p className="w-full text-xs text-destructive">{clientError ?? state.error}</p>}
         </form>
       )}
     </div>

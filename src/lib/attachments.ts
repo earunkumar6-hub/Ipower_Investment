@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AttachmentOwner } from "@prisma/client";
+import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-rules";
 import { fmtDate, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
@@ -12,7 +13,6 @@ import type { SessionUser } from "@/lib/session";
 // and are served only through /api/attachments/[id] after the same owner check as the record itself.
 
 const DIR = path.join(process.cwd(), "storage", "attachments");
-export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" };
 
 /** What a file is, per record type. Proposals count the KYC ones ("KYC documents x of 3"). */
