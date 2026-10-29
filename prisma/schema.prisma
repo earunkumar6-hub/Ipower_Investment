@@ -230,7 +230,6 @@ model Quotation {
   status       QuotationStatus @default(Draft)
   validUpto    DateTime        @db.Date
   subtotal     Decimal         @db.Decimal(12, 2)
-  gstTotal     Decimal         @db.Decimal(12, 2)
   total        Decimal         @db.Decimal(12, 2)
   ownerId      String
   acceptedAt   DateTime?
@@ -256,8 +255,6 @@ model QuotationItem {
   productName String
   sumInsured  Decimal?          @db.Decimal(14, 2)
   premium     Decimal           @db.Decimal(12, 2)
-  gstRate     Decimal           @db.Decimal(5, 2)
-  gstAmount   Decimal           @db.Decimal(12, 2)
   total       Decimal           @db.Decimal(12, 2)
   payMode     Frequency         @default(Yearly)
   decision    QuoteItemDecision @default(Pending)
@@ -295,7 +292,7 @@ model Proposal {
   insurer                 String
   productName             String
   sumInsured              Decimal?       @db.Decimal(14, 2)
-  premium                 Decimal        @db.Decimal(12, 2) // incl. GST — what the customer pays
+  premium                 Decimal        @db.Decimal(12, 2) // what the customer pays (no GST)
   panMasked               String?
   aadhaarLast4            String?
   aadhaarEnc              String? // full values, encrypted; copied to the customer on issue

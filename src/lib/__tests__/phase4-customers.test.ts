@@ -132,7 +132,7 @@ describe("Customers from proposals", () => {
     });
     createdLeads.push(lead.id);
     const q = await prisma.quotation.create({
-      data: { tenantId: users.arun.tenantId, quoteNo: `Q-T${Date.now() % 100000}`, leadId: lead.id, customerName: "Test Lead", mobile: "9876512340", validUpto: today, subtotal: "1", gstTotal: "0", total: "1", ownerId: users.arun.id },
+      data: { tenantId: users.arun.tenantId, quoteNo: `Q-T${Date.now() % 100000}`, leadId: lead.id, customerName: "Test Lead", mobile: "9876512340", validUpto: today, subtotal: "1", total: "1", ownerId: users.arun.id },
     });
     const p = await proposal({ customerName: "Test Lead", mobile: "9876512340", quotationId: q.id, status: "ConsentGiven", panMasked: "ABCxxxxx4M" });
     await prisma.consent.create({ data: { tenantId: users.arun.tenantId, proposalId: p.id, mobile: "9876512340", purpose: "test", textVersion: "t", expiresOn: addMonths(today, 1), status: "Given" } });

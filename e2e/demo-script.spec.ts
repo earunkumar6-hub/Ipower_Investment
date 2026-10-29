@@ -51,7 +51,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await expect(arun.getByRole("button", { name: "3 calls open" })).toBeVisible();
   });
 
-  test("2. Quotation for Meena R: two products + 18% GST, export PDF, customer accepts one product", async () => {
+  test("2. Quotation for Meena R: two products (no GST), export PDF, customer accepts one product", async () => {
     await arun.goto("/quotations/new?q=Meena");
     await arun.getByRole("link", { name: /Meena R/ }).click();
     const [insurer, plan, premium] = [arun.getByLabel("Insurer"), arun.getByLabel("Plan"), arun.getByLabel("Premium")];
@@ -61,7 +61,7 @@ test.describe.serial("Demo script – three roles on the same data", () => {
     await insurer.nth(1).fill("SBI Life");
     await plan.nth(1).fill("eShield Next");
     await premium.nth(1).fill("10500");
-    await expect(arun.getByText("₹34,789.94")).toBeVisible(); // live total incl. GST
+    await expect(arun.getByText("Total payable ₹29,483")).toBeVisible(); // live total, no GST
     await arun.getByRole("button", { name: "Save quotation" }).click();
     await expect(arun.getByText("Check before saving")).toBeVisible();
     await arun.getByRole("button", { name: "Yes, save" }).click();

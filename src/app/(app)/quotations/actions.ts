@@ -87,7 +87,6 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
           mobile: v.mobile,
           validUpto,
           subtotal: priced.subtotal,
-          gstTotal: priced.gstTotal,
           total: priced.total,
           ownerId: customer?.ownerId ?? lead?.ownerId ?? user.id,
           items: {

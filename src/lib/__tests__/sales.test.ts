@@ -7,15 +7,14 @@ const d = (s: string) => new Date(`${s}T00:00:00Z`);
 const iso = (xs: Date[]) => xs.map((x) => x.toISOString().slice(0, 10));
 
 describe("Quotation pricing", () => {
-  it("adds 18% GST per product and totals on the server", () => {
-    const i = priceItem("10500");
-    expect([i.gstAmount, i.total].map((x) => x.toFixed(2))).toEqual(["1890.00", "12390.00"]);
+  it("adds no GST: total = premium, totalled on the server", () => {
+    expect(priceItem("10500").total.toFixed(2)).toBe("10500.00");
     const q = priceQuotation(["18983", "10500"]);
-    expect([q.subtotal, q.gstTotal, q.total].map((x) => x.toFixed(2))).toEqual(["29483.00", "5306.94", "34789.94"]);
+    expect([q.subtotal, q.total].map((x) => x.toFixed(2))).toEqual(["29483.00", "29483.00"]);
   });
 
-  it("rounds GST half-up to paise", () => {
-    expect(priceItem("0.25").gstAmount.toFixed(2)).toBe("0.05"); // 0.045 → 0.05
+  it("rounds premiums to paise", () => {
+    expect(priceItem("0.255").total.toFixed(2)).toBe("0.26");
   });
 });
 

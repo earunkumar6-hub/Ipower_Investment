@@ -22,7 +22,6 @@ const PAY_MODES: Frequency[] = ["Yearly", "HalfYearly", "Quarterly", "Monthly", 
 
 // Display only — the server recomputes every amount. Paise as integers to avoid float drift.
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v) ? Math.round(Number(v) * 100) : 0);
-const gstPaise = (p: number) => Math.round((p * 18) / 100);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: p % 100 ? 2 : 0 });
 
 export function QuotationForm(props: { customerId: string; leadId: string; customerName: string; mobile: string; defaultValidUpto: string; plans: Plan[]; categories: string[] }) {
@@ -30,22 +29,16 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
   const [items, setItems] = useState<Item[]>([blank(categories[0] ?? OTHER), blank(categories[1] ?? categories[0] ?? OTHER)]);
   const [state, action, pending] = useActionState<ActionResult, FormData>(createQuotation, { ok: false });
   const set = (n: number, patch: Partial<Item>) => setItems(items.map((it, i) => (i === n ? { ...it, ...patch } : it)));
-  const totals = items.reduce(
-    (t, it) => {
-      const p = paise(it.premium), g = gstPaise(p);
-      return { premium: t.premium + p, gst: t.gst + g, total: t.total + p + g };
-    },
-    { premium: 0, gst: 0, total: 0 },
-  );
+  const total = items.reduce((t, it) => t + paise(it.premium), 0);
   const fmtValid = (iso: string) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
   const confirm = useConfirmBeforeSave(action, (form) => [
     ["Customer", String(form.get("customerName") ?? "")],
     ["Mobile", String(form.get("mobile") ?? "")],
     ["Valid till", fmtValid(String(form.get("validUpto") ?? ""))],
     ...items.filter((it) => it.insurer || it.productName || it.premium).map((it, n): [string, string] => [
-      `Product ${n + 1}`, `${it.category === OTHER ? it.categoryOther : it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${PAY_MODE_LABEL[it.payMode]}\n${inr(paise(it.premium))} + GST ${inr(gstPaise(paise(it.premium)))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
+      `Product ${n + 1}`, `${it.category === OTHER ? it.categoryOther : it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${PAY_MODE_LABEL[it.payMode]}\n${inr(paise(it.premium))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
     ]),
-    ["Total", inr(totals.total)],
+    ["Total", inr(total)],
   ]);
 
   return (
@@ -75,12 +68,11 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
           <TableRow>
             <TableHead className="w-40">Product</TableHead><TableHead>Insurer</TableHead><TableHead>Plan</TableHead>
             <TableHead className="w-36">Sum insured / cover</TableHead><TableHead className="w-32">Pay mode</TableHead><TableHead className="w-32">Premium</TableHead>
-            <TableHead className="text-right">GST 18%</TableHead><TableHead className="text-right">Total</TableHead><TableHead />
+            <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((it, n) => {
-            const p = paise(it.premium), g = gstPaise(p);
             return (
               <TableRow key={n}>
                 <TableCell>
@@ -102,8 +94,6 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
                   </NativeSelect>
                 </TableCell>
                 <TableCell><Input value={it.premium} onChange={(e) => set(n, { premium: e.target.value })} aria-label="Premium" inputMode="decimal" placeholder="18983" /></TableCell>
-                <TableCell className="text-right">{inr(g)}</TableCell>
-                <TableCell className="text-right font-medium">{inr(p + g)}</TableCell>
                 <TableCell>
                   {items.length > 1 && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, i) => i !== n))}>Remove</Button>
@@ -116,9 +106,7 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
             <TableCell colSpan={5}>
               {items.length < 5 && <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, blank(categories[0] ?? OTHER)])}>Add product</Button>}
             </TableCell>
-            <TableCell className="font-medium">{inr(totals.premium)}</TableCell>
-            <TableCell className="text-right font-medium">{inr(totals.gst)}</TableCell>
-            <TableCell className="text-right font-semibold">{inr(totals.total)}</TableCell>
+            <TableCell className="font-semibold">Total payable {inr(total)}</TableCell>
             <TableCell />
           </TableRow>
         </TableBody>

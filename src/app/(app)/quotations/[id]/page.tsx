@@ -59,10 +59,10 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
           <QuoteItemsTable
             quotationId={q.id}
             canDecide={canDecide}
-            totals={{ premium: fmtINR(q.subtotal), gst: fmtINR(q.gstTotal), total: fmtINR(q.total) }}
+            total={fmtINR(q.total)}
             items={q.items.map((i) => ({
               id: i.id, category: i.category, plan: `${i.insurer} – ${i.productName}`, cover: i.sumInsured ? fmtINR(i.sumInsured) : "—", payMode: PAY_MODE_LABEL[i.payMode],
-              premium: fmtINR(i.premium), gst: fmtINR(i.gstAmount), total: fmtINR(i.total), decision: i.decision,
+              premium: fmtINR(i.premium), decision: i.decision,
               proposal: i.proposal && { id: i.proposal.id, no: i.proposal.proposalNo },
             }))}
           />

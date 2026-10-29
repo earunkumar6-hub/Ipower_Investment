@@ -70,7 +70,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           <dl className="grid grid-cols-3 gap-3 text-sm">
             <div><dt className="text-xs text-muted-foreground">Partner</dt><dd>{p.insurer}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Plan</dt><dd>{p.productName}{p.scheme && ` · ${p.scheme.name}`}{p.sumInsured && ` · ${fmtINR(p.sumInsured)}`}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Premium{p.quotationId ? " (incl. GST)" : ""}</dt><dd>{fmtINR(p.premium)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Premium</dt><dd>{fmtINR(p.premium)}</dd></div>
           </dl>
 
           <div className="rounded-lg border p-3">

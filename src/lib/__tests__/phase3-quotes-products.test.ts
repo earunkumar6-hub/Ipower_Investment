@@ -47,11 +47,11 @@ beforeAll(async () => {
   const q = await prisma.quotation.create({
     data: {
       tenantId: users.arun.tenantId, quoteNo: `Q-T${Date.now() % 100000}`, customerId: rajesh.id, customerName: "Rajesh Kumar", mobile: "9876500000",
-      validUpto: new Date(Date.now() + 10 * 86_400_000), subtotal: "30000.00", gstTotal: "5400.00", total: "35400.00", ownerId: rajesh.ownerId,
+      validUpto: new Date(Date.now() + 10 * 86_400_000), subtotal: "30000.00", total: "30000.00", ownerId: rajesh.ownerId,
       items: {
         create: [
-          { category: "Health", insurer: "Care Health", productName: "Care Supreme", premium: "20000.00", gstRate: "18.00", gstAmount: "3600.00", total: "23600.00", payMode: "Yearly" },
-          { category: "Life", insurer: "LIC", productName: "Jeevan Anand", premium: "10000.00", gstRate: "18.00", gstAmount: "1800.00", total: "11800.00", payMode: "HalfYearly" },
+          { category: "Health", insurer: "Care Health", productName: "Care Supreme", premium: "20000.00", total: "20000.00", payMode: "Yearly" },
+          { category: "Life", insurer: "LIC", productName: "Jeevan Anand", premium: "10000.00", total: "10000.00", payMode: "HalfYearly" },
         ],
       },
     },
@@ -108,8 +108,8 @@ describe("Quotation decision", () => {
     const q = await prisma.quotation.create({
       data: {
         tenantId: users.arun.tenantId, quoteNo: `Q-D${Date.now() % 100000}`, customerId: rajesh.id, customerName: "Rajesh Kumar", mobile: "9876500000",
-        validUpto: new Date(Date.now() + 86_400_000), subtotal: "1000.00", gstTotal: "180.00", total: "1180.00", ownerId: rajesh.ownerId,
-        items: { create: { category: "Health", insurer: "Star Health", productName: "Comprehensive", premium: "1000.00", gstRate: "18.00", gstAmount: "180.00", total: "1180.00" } },
+        validUpto: new Date(Date.now() + 86_400_000), subtotal: "1000.00", total: "1000.00", ownerId: rajesh.ownerId,
+        items: { create: { category: "Health", insurer: "Star Health", productName: "Comprehensive", premium: "1000.00", total: "1000.00" } },
       },
     });
     as(users.arun);

@@ -1,14 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { istToday } from "@/lib/dates";
-import { D, round2, sum } from "@/lib/money";
+import { round2, sum } from "@/lib/money";
 
-export const GST_RATE = new D("18.00");
-
-/** Premium is before GST; the customer pays premium + 18% GST. */
+/** No GST on insurance / investment quotes (owner, 29 Oct 2026): the customer pays the premium. */
 export function priceItem(premium: Prisma.Decimal.Value) {
   const p = round2(premium);
-  const gstAmount = round2(p.times(GST_RATE).dividedBy(100));
-  return { premium: p, gstRate: GST_RATE, gstAmount, total: p.plus(gstAmount) };
+  return { premium: p, total: p };
 }
 
 export function priceQuotation(premiums: Prisma.Decimal.Value[]) {
@@ -16,7 +13,6 @@ export function priceQuotation(premiums: Prisma.Decimal.Value[]) {
   return {
     items,
     subtotal: sum(items.map((i) => i.premium)),
-    gstTotal: sum(items.map((i) => i.gstAmount)),
     total: sum(items.map((i) => i.total)),
   };
 }

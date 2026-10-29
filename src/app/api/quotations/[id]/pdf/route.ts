@@ -25,8 +25,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       <td>${esc(PAY_MODE_LABEL[i.payMode])}</td>
       <td class="num">${i.sumInsured ? esc(fmtINR(i.sumInsured)) : "—"}</td>
       <td class="num">${esc(fmtINR(i.premium))}</td>
-      <td class="num">${esc(fmtINR(i.gstAmount))}</td>
-      <td class="num">${esc(fmtINR(i.total))}</td>
     </tr>`).join("");
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${PDF_STYLE}</style></head><body>
@@ -36,11 +34,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       <span class="muted">Date ${esc(fmtDate(istDate(q.createdAt)))} · Valid till ${esc(fmtDate(q.validUpto))} · Prepared by ${esc(users.find((u) => u.id === q.ownerId)?.name ?? "")}</span>
     </p>
     <table>
-      <thead><tr><th>Product</th><th>Plan</th><th>Pay mode</th><th class="num">Sum insured / cover</th><th class="num">Premium</th><th class="num">GST 18%</th><th class="num">Total</th></tr></thead>
+      <thead><tr><th>Product</th><th>Plan</th><th>Pay mode</th><th class="num">Sum insured / cover</th><th class="num">Premium</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="total"><td colspan="4">Total payable</td><td class="num">${esc(fmtINR(q.subtotal))}</td><td class="num">${esc(fmtINR(q.gstTotal))}</td><td class="num">${esc(fmtINR(q.total))}</td></tr></tfoot>
+      <tfoot><tr class="total"><td colspan="4">Total payable</td><td class="num">${esc(fmtINR(q.total))}</td></tr></tfoot>
     </table>
-    <p class="muted" style="margin-top:24px">Premiums are indicative and subject to the insurer's underwriting. GST at 18% as applicable. Premiums are paid to the insurer; we collect them on the insurer's behalf.</p>
+    <p class="muted" style="margin-top:24px">Premiums are indicative and subject to the insurer's underwriting. Premiums are paid to the insurer; we collect them on the insurer's behalf.</p>
   </body></html>`;
 
   // ?format=png: the same quotation as an image, to share on WhatsApp.

@@ -15,12 +15,12 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { createProposalsFromSelected, deleteQuotation, markNotAccepted } from "../actions";
 
 export type QuoteItemRow = {
-  id: string; category: string; plan: string; cover: string; payMode: string; premium: string; gst: string; total: string;
+  id: string; category: string; plan: string; cover: string; payMode: string; premium: string;
   decision: "Pending" | "Selected" | "NotAccepted"; proposal: { id: string; no: string } | null;
 };
 
 /** Quoted products with a "Selected" tick each; the ticked ones become proposals. */
-export function QuoteItemsTable({ quotationId, items, totals, canDecide }: { quotationId: string; items: QuoteItemRow[]; totals: { premium: string; gst: string; total: string }; canDecide: boolean }) {
+export function QuoteItemsTable({ quotationId, items, total, canDecide }: { quotationId: string; items: QuoteItemRow[]; total: string; canDecide: boolean }) {
   const open = items.filter((i) => !i.proposal);
   const [ticked, setTicked] = useState<string[]>(() => open.filter((i) => i.decision !== "NotAccepted").map((i) => i.id));
   const [pending, start] = useTransition();
@@ -33,7 +33,7 @@ export function QuoteItemsTable({ quotationId, items, totals, canDecide }: { quo
           <TableRow>
             {canDecide && <TableHead className="w-20">Selected</TableHead>}
             <TableHead>Product</TableHead><TableHead>Partner · plan</TableHead><TableHead className="text-right">Cover</TableHead><TableHead>Pay mode</TableHead>
-            <TableHead className="text-right">Premium</TableHead><TableHead className="text-right">GST</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Proposal</TableHead>
+            <TableHead className="text-right">Premium</TableHead><TableHead>Proposal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -48,9 +48,7 @@ export function QuoteItemsTable({ quotationId, items, totals, canDecide }: { quo
               <TableCell className="whitespace-normal">{i.plan}</TableCell>
               <TableCell className="text-right">{i.cover}</TableCell>
               <TableCell>{i.payMode}</TableCell>
-              <TableCell className="text-right">{i.premium}</TableCell>
-              <TableCell className="text-right">{i.gst}</TableCell>
-              <TableCell className="text-right font-medium">{i.total}</TableCell>
+              <TableCell className="text-right font-medium">{i.premium}</TableCell>
               <TableCell>
                 {i.proposal ? <Link href={`/proposals/${i.proposal.id}`} className="text-brand-700 hover:underline">{i.proposal.no}</Link>
                   : i.decision === "NotAccepted" ? <StatusBadge tone="orange">Not accepted</StatusBadge> : <span className="text-muted-foreground">—</span>}
@@ -60,10 +58,8 @@ export function QuoteItemsTable({ quotationId, items, totals, canDecide }: { quo
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={canDecide ? 5 : 4} className="text-right">Total</TableCell>
-            <TableCell className="text-right">{totals.premium}</TableCell>
-            <TableCell className="text-right">{totals.gst}</TableCell>
-            <TableCell className="text-right font-semibold">{totals.total}</TableCell>
+            <TableCell colSpan={canDecide ? 5 : 4} className="text-right">Total payable</TableCell>
+            <TableCell className="text-right font-semibold">{total}</TableCell>
             <TableCell />
           </TableRow>
         </TableFooter>

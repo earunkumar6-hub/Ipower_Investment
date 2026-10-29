@@ -505,8 +505,8 @@ async function main() {
   await prisma.quotation.create({
     data: {
       tenantId, quoteNo: "Q-0416", leadId: leads["L-2028"], customerName: "Ganesh K", mobile: String(9790050000 + 2028),
-      validUpto: addDays(today, 15), subtotal: "24000.00", gstTotal: "4320.00", total: "28320.00", ownerId: users.arun,
-      items: { create: { category: "Health", insurer: "Care Health", productName: "Care Supreme", sumInsured: "1000000.00", premium: "24000.00", gstRate: "18.00", gstAmount: "4320.00", total: "28320.00" } },
+      validUpto: addDays(today, 15), subtotal: "24000.00", total: "24000.00", ownerId: users.arun,
+      items: { create: { category: "Health", insurer: "Care Health", productName: "Care Supreme", sumInsured: "1000000.00", premium: "24000.00", total: "24000.00" } },
     },
   });
 

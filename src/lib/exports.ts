@@ -156,8 +156,8 @@ export const REPORTS: Record<string, Report> = {
           name: "Quotations",
           totals: true,
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Products", width: 30 },
-            { header: "Subtotal", type: "money" }, { header: "GST", type: "money" }, { header: "Total", type: "money" }, { header: "Valid till", type: "date" }, { header: "Status" }],
-          rows: quotations.map((q) => [q.quoteNo, q.createdAt, q.customerName, q.items.map((i) => `${i.insurer} ${i.productName}`).join(", "), q.subtotal, q.gstTotal, q.total, q.validUpto,
+            { header: "Premium", type: "money" }, { header: "Valid till", type: "date" }, { header: "Status" }],
+          rows: quotations.map((q) => [q.quoteNo, q.createdAt, q.customerName, q.items.map((i) => `${i.insurer} ${i.productName}`).join(", "), q.total, q.validUpto,
             quotationStatus(q)[0]]),
         }],
       };
