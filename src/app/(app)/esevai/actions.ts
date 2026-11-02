@@ -32,7 +32,7 @@ const entrySchema = z
     paidAmount: money("Enter the amount paid / deducted"),
     paidVia: z.enum(["Wallet", "GPay", "NetBanking"]),
     paidFromAccountId: z.string().min(1, "Pick where it was paid from"),
-    providerTxnNo: z.string().trim().min(2, "Enter the transaction number").max(40),
+    providerTxnNo: z.string().trim().max(40).default(""), // optional (owner, 2 Nov 2026)
     collected: money("Enter the amount collected from the customer"),
     mode: z.enum(["Cash", "UPI"]),
     intoAccountId: z.string().trim().default(""), // UPI: the bank account it came into
@@ -108,7 +108,7 @@ async function createServiceEntryUnguarded(_: ActionResult, form: FormData): Pro
         customerName: v.customerName || customer?.name || null, customerMobile: v.customerMobile || null, customerId: customer?.id ?? null,
         gender: v.gender || null, paidVia: v.paidVia, paidFromAccountId: payFrom.id, receivedAccountId: into.ok.id,
         baseAmount: paid, walletCost: paid, serviceCharge: profit, customerAmount: collected, profit,
-        providerRef: v.providerRef || null, providerTxnNo: v.providerTxnNo, paymentMode: v.mode, reference: v.mode === "UPI" ? v.reference || null : null,
+        providerRef: v.providerRef || null, providerTxnNo: v.providerTxnNo || null, paymentMode: v.mode, reference: v.mode === "UPI" ? v.reference || null : null,
         denominations: cash?.ok, notes: v.notes || null, createdById: user.id,
       },
     });

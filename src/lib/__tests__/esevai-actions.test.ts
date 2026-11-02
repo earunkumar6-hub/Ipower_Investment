@@ -73,8 +73,15 @@ describe("E-Sevai entries (#7)", () => {
     expect(lines.map((l) => [l.direction, l.amount.toFixed(2), l.account.name])).toEqual([["In", "860.00", "SBI current ••1234"], ["Out", "850.00", "EB wallet"]]);
   });
 
-  it("needs the transaction no.; collected can't be below paid; cash notes must add up; Other needs its name", async () => {
-    expect((await createServiceEntry({ ok: false }, entry({ providerTxnNo: "" }))).fieldErrors).toHaveProperty("providerTxnNo");
+  it("transaction no. is optional: a blank one saves as empty", async () => {
+    const r = await createServiceEntry({ ok: false }, entry({ providerTxnNo: "" }));
+    expect(r.ok).toBe(true);
+    expect((await prisma.serviceTransaction.findUniqueOrThrow({ where: { id: r.id } })).providerTxnNo).toBeNull();
+    await prisma.dayBookEntry.deleteMany({ where: { sourceId: r.id } });
+    await prisma.serviceTransaction.delete({ where: { id: r.id } });
+  });
+
+  it("collected can't be below paid; cash notes must add up; Other needs its name", async () => {
     expect((await createServiceEntry({ ok: false }, entry({ collected: "800" }))).fieldErrors).toHaveProperty("collected");
     expect((await createServiceEntry({ ok: false }, entry({ denominations: notes(500) }))).fieldErrors).toHaveProperty("denominations");
     expect((await createServiceEntry({ ok: false }, entry({ serviceCode: "OTHER", providerRef: "" }))).fieldErrors).toHaveProperty("serviceName");

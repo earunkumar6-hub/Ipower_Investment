@@ -126,7 +126,7 @@ describe("Maturity and lifecycle", () => {
 });
 
 describe("Reminders and Not renewed", () => {
-  it("reminders are counted; Not renewed lapses the policy, stops reminders and lists it", async () => {
+  it("reminders are counted; Not renewed lapses the policy and stops reminders", async () => {
     const p = await policy({ startDate: addMonths(today, -14) });
     const item = await prisma.renewalItem.create({ data: { tenantId: arun.tenantId, policyId: p.id, dueDate: addMonths(today, -2), premiumAmount: "10000.00", status: "Overdue" } });
     expect((await sendRenewalReminder(item.id)).ok).toBe(true);
@@ -140,8 +140,6 @@ describe("Reminders and Not renewed", () => {
     const after = await prisma.policy.findUniqueOrThrow({ where: { id: p.id }, include: { renewals: true } });
     expect([after.status, after.closeReason, after.renewals[0].status]).toEqual(["Lapsed", "Moved to another insurer", "Lapsed"]);
     expect((await sendRenewalReminder(item.id)).ok).toBe(false);
-    const nr = await loadRenewals(arun as SessionUser, { tab: "notrenewed" }, today);
-    expect(nr.rows.some((r) => r.policy.id === p.id && r.policyStatus === "Lapsed")).toBe(true);
     expect((await prisma.auditLog.findFirstOrThrow({ where: { entityId: p.id, action: "Not renewed" } })).reason).toBe("Moved to another insurer");
   });
 });

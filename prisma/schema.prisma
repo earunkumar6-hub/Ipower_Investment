@@ -911,7 +911,7 @@ model ServiceTransaction {
   customerAmount    Decimal          @db.Decimal(12, 2)
   profit            Decimal          @db.Decimal(12, 2)
   providerRef       String? // service no. / application no. (EB consumer no.)
-  providerTxnNo     String? // provider / wallet transaction number (required for new entries)
+  providerTxnNo     String? // provider / wallet transaction number (optional)
   serviceName       String? // "Other" services: the name typed
   customerId        String? // linked when the mobile belongs to a customer
   customer          Customer?        @relation(fields: [customerId], references: [id])

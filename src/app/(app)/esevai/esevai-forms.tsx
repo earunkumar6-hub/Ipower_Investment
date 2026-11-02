@@ -155,7 +155,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
             </NativeSelect>
           </div>
         )}
-        <div className="space-y-1.5"><Label htmlFor="providerTxnNo">Transaction no.</Label><Input id="providerTxnNo" name="providerTxnNo" aria-invalid={!!err.providerTxnNo} /></div>
+        <div className="space-y-1.5"><Label htmlFor="providerTxnNo">Transaction no. <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="providerTxnNo" name="providerTxnNo" aria-invalid={!!err.providerTxnNo} /></div>
         <div className="space-y-1.5">
           <Label htmlFor="collected">Collected from customer</Label>
           <Input id="collected" name="collected" value={collected} onChange={(e) => { setTouched(true); setCollected(e.target.value); }} inputMode="decimal" aria-invalid={!!err.collected} />

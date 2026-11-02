@@ -1,6 +1,6 @@
-import { FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
-import { ExportButton } from "@/components/export-button";
+import { DownloadMenu } from "@/components/download-menu";
+import { exportLinks } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
@@ -46,24 +46,25 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
   const maturities = rows.filter((x) => x.kind === "maturity").length;
   const instalments = rows.length - maturities;
   const summary = tab === "customers" ? `${customers.length} customers · ${fmtINR(total)} overdue`
-    : tab === "notrenewed" ? `${rows.length} not renewed · ${rangeLabel(range)}`
     : `${instalments} ${tab === "due" ? "due" : tab === "overdue" ? "overdue" : paidTo === "pending" ? "collected, not yet paid to Post office / insurer" : "paid"} · ${tab === "paid" && paidTo === "pending" ? "" : `${rangeLabel(range)} · `}${fmtINR(total)}`
       + (maturities ? ` · ${maturities} maturit${maturities === 1 ? "y" : "ies"} ${tab === "due" ? "coming up" : "not yet closed"}` : "");
 
   return (
     <>
-      <PageHeader title="Renewals" user={user} actions={<>
-        {hasPermission(user.role, "Report.Export") && (
-          <a href="/api/export/renewal-month" download className={buttonVariants({ variant: "outline" })}><FileSpreadsheet className="text-green-700" />Download renewal Excel</a>
-        )}
-        <ExportButton report="renewals" user={user} params={{ tab, ...filter, ...rangeParams, ...(paidTo !== "all" && { paidto: paidTo }) }} />
-      </>} />
-      <div className="mb-4 grid grid-cols-4 gap-3">
+      <PageHeader title="Renewals" user={user} actions={hasPermission(user.role, "Report.Export") && (() => {
+        const thisTab = exportLinks("renewals", { tab, ...filter, ...rangeParams, ...(paidTo !== "all" && { paidto: paidTo }) });
+        const monthly = exportLinks("renewal-month");
+        return (
+          <DownloadMenu groups={[
+            { title: `This tab – ${TABS.find(([k]) => k === tab)?.[1]} (current filters)`, items: [{ label: "Excel", href: thisTab.excel, kind: "excel" }, { label: "PDF", href: thisTab.pdf, kind: "pdf" }] },
+            { title: "Monthly renewal report – last month + this month due", items: [{ label: "Excel", href: monthly.excel, kind: "excel" }, { label: "PDF", href: monthly.pdf, kind: "pdf" }] },
+          ]} />
+        );
+      })()} />
+      <div className="mb-4 grid grid-cols-3 gap-3">
         <StatCard title="Due this month" value={String(cards.due.count)} sub={fmtINR(cards.due.amount)} href={`/renewals?tab=due&range=month`} />
         <StatCard title="Paid" value={String(cards.paid.count)} sub={fmtINR(cards.paid.amount)} href={`/renewals?tab=paid&range=month`} />
-        <StatCard title="Not paid" value={String(cards.notPaid.count)} sub={fmtINR(cards.notPaid.amount)} alert={cards.notPaid.count > 0} />
-        <StatCard title="Not renewed (lapsed / matured)" value={String(cards.notRenewed)} sub="Follow up or close" href="/renewals?tab=notrenewed" />
-      </div>
+        <StatCard title="Not paid" value={String(cards.notPaid.count)} sub={fmtINR(cards.notPaid.amount)} alert={cards.notPaid.count > 0} />      </div>
       <div className="rounded-xl border bg-white p-4">
         <div className="mb-3 space-y-2 border-b">
           <div className="flex gap-1">
@@ -125,33 +126,6 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
           const items: TickItem[] = rows.map((i) => (i.kind === "maturity" ? { key: i.id, kind: "maturity", id: i.policy.id } : { key: i.id, kind: "bill", id: i.id }));
           return <PoSelection items={items} canReceipt={hasPermission(user.role, "Receipt.Create")}>{table}</PoSelection>;
         })()}
-
-        {tab === "notrenewed" && (
-          <Table>
-            <TableHeader>
-              <TableRow><TableHead>Customer</TableHead><TableHead>Product</TableHead><TableHead>Policy / account</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead><TableHead>Reason</TableHead><TableHead /></TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((i) => {
-                const p = i.policy;
-                const [status, tone] = renewalStatus(i, today);
-                return (
-                  <TableRow key={i.id}>
-                    <TableCell>{p.customer.name}</TableCell>
-                    <TableCell>{p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}</TableCell>
-                    <TableCell>{p.policyNumber}</TableCell>
-                    <TableCell>{fmtDate(i.date)}</TableCell>
-                    <TableCell className="text-right">{fmtINR(i.amount)}</TableCell>
-                    <TableCell><StatusBadge tone={tone}>{status}</StatusBadge></TableCell>
-                    <TableCell className="max-w-56 truncate" title={p.closeReason ?? undefined}>{p.closeReason ?? "—"}</TableCell>
-                    <TableCell className="text-right"><Link href={`/customers/${p.customer.id}`} className={buttonVariants({ size: "sm", variant: "outline" })}>Open customer</Link></TableCell>
-                  </TableRow>
-                );
-              })}
-              {rows.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">Nothing lapsed or matured in this period.</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        )}
 
         {tab === "customers" && (
           <Table>

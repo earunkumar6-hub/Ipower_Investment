@@ -1,5 +1,5 @@
 import { receiptRef } from "@/lib/payment-lines";
-import type { Frequency, Policy, PolicyStatus, Prisma, RenewalStatus } from "@prisma/client";
+import type { Frequency, Policy, Prisma, RenewalStatus } from "@prisma/client";
 import { overdueText } from "@/lib/overdue";
 import type { Tone } from "@/components/status-badge";
 import { addMonths } from "@/lib/dates";
@@ -52,7 +52,7 @@ type RowPolicy = Policy & { customer: { id: string; name: string } };
 /** An instalment to collect, the maturity of a one-time post office deposit (a reminder only), or a policy not renewed. */
 export type RenewalRow = {
   id: string;
-  kind: "instalment" | "maturity" | "closed";
+  kind: "instalment" | "maturity";
   policy: RowPolicy;
   date: Date;
   amount: Prisma.Decimal; // instalment, or the deposited amount for a maturity
@@ -65,7 +65,6 @@ export type RenewalRow = {
   companyStatus: CompanyStatus | null; // Paid tab only
   lastReminderAt: Date | null;
   reminderCount: number;
-  policyStatus?: PolicyStatus; // Not renewed tab
 };
 
 /** By customer tab: everything one customer owes and has paid, across their policies. */
@@ -79,19 +78,15 @@ const monthBounds = (today: Date) => ({ from: new Date(Date.UTC(today.getUTCFull
 const fyStart = (today: Date) => new Date(Date.UTC(today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1, 3, 1));
 const total = (xs: { premiumAmount: Prisma.Decimal }[]) => (xs.length ? sum(xs.map((x) => x.premiumAmount)) : ZERO);
 
-/** Summary cards: this month's dues (for the current filter), paid, not paid, and policies not renewed this month. */
+/** Summary cards: this month's dues (for the current filter), paid and not paid. */
 export async function renewalCards(tenantId: string, policyWhere: Prisma.PolicyWhereInput, today: Date) {
   const m = monthBounds(today);
-  const [items, notRenewed] = await Promise.all([
-    db.renewalItem.findMany({ where: { tenantId, policy: policyWhere, dueDate: { gte: m.from, lte: m.to }, status: { in: ["Due", "Overdue", "Paid"] } }, select: { status: true, premiumAmount: true } }),
-    db.policy.count({ where: { tenantId, AND: [policyWhere], status: { in: ["Lapsed", "Matured"] }, closedOn: { gte: m.from, lte: m.to } } }),
-  ]);
+  const items = await db.renewalItem.findMany({ where: { tenantId, policy: policyWhere, dueDate: { gte: m.from, lte: m.to }, status: { in: ["Due", "Overdue", "Paid"] } }, select: { status: true, premiumAmount: true } });
   const paid = items.filter((i) => i.status === "Paid"), unpaid = items.filter((i) => i.status !== "Paid");
   return {
     due: { count: items.length, amount: total(items) },
     paid: { count: paid.length, amount: total(paid) },
     notPaid: { count: unpaid.length, amount: total(unpaid) },
-    notRenewed,
   };
 }
 
@@ -102,19 +97,6 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
   const include = { customer: { select: { id: true, name: true } } };
   const policyIn = { tenantId: user.tenantId, AND: [f.policyWhere] } satisfies Prisma.PolicyWhereInput;
   const none = { rows: [] as RenewalRow[], customers: [] as CustomerRenewalRow[] };
-
-  // Not renewed: policies that lapsed or matured in the date range (closedOn), newest first.
-  if (f.tab === "notrenewed") {
-    const closed = await db.policy.findMany({
-      where: { ...policyIn, status: { in: ["Lapsed", "Matured"] }, ...(f.range && { closedOn: { gte: f.range.from, lte: f.range.to } }) },
-      include, orderBy: { closedOn: "desc" }, take,
-    });
-    const rows: RenewalRow[] = closed.map((p) => ({
-      id: `c-${p.id}`, kind: "closed", policy: p, date: p.closedOn ?? maturityDate(p) ?? p.startDate, amount: p.premiumAmount, status: "Lapsed",
-      paidOn: null, paidReceiptId: null, paidReceiptNo: null, paidReceiptHref: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0, policyStatus: p.status,
-    }));
-    return { ...f, ...none, rows, total: ZERO };
-  }
 
   // By customer: each customer with an active matching policy – due this month, paid this financial year, overdue.
   if (f.tab === "customers") {
@@ -167,7 +149,6 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
 
 export function renewalStatus(r: RenewalRow, today: Date): [string, Tone] {
   const days = Math.round((today.getTime() - r.date.getTime()) / 86_400_000);
-  if (r.kind === "closed") return r.policyStatus === "Matured" ? ["Matured – not renewed", "slate"] : ["Lapsed – not renewed", "red"];
   if (r.kind === "maturity") return days > 0 ? [`Matured ${days} days ago`, "red"] : [days === 0 ? "Matures today" : `Matures in ${-days} days`, "indigo"];
   if (r.status === "Paid") return ["Paid", "green"];
   if (r.status === "Overdue") return [`${overdueText(days)} overdue`, "red"];

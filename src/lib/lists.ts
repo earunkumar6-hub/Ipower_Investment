@@ -90,7 +90,7 @@ export function customerFilter(user: SessionUser, sp: Params) {
   return { q, product, company, scheme: plan ?? poScheme, status, where, holdingWhere, filtered, filterLabel };
 }
 
-export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"], ["notrenewed", "Not renewed"], ["customers", "By customer"]] as const;
+export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"], ["customers", "By customer"]] as const;
 export type RenewalTab = (typeof RENEWAL_TABS)[number][0];
 
 /** Quick picks for the Renewals date range. */
@@ -115,7 +115,7 @@ export function pickRange(key: string, today: Date): { from: Date; to: Date } | 
 
 /**
  * The Renewals date range: From / To, else a quick pick, else the old `within` days, else the tab's default
- * (Due: next 30 days · Paid: last 30 days · Not renewed: this month · Overdue / By customer: no limit).
+ * (Due: next 30 days · Paid: last 30 days · Overdue / By customer: no limit).
  */
 export function renewalRange(tab: RenewalTab, sp: Params, today: Date): { from: Date; to: Date; pick: string } | null {
   const from = isoDay(sp.from), to = isoDay(sp.to);
@@ -128,7 +128,6 @@ export function renewalRange(tab: RenewalTab, sp: Params, today: Date): { from: 
   }
   if (tab === "due") return { ...pickRange("next30", today)!, pick: "next30" };
   if (tab === "paid") return { from: addDays(today, -29), to: today, pick: "last30" };
-  if (tab === "notrenewed") return { ...pickRange("month", today)!, pick: "month" };
   return null;
 }
 

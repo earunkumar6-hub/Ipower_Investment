@@ -43,7 +43,7 @@ export function RenewalRowActions({ renewalItemId, customerId, overdue }: { rene
   );
 }
 
-/** The customer won't renew: the policy moves to the Not renewed tab and reminders stop. */
+/** The customer won't renew: the policy becomes Lapsed and reminders stop. */
 function NotRenewedButton({ renewalItemId }: { renewalItemId: string }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -60,7 +60,7 @@ function NotRenewedButton({ renewalItemId }: { renewalItemId: string }) {
             <Input id={`nr-${renewalItemId}`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Moved to another insurer" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <p className="text-xs text-muted-foreground">The policy shows as Lapsed on the Not renewed tab; its unpaid instalments lapse and no more reminders go out.</p>
+          <p className="text-xs text-muted-foreground">The policy becomes Lapsed (shown on the customer page); its unpaid instalments lapse and no more reminders go out.</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Back</Button>
             <Button type="button" disabled={pending} onClick={() => start(async () => {

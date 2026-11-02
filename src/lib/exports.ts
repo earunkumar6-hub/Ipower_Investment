@@ -306,16 +306,15 @@ export const REPORTS: Record<string, Report> = {
         };
       }
       const paid = tab === "paid";
-      const closed = tab === "notrenewed";
       return {
         file: `renewals-${tab}-${stamp()}.xlsx`, title,
         sheets: [{
           name,
-          totals: !closed,
-          columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: closed ? "Date" : "Due", type: "date" },
-            { header: closed ? "Premium" : "Amount", type: "money" }, { header: "Status", width: 22 },
+          totals: true,
+          columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
+            { header: "Amount", type: "money" }, { header: "Status", width: 22 },
             ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }]
-              : closed ? [{ header: "Reason", width: 30 }] : [{ header: "Reminders sent" }, { header: "Last reminder", type: "datetime" as const, width: 20 }])],
+              : [{ header: "Reminders sent" }, { header: "Last reminder", type: "datetime" as const, width: 20 }])],
           rows: items.map((i) => {
             const p = i.policy;
             const [status] = renewalStatus(i, today);
@@ -323,7 +322,7 @@ export const REPORTS: Record<string, Report> = {
             const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
               i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (${fmtINR(i.amount)})` : status];
             return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""]
-              : closed ? [...base, p.closeReason] : [...base, i.reminderCount || null, i.lastReminderAt];
+              : [...base, i.reminderCount || null, i.lastReminderAt];
           }),
         }],
       };
