@@ -1,3 +1,5 @@
+# Development database (and the optional demo app). Shows as "ipower-dev" in Docker Desktop.
+name: ipower-dev
 services:
   postgres:
     image: postgres:16-alpine
@@ -32,5 +34,8 @@ services:
       - bills:/app/storage
 
 volumes:
+  # Fixed names: the data was created when this project was called "app" – keep using it.
   pgdata:
+    name: app_pgdata
   bills:
+    name: app_bills

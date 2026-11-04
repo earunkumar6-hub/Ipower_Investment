@@ -77,6 +77,6 @@ Pending change requests from the owner: `docs/Changes.txt`. Run/deploy steps: `R
 
 ## Tests – they write to the database in `DATABASE_URL`
 - `pnpm test` (vitest) and `pnpm e2e` (Playwright, reseeds) use the dev DB from `.env`. Don't run them against real data.
-- Use a scratch DB: `docker exec app-postgres-1 createdb -U flcrm flcrm_check`, set
+- Use a scratch DB: `docker exec ipower-dev-postgres-1 createdb -U flcrm flcrm_check` (Docker project "ipower-dev", data volume `app_pgdata`), set
   `DATABASE_URL=postgresql://flcrm:flcrm@localhost:5433/flcrm_check`, `pnpm prisma migrate deploy`, `pnpm db:seed`, `pnpm test`, then `dropdb`.
 - Dev Postgres is on host port 5433. Seed tests that check month totals only run from the 10th of the month.
