@@ -8,13 +8,13 @@ import { audit, changedOnly } from "@/lib/audit";
 import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { AADHAAR_RE, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
+import { AADHAAR_RE, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { canActOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
 import { photoProblem, savePhoto } from "@/lib/photos";
 import { createPolicyWithSchedule } from "@/lib/policies";
-import { BANK_FIELDS, lockInUntil, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
+import { BANK_FIELDS, isHealthCover, isPostal, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
@@ -88,6 +88,9 @@ const addSchema = z.object({
   term: yearsField.default(null),
   premiumPayingTerm: yearsField.default(null),
   nominee: z.string().trim().max(80).default(""),
+  sipDay: z.string().default(""),
+  folioNo: z.string().trim().toUpperCase().max(40, "Folio number is too long").default(""),
+  firstHolderCif: z.string().trim().toUpperCase().max(40, "CIF is too long").default(""), // post office only
 });
 
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -116,6 +119,9 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
   if (product.schemes.length > 0 && !scheme) return fail("Pick the scheme", { schemeId: "Required" });
   if (!product.payModes.includes(v.frequency)) return fail(`${product.name} is paid ${product.payModes.map((m) => PAY_MODE_LABEL[m].toLowerCase()).join(" or ")}`, { frequency: "Not allowed" });
   if (v.startDate > addMonths(istToday(), 1)) return fail("Date of commencement can't be more than a month ahead", { startDate: "Too far ahead" });
+  // Mutual fund SIP: the SIP date (1–28) is required; bills fall on it.
+  const sipDay = needsSipDay(product.productType, v.frequency) ? Number(v.sipDay) : null;
+  if (sipDay !== null && !(Number.isInteger(sipDay) && sipDay >= 1 && sipDay <= 28)) return fail("Pick the SIP date (1–28)", { sipDay: "Required" });
 
   const shown = (f: string) => product.fields.includes(f);
   const needed = (f: string) => product.requiredFields.includes(f);
@@ -123,6 +129,24 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
   if (needed("premiumPayingTerm") && !v.premiumPayingTerm) return fail("Enter the premium paying term", { premiumPayingTerm: "Required" });
   if (v.premiumPayingTerm && termMonths && v.premiumPayingTerm > termMonths) return fail("Premium paying term can't be longer than the term", { premiumPayingTerm: "Too long" });
   if (needed("nominee") && !v.nominee) return fail("Enter the nominee", { nominee: "Required" });
+  // Insurance saved straight as a policy needs DOC, sum assured, plan, premium (+ term, PPT for life) – owner, 3 Nov 2026.
+  if (v.policyNumber && product.productType === "Insurance") {
+    const missing = missingInsuranceDetails({
+      health: isHealthCover({ invoiceRule: product.invoiceRule }), hasPlans: product.schemes.length > 0, pptShown: shown("premiumPayingTerm"),
+      startDate: v.startDate, sumAssured: v.sumAssured, schemeId: scheme?.id, termMonths, premiumPayingTermMonths: v.premiumPayingTerm, premiumOk: Number(v.amount) > 0,
+    });
+    if (missing.length) {
+      const field: Record<string, string> = { "sum assured": "sumAssured", term: "term", "premium paying term": "premiumPayingTerm", plan: "schemeId" };
+      return fail(`Fill in before the policy number: ${missing.join(", ")}`, Object.fromEntries(missing.filter((m) => field[m]).map((m) => [field[m], "Required"])));
+    }
+  }
+
+  // Post office: the holder's CIF from the post office (optional), unique within the company like on proposals.
+  const firstHolderCif = isPostal(product) ? v.firstHolderCif || null : null;
+  if (firstHolderCif) {
+    const duplicate = await duplicateCompanyCif(db, user.tenantId, product.partner, firstHolderCif, { customerId: customer.id, mobile: customer.mobile }, "");
+    if (duplicate) return { ok: false, error: `${firstHolderCif}: ${duplicateMessage(duplicate)}`, duplicate, fieldErrors: { firstHolderCif: "Already used" } };
+  }
 
   // Custom fields: cf_<id>
   const customValues: Record<string, string | number> = {};
@@ -163,7 +187,7 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
     productType: product.productType, partner: product.partner,
     // Post office accounts show their scheme ("TD 5 years"); insurance and funds their product name.
     productName: product.productType === "Insurance" || product.productType === "MutualFund" || !scheme ? product.name : scheme.name,
-    productId: product.id, schemeId: scheme?.id ?? null, frequency: v.frequency, startDate: v.startDate, termMonths,
+    productId: product.id, schemeId: scheme?.id ?? null, frequency: v.frequency, startDate: v.startDate, sipDay, folioNo: product.productType === "MutualFund" ? v.folioNo || null : null, firstHolderCif, termMonths,
     premiumPayingTermMonths: shown("premiumPayingTerm") ? v.premiumPayingTerm : null, nominee: shown("nominee") ? v.nominee || null : null,
     rateAtOpen: scheme ? rateOn(scheme.rates, v.startDate)?.rate ?? null : null,
     customValues: Object.keys(customValues).length ? customValues : undefined, bankDetailsEnc,

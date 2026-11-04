@@ -1,20 +1,21 @@
 "use client";
 
-import type { CustomFieldType, Frequency, ProductType } from "@prisma/client";
+import type { CustomFieldType, Frequency, InvoiceRule, ProductType } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { useConfirmBeforeSave, type SummaryRow } from "@/components/confirm-save";
+import { DuplicateCustomerDialog } from "@/components/duplicate-customer-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { BANK_FIELDS, fmtTenure, PAY_MODE_LABEL, PRODUCT_TYPE_LABEL, type BankField } from "@/lib/products";
+import { BANK_FIELDS, fmtTenure, isHealthCover, isPostal, needsSipDay, payModeLabel, PRODUCT_TYPE_LABEL, SIP_DAYS, sipDateLabel, type BankField } from "@/lib/products";
 import { addProductDirect } from "../../actions";
 
 export type CatalogueProduct = {
-  id: string; name: string; partner: string; productType: ProductType; payModes: Frequency[]; lockInMonths: number | null;
+  id: string; name: string; partner: string; productType: ProductType; invoiceRule: InvoiceRule; payModes: Frequency[]; lockInMonths: number | null;
   fields: string[]; requiredFields: string[]; bankDetailsRequired: boolean; bankFields: string[];
   schemes: { id: string; name: string; tenureMonths: number | null; rates: { rate: string; from: string }[] }[];
   customFields: { id: string; label: string; type: CustomFieldType; options: string[]; required: boolean }[];
@@ -44,6 +45,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
   const [schemeId, setSchemeId] = useState("");
   const [startDate, setStartDate] = useState(today);
   const [term, setTerm] = useState("");
+  const [frequency, setFrequency] = useState("");
   const product = products.find((p) => p.id === productId);
   const scheme = product?.schemes.find((s) => s.id === schemeId);
   const termMonths = scheme?.tenureMonths ?? (term ? Math.round(Number(term) * 12) : null);
@@ -52,9 +54,18 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
   const lockIn = product?.lockInMonths && startDate ? addMonthsIso(startDate, product.lockInMonths) : "";
   const shown = (f: string) => !!product?.fields.includes(f);
   const needed = (f: string) => !!product?.requiredFields.includes(f);
+  const mf = product?.productType === "MutualFund";
+  const payMode = frequency || product?.payModes[0] || "";
+  const sip = needsSipDay(product?.productType, payMode);
+  // Insurance with a policy number needs sum assured; life cover also term and premium paying term (3 Nov 2026).
+  const insurance = product?.productType === "Insurance";
+  const postal = !!product && isPostal(product); // holder CIF from the post office (owner, 4 Nov 2026)
+  const [dup, setDup] = useState<ActionResult["duplicate"]>();
+  const life = insurance && !isHealthCover({ invoiceRule: product?.invoiceRule });
 
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await addProductDirect(prev, form);
+    setDup(r.duplicate);
     if (r.ok) {
       toast.success(r.message ?? "Saved");
       router.push(r.href!);
@@ -70,8 +81,11 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
       ["Customer", customerName],
       ["Product", `${product.partner} · ${product.name}${scheme ? ` · ${scheme.name}` : ""}`],
       ["Policy / account no.", get("policyNumber") || "Blank – saved in Proposals until issued"],
-      ["Amount / premium", get("amount") && `₹${Number(get("amount")).toLocaleString("en-IN")} · ${PAY_MODE_LABEL[get("frequency") as Frequency] ?? ""}`],
+      ...(mf ? [["Folio number", get("folioNo").toUpperCase()] as SummaryRow] : []),
+      ...(postal ? [["Holder CIF (post office)", get("firstHolderCif").toUpperCase()] as SummaryRow] : []),
+      [mf ? "Investment amount" : "Amount / premium", get("amount") && `₹${Number(get("amount")).toLocaleString("en-IN")} · ${get("frequency") ? payModeLabel(get("frequency") as Frequency, mf) : ""}`],
       ["Commenced", fmt(get("startDate"))],
+      ...(sip ? [["SIP date", get("sipDay") && sipDateLabel(Number(get("sipDay")))] as SummaryRow] : []),
       ["Term", termMonths ? `${fmtTenure(termMonths)}${maturity ? ` · matures ${fmt(maturity)}` : ""}` : ""],
       ["Interest rate", rate ? `${rate}%` : ""],
       ["Premium paying term", get("premiumPayingTerm") && `${get("premiumPayingTerm")} years`],
@@ -90,15 +104,15 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
       </div>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Product" name="productId" required error={err.productId}>
-          <NativeSelect id="productId" name="productId" value={productId} onChange={(e) => { setProductId(e.target.value); setSchemeId(""); setTerm(""); }} className="w-full">
-            <NativeSelectOption value="">Pick a product</NativeSelectOption>
+          <NativeSelect id="productId" name="productId" value={productId} onChange={(e) => { setProductId(e.target.value); setSchemeId(""); setTerm(""); setFrequency(""); }} className="w-full">
+            <NativeSelectOption value=""></NativeSelectOption>
             {products.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.partner} · {p.name} ({PRODUCT_TYPE_LABEL[p.productType]})</NativeSelectOption>)}
           </NativeSelect>
         </Field>
         {product && product.schemes.length > 0 && (
           <Field label="Scheme / tenure" name="schemeId" required error={err.schemeId}>
             <NativeSelect id="schemeId" name="schemeId" value={schemeId} onChange={(e) => setSchemeId(e.target.value)} className="w-full">
-              <NativeSelectOption value="">Pick</NativeSelectOption>
+              <NativeSelectOption value=""></NativeSelectOption>
               {product.schemes.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.name}</NativeSelectOption>)}
             </NativeSelect>
           </Field>
@@ -111,19 +125,27 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
       {product && (
         <>
           <div className="grid grid-cols-4 gap-3">
-            <Field label="Amount / premium" name="amount" required error={err.amount}><Input id="amount" name="amount" inputMode="decimal" placeholder="100000" /></Field>
-            <Field label="Pay mode" name="frequency" required error={err.frequency}>
-              <NativeSelect id="frequency" name="frequency" defaultValue={product.payModes[0]} className="w-full">
-                {product.payModes.map((m) => <NativeSelectOption key={m} value={m}>{PAY_MODE_LABEL[m]}</NativeSelectOption>)}
+            <Field label={mf ? "Investment amount" : "Amount / premium"} name="amount" required error={err.amount}><Input id="amount" name="amount" inputMode="decimal" placeholder={mf ? "5000" : "100000"} /></Field>
+            <Field label={mf ? "SIP / Lumpsum" : "Pay mode"} name="frequency" required error={err.frequency}>
+              <NativeSelect id="frequency" name="frequency" value={payMode} onChange={(e) => setFrequency(e.target.value)} className="w-full">
+                {product.payModes.map((m) => <NativeSelectOption key={m} value={m}>{payModeLabel(m, mf)}</NativeSelectOption>)}
               </NativeSelect>
             </Field>
             <Field label="Date of commencement" name="startDate" required error={err.startDate}>
               <Input id="startDate" name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </Field>
+            {sip ? (
+              <Field label="SIP date" name="sipDay" required error={err.sipDay}>
+                <NativeSelect id="sipDay" name="sipDay" defaultValue="" className="w-full">
+                  <NativeSelectOption value=""></NativeSelectOption>
+                  {SIP_DAYS.map((d) => <NativeSelectOption key={d} value={d}>{sipDateLabel(d)}</NativeSelectOption>)}
+                </NativeSelect>
+              </Field>
+            ) : <input type="hidden" name="sipDay" value="" />}
             {scheme?.tenureMonths ? (
               <Field label="Term" name="term"><div className="flex h-8 items-center text-sm">{fmtTenure(scheme.tenureMonths)} <span className="ml-1 text-xs text-muted-foreground">(from scheme)</span></div><input type="hidden" name="term" value="" /></Field>
             ) : (
-              <Field label="Term (years)" name="term" error={err.term}><Input id="term" name="term" inputMode="decimal" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="blank = open-ended" /></Field>
+              <Field label="Term (years)" name="term" required={life} error={err.term}><Input id="term" name="term" inputMode="decimal" value={term} onChange={(e) => setTerm(e.target.value)} placeholder={life ? "e.g. 20" : "blank = open-ended"} /></Field>
             )}
           </div>
 
@@ -135,18 +157,20 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {product.productType === "Insurance" && <Field label="Cover / sum assured" name="sumAssured" error={err.sumAssured}><Input id="sumAssured" name="sumAssured" inputMode="decimal" placeholder="optional" /></Field>}
+            {insurance && <Field label="Sum assured (SA)" name="sumAssured" required error={err.sumAssured}><Input id="sumAssured" name="sumAssured" inputMode="decimal" placeholder="e.g. 1000000" /></Field>}
             {shown("premiumPayingTerm") && (
-              <Field label="Premium paying term (years)" name="premiumPayingTerm" required={needed("premiumPayingTerm")} error={err.premiumPayingTerm}>
+              <Field label="Premium paying term (PPT, years)" name="premiumPayingTerm" required={needed("premiumPayingTerm") || life} error={err.premiumPayingTerm}>
                 <Input id="premiumPayingTerm" name="premiumPayingTerm" inputMode="decimal" />
               </Field>
             )}
+            {postal && <Field label="Holder CIF (given by the post office)" name="firstHolderCif" error={err.firstHolderCif}><Input id="firstHolderCif" name="firstHolderCif" placeholder="optional" className="not-placeholder-shown:uppercase" /></Field>}
+            {mf && <Field label="Folio number" name="folioNo" error={err.folioNo}><Input id="folioNo" name="folioNo" placeholder="from the AMC (optional)" className="not-placeholder-shown:uppercase" /></Field>}
             {shown("nominee") && <Field label="Nominee" name="nominee" required={needed("nominee")} error={err.nominee}><Input id="nominee" name="nominee" /></Field>}
             {product.customFields.map((f) => (
               <Field key={f.id} label={f.label} name={`cf_${f.id}`} required={f.required} error={err[`cf_${f.id}`]}>
                 {f.type === "Dropdown" ? (
                   <NativeSelect id={`cf_${f.id}`} name={`cf_${f.id}`} defaultValue="" className="w-full">
-                    <NativeSelectOption value="">Pick</NativeSelectOption>
+                    <NativeSelectOption value=""></NativeSelectOption>
                     {f.options.map((o) => <NativeSelectOption key={o} value={o}>{o}</NativeSelectOption>)}
                   </NativeSelect>
                 ) : <Input id={`cf_${f.id}`} name={`cf_${f.id}`} type={f.type === "Date" ? "date" : "text"} inputMode={f.type === "Number" ? "decimal" : undefined} />}
@@ -162,7 +186,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
                   <Field key={k} label={BANK_FIELDS[k]} name={`bank_${k}`} required error={err[`bank_${k}`]}>
                     {k === "accountType" ? (
                       <NativeSelect id="bank_accountType" name="bank_accountType" defaultValue="" className="w-full">
-                        <NativeSelectOption value="">Pick…</NativeSelectOption>
+                        <NativeSelectOption value=""></NativeSelectOption>
                         <NativeSelectOption value="Savings">Savings</NativeSelectOption>
                         <NativeSelectOption value="Current">Current</NativeSelectOption>
                       </NativeSelect>
@@ -183,6 +207,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
         <p className="text-xs text-muted-foreground">With a policy number it is saved here as Active and its renewal schedule is created. Leave it blank and it waits in Proposals.</p>
       </div>
       {confirm.dialog}
+      <DuplicateCustomerDialog duplicate={dup} onClose={() => setDup(undefined)} />
     </form>
   );
 }

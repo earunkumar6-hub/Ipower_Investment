@@ -212,7 +212,7 @@ export function OtherIncomeForm({ date, closed, accounts }: { date: string; clos
           <div className="space-y-1.5">
             <Label htmlFor="oiAccount">Received in</Label>
             <NativeSelect id="oiAccount" name="accountId" defaultValue="" className="w-full">
-              <NativeSelectOption value="">Pick account</NativeSelectOption>
+              <NativeSelectOption value=""></NativeSelectOption>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
             </NativeSelect>
           </div>
@@ -353,7 +353,7 @@ export function VerifyCloseForm(p: {
         <div className="flex-1 space-y-1.5">
           <Label htmlFor="verifiedById">Verified by</Label>
           <NativeSelect id="verifiedById" name="verifiedById" className="w-full" defaultValue={p.verifiedById ?? ""} disabled={!p.canVerify}>
-            <NativeSelectOption value="">Pick…</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             {p.admins.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
           </NativeSelect>
         </div>

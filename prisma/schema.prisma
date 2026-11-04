@@ -314,6 +314,8 @@ model Proposal {
   frequency               Frequency?
   termMonths              Int?
   startDate               DateTime?      @db.Date
+  sipDay                  Int? // mutual fund SIP: day of the month it is debited (1–28)
+  folioNo                 String? // mutual fund folio from the AMC (several SIPs can share one)
   premiumPayingTermMonths Int?
   nominee                 String?
   rateAtOpen              Decimal?       @db.Decimal(5, 2)
@@ -456,6 +458,8 @@ model Policy {
   premiumAmount           Decimal      @db.Decimal(12, 2) // premium, SIP or RD instalment
   frequency               Frequency
   startDate               DateTime     @db.Date
+  sipDay                  Int? // mutual fund SIP: day of the month it is debited (1–28); bills fall on it
+  folioNo                 String? // mutual fund folio from the AMC – not unique: several SIPs can share one
   termMonths              Int?
   sumAssured              Decimal?     @db.Decimal(14, 2)
   status                  PolicyStatus @default(Active)

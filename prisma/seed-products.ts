@@ -42,6 +42,9 @@ const CATALOGUE: ProductSeed[] = [
     schemes: [{ name: "PPF 15 years", tenure: 180, rates: [rate("7.10", "2026-10-01")] }] },
   { name: "Jeevan Anand", productType: "Insurance", partner: "LIC", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly", "HalfYearly", "Quarterly", "Monthly"], lockIn: 36, bank: true, fields: INS_FIELDS, required: ["policyNumber", "commencement", "premiumPayingTerm"],
     schemes: [{ name: "Plan 20 years", tenure: 240 }, { name: "Plan 25 years", tenure: 300 }] },
+  // Postal Life Insurance: life insurance sold by the post office (all four pay modes; term per policy).
+  { name: "Postal Life Insurance", productType: "Insurance", partner: "Post Office", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly", "HalfYearly", "Quarterly", "Monthly"], lockIn: 36, bank: true, fields: INS_FIELDS, required: ["policyNumber", "commencement", "premiumPayingTerm"],
+    schemes: ["Santosh (Endowment)", "Suraksha (Whole life)", "Suvidha (Convertible whole life)", "Sumangal (Money back)", "Yugal Suraksha (Joint life)", "Bal Jeevan Bima (Children)"].map((name) => ({ name, tenure: null })) },
   { name: "Smart Shield", productType: "Insurance", partner: "SBI Life", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly", "Monthly"], bank: true, fields: INS_FIELDS, required: ["policyNumber", "commencement", "premiumPayingTerm"],
     schemes: [{ name: "Term 30 years", tenure: 360 }] },
   { name: "eShield Next", productType: "Insurance", partner: "SBI Life", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly"], bank: true, fields: INS_FIELDS, required: ["policyNumber", "commencement"],

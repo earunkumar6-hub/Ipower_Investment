@@ -4,7 +4,7 @@ import { canActOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { esc, htmlToPdf, htmlToPng, PDF_STYLE, pdfHeader } from "@/lib/pdf";
 import { hasPermission } from "@/lib/permissions";
-import { PAY_MODE_LABEL } from "@/lib/products";
+import { isMfCategory, payModeLabel } from "@/lib/products";
 import { getSessionUser } from "@/lib/session";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,14 +18,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     userNames(user.tenantId),
   ]);
 
+  // Mutual fund rows: SIP / Lumpsum and investment amount, no cover column when every row is a mutual fund.
+  const anyMf = q.items.some((i) => isMfCategory(i.category)), allMf = q.items.every((i) => isMfCategory(i.category));
   const rows = q.items.map((i) => `
     <tr>
       <td>${esc(i.category)}</td>
       <td>${esc(i.insurer)} – ${esc(i.productName)}</td>
-      <td>${esc(PAY_MODE_LABEL[i.payMode])}</td>
-      <td class="num">${i.sumInsured ? esc(fmtINR(i.sumInsured)) : "—"}</td>
+      <td>${esc(payModeLabel(i.payMode, isMfCategory(i.category)))}</td>
+      ${allMf ? "" : `<td class="num">${i.sumInsured ? esc(fmtINR(i.sumInsured)) : "—"}</td>`}
       <td class="num">${esc(fmtINR(i.premium))}</td>
     </tr>`).join("");
+  const notes = [
+    !allMf && "Premiums are indicative and subject to the insurer's underwriting. Premiums are paid to the insurer; we collect them on the insurer's behalf.",
+    anyMf && "Mutual fund investments are subject to market risks; read all scheme related documents carefully.",
+  ].filter(Boolean).map((t) => `<p class="muted" style="margin-top:${allMf || !anyMf ? 24 : 8}px">${esc(String(t))}</p>`).join("");
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${PDF_STYLE}</style></head><body>
     ${pdfHeader(tenant.name, `<h1>Quotation</h1><div>${esc(q.quoteNo)}</div>`)}
@@ -34,11 +40,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       <span class="muted">Date ${esc(fmtDate(istDate(q.createdAt)))} · Valid till ${esc(fmtDate(q.validUpto))} · Prepared by ${esc(users.find((u) => u.id === q.ownerId)?.name ?? "")}</span>
     </p>
     <table>
-      <thead><tr><th>Product</th><th>Plan</th><th>Pay mode</th><th class="num">Sum insured / cover</th><th class="num">Premium</th></tr></thead>
+      <thead><tr><th>Product</th><th>${allMf ? "Scheme" : anyMf ? "Plan / scheme" : "Plan"}</th><th>${allMf ? "SIP / Lumpsum" : "Pay mode"}</th>${allMf ? "" : `<th class="num">Sum insured / cover</th>`}<th class="num">${allMf ? "Investment amount" : anyMf ? "Premium / amount" : "Premium"}</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr class="total"><td colspan="4">Total payable</td><td class="num">${esc(fmtINR(q.total))}</td></tr></tfoot>
+      <tfoot><tr class="total"><td colspan="${allMf ? 3 : 4}">${allMf ? "Total investment" : "Total payable"}</td><td class="num">${esc(fmtINR(q.total))}</td></tr></tfoot>
     </table>
-    <p class="muted" style="margin-top:24px">Premiums are indicative and subject to the insurer's underwriting. Premiums are paid to the insurer; we collect them on the insurer's behalf.</p>
+    ${notes}
   </body></html>`;
 
   // ?format=png: the same quotation as an image, to share on WhatsApp.

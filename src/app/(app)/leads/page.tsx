@@ -1,6 +1,6 @@
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
-import { fmtDate, isoDate } from "@/lib/dates";
+import { fmtDmy, isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, interestOptions, userNames } from "@/lib/leads";
 import { leadFilter } from "@/lib/lists";
@@ -76,7 +76,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 email: panelLead.email ?? "", address: panelLead.address ?? "", source: panelLead.source, referrerName: panelLead.referrerName ?? "",
                 interest: panelLead.interest ?? "", notes: panelLead.notes ?? "",
               },
-              dobLabel: panelLead.dob ? fmtDate(panelLead.dob) : null,
+              dobLabel: panelLead.dob ? fmtDmy(panelLead.dob) : null,
               status: panelLead.status,
               stage: panelLead.stage,
               notInterestedReason: panelLead.notInterestedReason,

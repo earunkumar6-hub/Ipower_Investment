@@ -1,7 +1,7 @@
 import type { Frequency, InvoiceRule, Prisma, ProductType, RenewalStatus } from "@prisma/client";
 import { addMonths } from "@/lib/dates";
 import type { Tx } from "@/lib/db";
-import { STEP_MONTHS } from "@/lib/dues";
+import { seriesAnchor, STEP_MONTHS } from "@/lib/dues";
 import { renewalDueDates } from "@/lib/renewals";
 
 // Renewal schedule rules (Oct 2026 spec, rule #13 / #24): the first payment is taken at the start; renewals are
@@ -12,7 +12,7 @@ import { renewalDueDates } from "@/lib/renewals";
 //   None             TD, KVP, NSC, SCSS, MIS – one-time, no bills (mutual fund SIPs stay payable, open-ended)
 // Without a catalogue product the term decides (UntilMaturity).
 
-type SchedulePolicy = { startDate: Date; frequency: Frequency; termMonths: number | null; premiumPayingTermMonths?: number | null; productType: ProductType };
+type SchedulePolicy = { startDate: Date; sipDay?: number | null; frequency: Frequency; termMonths: number | null; premiumPayingTermMonths?: number | null; productType: ProductType };
 
 /** Bills fall due strictly before this date; null = open-ended. */
 export function billEnd(p: SchedulePolicy, rule?: InvoiceRule | null): Date | null {
@@ -51,7 +51,8 @@ export function fullSchedule(p: SchedulePolicy & { premiumAmount: Prisma.Decimal
   const billed = step && (rule !== "None" || p.productType === "MutualFund");
   if (billed) {
     const monthEndSeries = sorted.length > 0 && sorted.every((s) => isMonthEnd(s.dueDate));
-    const at = (k: number) => (monthEndSeries ? monthEndOf(addMonths(p.startDate, k * step)) : addMonths(p.startDate, k * step));
+    const anchor = seriesAnchor(p); // the start date, or the SIP date for a mutual fund SIP
+    const at = (k: number) => (monthEndSeries ? monthEndOf(addMonths(anchor, k * step)) : addMonths(anchor, k * step));
     const inside = (d: Date) => (end ? d < end : d <= horizon);
     // Before the first stored instalment: the policy's own series from the start.
     const first = sorted[0]?.dueDate;
@@ -86,8 +87,10 @@ export type PolicyInput = {
   secondHolderId?: string | null; // joint account
   firstHolderCif?: string | null; // CIFs given by the post office / insurer
   secondHolderCif?: string | null;
+  folioNo?: string | null; // mutual fund folio
   productType: ProductType; partner: string; productName: string; productId?: string | null; schemeId?: string | null;
   premiumAmount: Prisma.Decimal.Value; frequency: Frequency; startDate: Date; termMonths?: number | null; sumAssured?: Prisma.Decimal.Value | null;
+  sipDay?: number | null; // mutual fund SIP date
   premiumPayingTermMonths?: number | null; nominee?: string | null; rateAtOpen?: Prisma.Decimal.Value | null;
   customValues?: Prisma.InputJsonValue | null; bankDetailsEnc?: string | null;
   /** From Settings → Products and schemes; without it the term decides. */

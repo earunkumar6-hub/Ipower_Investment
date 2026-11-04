@@ -111,7 +111,7 @@ describe("Customers from proposals", () => {
   const proposal = (data: Partial<Parameters<typeof prisma.proposal.create>[0]["data"]>) => prisma.proposal.create({
     data: {
       tenantId: users.arun.tenantId, proposalNo: `P-T${Math.floor(Math.random() * 1e6)}`, customerName: "x", mobile: "9000000000", insurer: "Star Health", productName: "Comprehensive",
-      premium: "12000.00", status: "Draft", ownerId: users.arun.id, frequency: "Yearly", startDate: today, termMonths: 12, ...data,
+      premium: "12000.00", status: "Draft", ownerId: users.arun.id, frequency: "Yearly", startDate: today, termMonths: 12, sumInsured: "500000", premiumPayingTermMonths: 12, ...data,
     } as Parameters<typeof prisma.proposal.create>[0]["data"],
   });
 

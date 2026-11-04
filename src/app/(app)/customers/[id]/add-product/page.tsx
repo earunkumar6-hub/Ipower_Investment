@@ -29,7 +29,7 @@ export default async function AddProductPage({ params }: { params: Promise<{ id:
           customerName={customer.name}
           today={isoDate(istToday())}
           products={products.map((p) => ({
-            id: p.id, name: p.name, partner: p.partner, productType: p.productType, payModes: p.payModes, lockInMonths: p.lockInMonths,
+            id: p.id, name: p.name, partner: p.partner, productType: p.productType, invoiceRule: p.invoiceRule, payModes: p.payModes, lockInMonths: p.lockInMonths,
             fields: p.fields, requiredFields: p.requiredFields, bankDetailsRequired: p.bankDetailsRequired, bankFields: p.bankFields,
             schemes: p.schemes.map((s) => ({ id: s.id, name: s.name, tenureMonths: s.tenureMonths, rates: s.rates.map((r) => ({ rate: r.rate.toFixed(2), from: isoDate(r.effectiveFrom) })) })),
             customFields: p.customFields.map((f) => ({ id: f.id, label: f.label, type: f.type, options: f.options, required: f.required })),

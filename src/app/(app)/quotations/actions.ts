@@ -11,6 +11,7 @@ import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
+import { isMfCategory, MF_PAY_MODES } from "@/lib/products";
 import { priceQuotation } from "@/lib/quotation";
 import { authorize, type SessionUser } from "@/lib/session";
 
@@ -75,6 +76,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
       for (const [n, i] of v.items.entries()) {
         const r = await resolveDropdown(tx, user, "quotationCategory", i.category, i.categoryOther);
         if ("error" in r) throw new QuoteRefused(`Product ${n + 1}: ${r.error}`);
+        if (isMfCategory(r.value) && !MF_PAY_MODES.includes(i.payMode)) throw new QuoteRefused(`Product ${n + 1}: pick SIP or Lumpsum`);
         categories.push(r.value);
       }
       const q = await tx.quotation.create({
@@ -94,7 +96,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
               category: categories[n],
               insurer: i.insurer,
               productName: i.productName,
-              sumInsured: i.sumInsured || null,
+              sumInsured: isMfCategory(categories[n]) ? null : i.sumInsured || null, // no cover on a mutual fund
               payMode: i.payMode,
               ...priced.items[n],
             })),
@@ -120,7 +122,7 @@ async function ownQuotation(user: SessionUser, quotationId: string) {
   return { q } as const;
 }
 
-type QuotedItem = { id: string; insurer: string; productName: string; sumInsured: Prisma.Decimal | null; total: Prisma.Decimal; payMode: Frequency };
+type QuotedItem = { id: string; category: string; insurer: string; productName: string; sumInsured: Prisma.Decimal | null; total: Prisma.Decimal; payMode: Frequency };
 type QuoteParty = { id: string; customerId: string | null; customerName: string; mobile: string; ownerId: string };
 
 /** One proposal for a quoted product, linked to the catalogue product when the plan matches. No OTP consent step (owner, 20 Oct 2026). */
@@ -135,7 +137,7 @@ async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: Quote
       tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), quotationId: q.id, quotationItemId: item.id,
       customerId: q.customerId, customerName: q.customerName, mobile: q.mobile, insurer: item.insurer, productName: item.productName,
       sumInsured: item.sumInsured, premium: item.total, status: "Draft", ownerId: q.ownerId,
-      productType: product?.productType ?? "Insurance", productId: product?.id, schemeId: onlyScheme?.id, frequency: item.payMode, termMonths: onlyScheme?.tenureMonths,
+      productType: product?.productType ?? (isMfCategory(item.category) ? "MutualFund" : "Insurance"), productId: product?.id, schemeId: onlyScheme?.id, frequency: item.payMode, termMonths: onlyScheme?.tenureMonths,
     },
   });
   return p;

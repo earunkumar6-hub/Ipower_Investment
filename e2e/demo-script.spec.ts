@@ -82,19 +82,21 @@ test.describe.serial("Demo script – three roles on the same data", () => {
   test("3. Proposal: optional PAN stored masked; policy number creates customer + renewal (no OTP consent)", async () => {
     await arun.getByRole("link", { name: /^P-\d+$/ }).first().click();
     await arun.waitForURL(/\/proposals\/c/);
+    await arun.getByLabel("Customer consent taken").check();
     await arun.getByLabel("PAN").fill("ABCDE1234M");
-    await arun.getByRole("button", { name: "Save Aadhaar / PAN" }).click();
+    await arun.getByRole("button", { name: "Save proposal" }).click(); // one Save for the whole proposal (3 Nov 2026)
+    await arun.getByRole("button", { name: "Yes, save" }).click();
     await expect(arun.getByText("ABCxxxxx4M").first()).toBeVisible();
     await expect(arun.getByText("ABCDE1234M")).toHaveCount(0); // full PAN never shown back
 
     // Pay mode comes from the quotation (Yearly); enter the term and start date.
     await arun.getByLabel("Term (years)").fill("1");
-    await arun.getByLabel("Start date").fill(new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10));
-    await arun.getByRole("button", { name: "Save details" }).last().click(); // Save is at the top and bottom
-    await arun.getByRole("button", { name: "Yes, save" }).click();
-    await expect(arun.getByText("Policy details saved")).toBeVisible();
+    await arun.locator("#schemeId").selectOption({ index: 1 }); // plan, sum assured: needed before the policy number (3 Nov 2026)
+    await arun.locator("#sumInsured").fill("500000");
+    await arun.locator("#startDate").fill(new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10));
     await arun.getByLabel("Policy number (leave blank until issued)").fill("STAR-P-700123");
-    await arun.getByRole("button", { name: "Save policy number" }).click();
+    await arun.getByRole("button", { name: "Save proposal" }).click(); // one Save: details + policy number
+    await arun.getByRole("button", { name: "Yes, save" }).click();
     await expect(arun.getByText(/Policy STAR-P-700123 issued and moved to Partners \/ Customers under Meena R/)).toBeVisible();
     await expect(arun.getByText(/Next renewal due/)).toBeVisible();
   });

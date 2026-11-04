@@ -23,6 +23,51 @@ export const INVOICE_RULE_SHORT: Record<InvoiceRule, string> = {
 export const PAY_MODE_LABEL: Record<Frequency, string> = { OneTime: "One-time", Monthly: "Monthly", Quarterly: "Quarterly", HalfYearly: "Half-yearly", Yearly: "Yearly" };
 export const PAY_MODES = Object.keys(PAY_MODE_LABEL) as Frequency[];
 
+/**
+ * Post office products (owner, 3 Nov 2026): the company holder CIF is asked only for these – every post office
+ * scheme, plus anything sold by the company "Post Office" (Postal Life Insurance). Mutual funds have a folio instead.
+ */
+export const isPostal = (p: { productType: ProductType; partner: string }) => p.productType.startsWith("Po") || p.partner.trim().toLowerCase() === "post office";
+
+/**
+ * Health cover renews until it is closed (no term, no premium paying term); other insurance is life cover. Without a
+ * catalogue product the quotation's product type ("Health") decides.
+ */
+export const isHealthCover = (p: { invoiceRule?: InvoiceRule | null; category?: string | null }) =>
+  p.invoiceRule ? p.invoiceRule === "UntilClosed" : /health/i.test(p.category ?? "");
+
+/**
+ * Insurance details needed before the policy number is saved (owner, 3 Nov 2026): DOC, sum assured, plan and premium
+ * for every insurance; life cover also the term and premium paying term (when the product shows it). Returns the
+ * missing ones, in screen order.
+ */
+export function missingInsuranceDetails(p: {
+  health: boolean; hasPlans: boolean; pptShown: boolean;
+  startDate: unknown; sumAssured: unknown; schemeId: unknown; termMonths: unknown; premiumPayingTermMonths: unknown; premiumOk: boolean;
+}): string[] {
+  return [
+    !p.startDate && "date of commencement (DOC)",
+    !p.sumAssured && "sum assured",
+    p.hasPlans && !p.schemeId && "plan",
+    !p.health && !p.termMonths && "term",
+    !p.health && p.pptShown && !p.premiumPayingTermMonths && "premium paying term",
+    !p.premiumOk && "premium",
+  ].filter((x): x is string => !!x);
+}
+
+/** Quotation product "Mutual fund" (any case, also typed under Other): SIP / Lumpsum wording, no cover. */
+export const isMfCategory = (category: string) => category.trim().toLowerCase() === "mutual fund";
+export const MF_PAY_MODES: Frequency[] = ["Monthly", "OneTime"];
+/** SIP date choices (1–28: every month has them). */
+export const SIP_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
+/** 1 → "1st", 22 → "22nd". */
+export const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
+/** "10th of every month". */
+export const sipDateLabel = (day: number) => `${ordinal(day)} of every month`;
+/** A mutual fund paid monthly is a SIP and needs a SIP date. */
+export const needsSipDay = (productType: ProductType | null | undefined, frequency: Frequency | string | null | undefined) => productType === "MutualFund" && frequency === "Monthly";
+export const payModeLabel = (m: Frequency, mf: boolean) => (mf && m === "Monthly" ? "SIP (monthly)" : mf && m === "OneTime" ? "Lumpsum" : PAY_MODE_LABEL[m]);
+
 /** Fields an account / policy of this product can show. */
 export const ACCOUNT_FIELDS = {
   policyNumber: "Policy / account number",

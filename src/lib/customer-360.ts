@@ -7,7 +7,7 @@ import { OUTCOME_LABEL } from "@/lib/lead-labels";
 import { callInclude, callParty, canActOn, userNames, type CallKind } from "@/lib/leads";
 import { sum, ZERO } from "@/lib/money";
 import { maturityOf } from "@/lib/policies";
-import { lockInUntil } from "@/lib/products";
+import { isPostal, lockInUntil, sipDateLabel } from "@/lib/products";
 import { refreshOverdue } from "@/lib/renewals";
 import type { SessionUser } from "@/lib/session";
 
@@ -75,9 +75,11 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     amountLabel: PER_LABEL[p.frequency],
     details: [
       p.secondHolder && ["Joint account", `second holder ${p.secondHolder.name} (${p.secondHolder.cifNo})`],
-      p.secondHolder
-        ? (p.firstHolderCif || p.secondHolderCif) && ["Holder CIF (company)", `first ${p.firstHolderCif ?? "—"} · second ${p.secondHolderCif ?? "—"}`]
-        : p.firstHolderCif && ["Holder CIF (company)", p.firstHolderCif],
+      isPostal(p) && (p.secondHolder
+        ? (p.firstHolderCif || p.secondHolderCif) && ["Holder CIF (post office)", `first ${p.firstHolderCif ?? "—"} · second ${p.secondHolderCif ?? "—"}`]
+        : p.firstHolderCif && ["Holder CIF (post office)", p.firstHolderCif]),
+      p.folioNo && ["Folio number", p.folioNo],
+      p.sipDay && ["SIP date", sipDateLabel(p.sipDay)],
       p.nominee && ["Nominee", p.nominee],
       ...Object.entries((p.customValues ?? {}) as Record<string, string | number>).map(([k, v]) => [k, String(v)]),
       p.premiumPayingTermMonths && ["Premium paying term", `${p.premiumPayingTermMonths / 12} years`],

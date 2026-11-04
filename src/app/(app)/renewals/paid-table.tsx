@@ -94,7 +94,7 @@ export function PaidTable({ rows, accounts, today, canPay }: { rows: PaidRow[]; 
           <div className="space-y-1">
             <Label htmlFor="accountId" className="text-xs">Paid from</Label>
             <NativeSelect id="accountId" name="accountId" size="sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              <NativeSelectOption value="">Pick account</NativeSelectOption>
+              <NativeSelectOption value=""></NativeSelectOption>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
             </NativeSelect>
           </div>

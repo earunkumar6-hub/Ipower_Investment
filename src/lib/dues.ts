@@ -16,8 +16,20 @@ const isMonthEnd = (d: Date) => monthEnd(d).getTime() === d.getTime();
 export const seriesDate = (anchor: Date, months: number, monthEndSeries: boolean) =>
   monthEndSeries ? monthEnd(addMonths(anchor, months)) : addMonths(anchor, months);
 
+/**
+ * Where a policy's series of bills starts counting from: the start date, or for a mutual fund SIP with a SIP date
+ * (1–28) the last SIP date on or before the start, so the first bill is the first SIP date after the start
+ * (start 3 Nov, SIP date 25 → 25 Nov; start 20 Nov, SIP date 5 → 5 Dec).
+ */
+export function seriesAnchor(p: { startDate: Date; sipDay?: number | null }) {
+  if (!p.sipDay) return p.startDate;
+  const s = p.startDate;
+  const back = p.sipDay > s.getUTCDate() ? 1 : 0;
+  return new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() - back, p.sipDay));
+}
+
 /** `billUntil`: bills fall due strictly before it (from the product's bill rule, see billEnd in policies.ts); default start + term. */
-export type DuePolicy = { startDate: Date; frequency: Frequency; termMonths: number | null; premiumAmount: Prisma.Decimal; billUntil?: Date | null };
+export type DuePolicy = { startDate: Date; sipDay?: number | null; frequency: Frequency; termMonths: number | null; premiumAmount: Prisma.Decimal; billUntil?: Date | null };
 export type StoredDue = { id: string; dueDate: Date; premiumAmount: Prisma.Decimal; status: RenewalStatus };
 /** `itemId` null = advance instalment, created when paid. */
 export type Due = { itemId: string | null; dueDate: Date; amount: Prisma.Decimal };
@@ -31,8 +43,8 @@ export function payableDues(policy: DuePolicy, stored: StoredDue[], today: Date)
 
   const step = STEP_MONTHS[policy.frequency];
   if (!step) return open;
-  // Continue the policy's own series: from its first stored due (month ends for RD), else from the start date.
-  const anchor = all[0]?.dueDate ?? policy.startDate;
+  // Continue the policy's own series: from its first stored due (month ends for RD), else from the start date (SIP date).
+  const anchor = all[0]?.dueDate ?? seriesAnchor(policy);
   const monthEndSeries = all.length > 0 && all.every((r) => isMonthEnd(r.dueDate));
   const last = all.at(-1)?.dueDate;
   const end = policy.billUntil !== undefined ? policy.billUntil : policy.termMonths ? addMonths(policy.startDate, policy.termMonths) : null;

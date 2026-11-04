@@ -107,7 +107,8 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await expect(owner.locator("#aadhaar")).toBeDisabled();
     await owner.getByLabel("Customer consent taken").check();
     await owner.locator("#pan").fill("QAQPA1234Q");
-    await owner.getByRole("button", { name: "Save Aadhaar / PAN" }).click();
+    await owner.getByRole("button", { name: "Save proposal" }).click(); // one Save for the whole proposal (3 Nov 2026)
+    await owner.getByRole("button", { name: "Yes, save" }).click();
     await expect(owner.getByText(/QAQxxxxx4Q/).first()).toBeVisible();
     await shot(owner, "01");
   });
@@ -119,13 +120,11 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await owner.locator("#jh-search").fill("Karthik");
     await owner.getByRole("button", { name: /Karthik V/ }).first().click();
     await expect(owner.getByText(/Karthik V/).first()).toBeVisible();
-    await owner.locator("#jh-cif1").fill("FH-QA-11");
-    await owner.locator("#jh-cif2").fill("SH-QA-12");
-    await owner.getByRole("button", { name: "Save account holders" }).click();
+    await expect(owner.locator("#jh-cif1")).toHaveCount(0); // company CIF only for post office products (3 Nov 2026)
+    await owner.getByRole("button", { name: "Save proposal" }).click(); // one Save for the whole proposal (3 Nov 2026)
+    await owner.getByRole("button", { name: "Yes, save" }).click();
     await owner.waitForTimeout(1500);
     await owner.reload();
-    await expect(owner.locator("#jh-cif1")).toHaveValue("FH-QA-11");
-    await expect(owner.locator("#jh-cif2")).toHaveValue("SH-QA-12");
     await expect(owner.getByText(/Karthik V/).first()).toBeVisible();
     await shot(owner, "12");
   });
@@ -134,17 +133,19 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await openProposal(owner);
     await expect(owner.getByText("Not required to save or submit")).toBeVisible();
     await expect(owner.getByText("0 uploaded")).toBeVisible();
-    await expect(owner.getByRole("button", { name: "Save details" })).toHaveCount(2); // #26 top and bottom
+    await expect(owner.getByRole("button", { name: "Save proposal" })).toHaveCount(1); // one Save for details + policy number (owner, 3 Nov 2026)
     await owner.locator("#schemeId").selectOption({ label: "Individual" });
     await owner.locator("#frequency").selectOption({ label: "Yearly" });
     await owner.locator("#term").fill("1");
+    await owner.locator("#sumInsured").fill("500000"); // insurance needs the sum assured before the policy number (3 Nov 2026)
     await owner.locator("#startDate").fill(istToday());
-    await owner.getByRole("button", { name: "Save details" }).first().click();
+    await owner.getByRole("button", { name: "Save proposal" }).click(); // blank policy number: details saved only
     await expect(owner.getByText("Check before saving")).toBeVisible(); // #26 check-before-saving pop-up
     await owner.getByRole("button", { name: "Yes, save" }).click();
-    await expect(owner.getByText("Policy details saved")).toBeVisible();
+    await expect(owner.getByText(/Proposal saved/)).toBeVisible();
     await owner.locator("#policyNumber").fill("CARE-QA-0002");
-    await owner.getByRole("button", { name: "Save policy number" }).click();
+    await owner.getByRole("button", { name: "Save proposal" }).click();
+    await owner.getByRole("button", { name: "Yes, save" }).click();
     await expect(owner.getByText(/Policy CARE-QA-0002 issued/)).toBeVisible();
     // KYC can still be uploaded: attach a PAN copy
     await owner.getByLabel("What is the file").selectOption("PAN");
@@ -166,7 +167,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     if (!(await user.locator("input[type=checkbox]:checked").count())) await bills.first().check();
     await user.getByRole("button", { name: "UPI", exact: true }).click();
     await user.locator("#reference").fill("UTR-QA-0003");
-    await expect(user.locator("#intoAccountId option")).toContainText(["Pick the bank account", "SBI ••1234"]); // company accounts to pick from
+    await expect(user.locator("#intoAccountId option")).toContainText(["", "SBI ••1234"]); // company accounts to pick from
     await user.locator("#intoAccountId").selectOption({ label: "SBI ••1234" });
     await user.getByRole("button", { name: "Save receipt" }).click();
     await user.waitForURL(/\/(receipts|payments)\/c/);
@@ -238,7 +239,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await user.locator("#purpose").fill("Form filling");
     await user.locator("#amount").fill("500");
     await user.getByRole("button", { name: "Net banking", exact: true }).click();
-    await expect(user.locator("#netType option")).toHaveText(["Pick…", "NEFT", "IMPS", "RTGS"]);
+    await expect(user.locator("#netType option")).toHaveText(["", "NEFT", "IMPS", "RTGS"]);
     await user.locator("#netType").selectOption("NEFT");
     await user.locator("#bankName").selectOption({ label: "HDFC" });
     await user.locator("#reference").fill("NEFT-QA-0024");
@@ -286,7 +287,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
   // ── E-Sevai ──
   test("#6 Wallets – CSC / E-Sevai / Other; recharge from a bank with transaction no.; statement", async () => {
     await admin.goto("/settings/accounts");
-    await expect(admin.locator("#walletKind option")).toHaveText(["Pick…", "CSC wallet", "E-Sevai wallet", "Other"]);
+    await expect(admin.locator("#walletKind option")).toHaveText(["", "CSC wallet", "E-Sevai wallet", "Other"]);
     await admin.locator("#walletKind").selectOption({ label: "E-Sevai wallet" });
     await admin.locator("#wOpening").fill("1000");
     await admin.getByRole("button", { name: "Add wallet" }).click();
@@ -478,7 +479,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
   test("#11 MICR and account type – on bank accounts and on products / customer holdings", async () => {
     await owner.goto("/settings/accounts");
     await expect(owner.locator("#micr")).toBeVisible();
-    await expect(owner.locator("#accountKind option")).toHaveText(["Pick…", "Savings", "Current"]);
+    await expect(owner.locator("#accountKind option")).toHaveText(["", "Savings", "Current"]);
     await owner.goto("/settings");
     await owner.getByRole("row", { name: /Post Office TD/ }).getByRole("link", { name: "Edit" }).click();
     await owner.locator("input[name=bankFields][value=micr]").check();

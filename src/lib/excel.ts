@@ -5,7 +5,8 @@ import { ADVISOR, logoPng, TAGLINE } from "@/lib/brand";
 // Excel downloads for Admin and Super Admin. Amounts go in as numbers (so totals and
 // formulas work in Excel), business dates as dates, timestamps as IST wall-clock time.
 
-export type ColType = "text" | "money" | "date" | "datetime";
+/** `dmy`: a date shown as dd/mm/yyyy (date of birth). */
+export type ColType = "text" | "money" | "date" | "dmy" | "datetime";
 export type Col = { header: string; type?: ColType; width?: number };
 export type Cell = string | number | Date | Prisma.Decimal | null | undefined;
 /** `totals`: add a SUM row under every money column. */
@@ -15,6 +16,7 @@ const FORMAT: Record<ColType, string | undefined> = {
   text: undefined,
   money: "#,##0.00",
   date: "dd-mmm-yyyy",
+  dmy: "dd/mm/yyyy",
   datetime: "dd-mmm-yyyy h:mm AM/PM",
 };
 const IST_OFFSET_MS = 5.5 * 3_600_000;

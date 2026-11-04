@@ -47,7 +47,7 @@ beforeAll(async () => {
   const p = await prisma.proposal.create({
     data: {
       tenantId: users.admin.tenantId, proposalNo: `P-VT13-${started.getTime()}`, customerId: a.id, customerName: a.name, mobile: a.mobile,
-      insurer: bPolicy.partner, productName: "Vitest identity plan", premium: "1000", ownerId: users.arun.id, frequency: "Yearly", startDate: new Date(), termMonths: 24,
+      insurer: bPolicy.partner, productName: "Vitest identity plan", premium: "1000", ownerId: users.arun.id, frequency: "Yearly", startDate: new Date(), termMonths: 24, sumInsured: "100000", premiumPayingTermMonths: 24,
     },
   });
   proposalId = p.id;
@@ -118,7 +118,7 @@ describe("Company CIF unique within a company (#13)", () => {
     const fresh = await prisma.proposal.create({
       data: {
         tenantId: users.admin.tenantId, proposalNo: `P-VT13b-${started.getTime()}`, customerId: a.id, customerName: a.name, mobile: a.mobile,
-        insurer: bPolicy.partner, productName: "Vitest CIF plan", premium: "1000", ownerId: users.arun.id,
+        insurer: bPolicy.partner, productType: "PoTd", productName: "Vitest CIF plan", premium: "1000", ownerId: users.arun.id, // CIFs: post office only
       },
     });
     try {

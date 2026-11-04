@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { billEnd, fullSchedule, maturityOf } from "@/lib/policies";
-import { fmtTenure, INVOICE_RULE_LABEL, PAY_MODE_LABEL } from "@/lib/products";
+import { fmtTenure, INVOICE_RULE_LABEL, payModeLabel, sipDateLabel } from "@/lib/products";
 import { refreshOverdue } from "@/lib/renewals";
 import { requirePermission } from "@/lib/session";
 
@@ -38,7 +38,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
       <div className="rounded-xl border bg-white p-4">
         <h2 className="font-semibold">Renewal schedule · {p.partner} {p.productName}{p.scheme && ` · ${p.scheme.name}`} · {p.policyNumber}</h2>
         <dl className="mt-2 mb-4 grid grid-cols-5 gap-3 text-sm">
-          <div><dt className="text-xs text-muted-foreground">Pay mode</dt><dd>{PAY_MODE_LABEL[p.frequency]}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Pay mode</dt><dd>{payModeLabel(p.frequency, p.productType === "MutualFund")}{p.sipDay && ` · SIP date ${sipDateLabel(p.sipDay)}`}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Term</dt><dd>{p.termMonths ? fmtTenure(p.termMonths) : "Open-ended"}{rule === "UntilClosed" && " (renewable)"}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Start date</dt><dd>{fmtDate(p.startDate)}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Amount</dt><dd>{fmtINR(p.premiumAmount)}</dd></div>

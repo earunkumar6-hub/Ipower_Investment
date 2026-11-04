@@ -108,7 +108,7 @@ export const REPORTS: Record<string, Report> = {
         title: `Leads${filter ? ` – ${filter}` : ""}`,
         sheets: [{
           name: "Leads",
-          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile", width: 22 }, { header: "WhatsApp", width: 14 }, { header: "Date of birth", type: "date" },
+          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile", width: 22 }, { header: "WhatsApp", width: 14 }, { header: "Date of birth", type: "dmy" },
             { header: "Gender" }, { header: "Email", width: 24 }, { header: "Address", width: 30 }, { header: "Business type" }, { header: "Referred by", width: 18 },
             { header: "Interested product", width: 24 }, { header: "Status" }, { header: "Stage" }, { header: "Next call", type: "datetime", width: 20 },
             { header: "Owner" }, { header: "Notes", width: 30 }, { header: "Created", type: "datetime", width: 20 }],

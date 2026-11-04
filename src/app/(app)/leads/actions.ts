@@ -6,7 +6,7 @@ import { Gender, LeadSource, LeadStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { audit, changedOnly } from "@/lib/audit";
-import { fmtDate, istToday, parseIstDateTime } from "@/lib/dates";
+import { fmtDmy, istToday, parseIstDateTime } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
 import { canActOn } from "@/lib/leads";
@@ -139,7 +139,7 @@ export async function createLead(_: ActionResult, form: FormData): Promise<Actio
 
 /** What the change log shows for a lead's details. */
 const detailsSnapshot = (l: { name: string; dob: Date | null; gender: Gender | null; email: string | null; address: string | null; source: LeadSource; referrerName: string | null; interest: string | null; notes: string | null }, mobiles: { number: string; isWhatsApp: boolean }[]) => ({
-  name: l.name, dob: l.dob ? fmtDate(l.dob) : null, gender: l.gender ? GENDER_LABEL[l.gender] : null, mobiles: mobiles.map((m) => `${m.number}${m.isWhatsApp ? " (WhatsApp)" : ""}`).join(", "),
+  name: l.name, dob: l.dob ? fmtDmy(l.dob) : null, gender: l.gender ? GENDER_LABEL[l.gender] : null, mobiles: mobiles.map((m) => `${m.number}${m.isWhatsApp ? " (WhatsApp)" : ""}`).join(", "),
   email: l.email, address: l.address, businessType: LEAD_SOURCE_LABEL[l.source], referredBy: l.referrerName, interestedProduct: l.interest, notes: l.notes,
 });
 

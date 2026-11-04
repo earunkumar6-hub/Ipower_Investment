@@ -7,7 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { createPolicyWithSchedule } from "@/lib/policies";
-import { rateOn } from "@/lib/products";
+import { isHealthCover, isPostal, missingInsuranceDetails, needsSipDay, rateOn } from "@/lib/products";
 import { audit } from "@/lib/audit";
 import { EncryptionKeyMissing } from "@/lib/crypto";
 import { AADHAAR_RE, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
@@ -96,6 +96,10 @@ const detailsSchema = z.object({
   premiumPayingTerm: years,
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the start date").transform((v) => new Date(`${v}T00:00:00Z`)),
   schemeId: z.string().default(""),
+  sipDay: z.string().default(""),
+  // Premium and sum assured can be corrected on the proposal (sent only by the proposal screen; absent = keep).
+  premium: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter the premium").refine((x) => Number(x) > 0, "Premium must be more than 0").optional(),
+  sumInsured: z.union([z.literal(""), z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter the sum assured as an amount")]).optional(),
 });
 
 /** Pay mode, term, start date and premium paying term – used to build the renewal schedule when the policy number comes. */
@@ -111,9 +115,13 @@ export async function savePolicyDetails(_: ActionResult, form: FormData): Promis
     if (r.p.status === "Issued") return { ok: false, error: "Policy already issued" };
     const scheme = v.schemeId && r.p.productId ? await tx.scheme.findFirst({ where: { id: v.schemeId, productId: r.p.productId } }) : null;
     if (v.schemeId && !scheme) return { ok: false, error: "Pick a scheme of this product" };
+    // Mutual fund SIP: the day of the month it is debited (1–28) is required; nothing else keeps one.
+    const sip = needsSipDay(r.p.productType, v.frequency);
+    const sipDay = sip ? Number(v.sipDay) : null;
+    if (sip && !(Number.isInteger(sipDay) && sipDay! >= 1 && sipDay! <= 28)) return { ok: false, error: "Pick the SIP date (1–28)" };
     await tx.proposal.update({
       where: { id: r.p.id },
-      data: { frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
+      data: { sipDay, ...(v.premium && { premium: v.premium }), ...(v.sumInsured !== undefined && { sumInsured: v.sumInsured || null }), frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
     });
     return { ok: true };
   });
@@ -144,6 +152,17 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       const { p } = r;
       if (p.status === "Issued") return { ok: false, error: "Policy already issued" };
       if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
+      if (needsSipDay(p.productType, p.frequency) && !p.sipDay) return { ok: false, error: "Save the SIP date first" };
+      if (p.productType === "Insurance") {
+        // Insurance: DOC, sum assured, plan, premium (+ term and premium paying term for life cover) before the number.
+        const plan = p.productId ? await tx.product.findUnique({ where: { id: p.productId }, include: { schemes: { where: { active: true }, select: { id: true } } } }) : null;
+        const category = p.quotationItemId ? (await tx.quotationItem.findUnique({ where: { id: p.quotationItemId }, select: { category: true } }))?.category : null;
+        const missing = missingInsuranceDetails({
+          health: isHealthCover({ invoiceRule: plan?.invoiceRule, category }), hasPlans: !!plan?.schemes.length, pptShown: !plan || plan.fields.includes("premiumPayingTerm"),
+          startDate: p.startDate, sumAssured: p.sumInsured, schemeId: p.schemeId, termMonths: p.termMonths, premiumPayingTermMonths: p.premiumPayingTermMonths, premiumOk: p.premium.gt(0),
+        });
+        if (missing.length) return { ok: false, error: `Fill in before the policy number: ${missing.join(", ")}` };
+      }
 
       // One person, many policies: reuse the customer by id, else by any of their mobile numbers.
       const lead = p.quotation?.leadId ? await tx.lead.findUnique({ where: { id: p.quotation.leadId }, include: { mobiles: { orderBy: { sort: "asc" } } } }) : null;
@@ -203,9 +222,9 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       const scheme = p.schemeId ? await tx.scheme.findUnique({ where: { id: p.schemeId }, include: { rates: true } }) : null;
       await createPolicyWithSchedule(tx, {
         tenantId: user.tenantId, customerId: customer.id, secondHolderId, ownerId: p.ownerId, proposalId: p.id, policyNumber,
-        firstHolderCif: p.firstHolderCif, secondHolderCif: p.jointAccount ? p.secondHolderCif : null,
+        firstHolderCif: p.firstHolderCif, secondHolderCif: p.jointAccount ? p.secondHolderCif : null, folioNo: p.productType === "MutualFund" ? p.folioNo : null,
         productType: p.productType, partner: p.insurer, productName: p.productName, productId: p.productId, schemeId: p.schemeId,
-        premiumAmount: p.premium, frequency: p.frequency, startDate: p.startDate, termMonths: p.termMonths, sumAssured: p.sumInsured,
+        premiumAmount: p.premium, frequency: p.frequency, startDate: p.startDate, sipDay: needsSipDay(p.productType, p.frequency) ? p.sipDay : null, termMonths: p.termMonths, sumAssured: p.sumInsured,
         premiumPayingTermMonths: p.premiumPayingTermMonths, nominee: p.nominee, customValues: (p.customValues ?? undefined) as Prisma.InputJsonValue | undefined,
         bankDetailsEnc: p.bankDetailsEnc, rateAtOpen: p.rateAtOpen ?? (scheme ? rateOn(scheme.rates, p.startDate)?.rate : null), invoiceRule: product?.invoiceRule,
       });
@@ -224,6 +243,63 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
   }
 }
 
+/**
+ * The proposal's one Save (owner, 3 Nov 2026), in order: policy details, account holders, Aadhaar / PAN, then – when a
+ * policy number is typed – issue. Each part is saved by its own action (same checks and change log as before) and
+ * the first refusal stops the rest; parts saved before it stay saved. Details are skipped while the start date and
+ * the policy number are both blank, so holders and Aadhaar / PAN can be saved early.
+ */
+export async function saveProposal(prev: ActionResult, form: FormData): Promise<ActionResult> {
+  const text = (k: string) => String(form.get(k) ?? "").trim();
+  const issuing = !!text("policyNumber");
+  const saved: string[] = [];
+  const stop = (r: ActionResult): ActionResult => ({ ...r, error: saved.length ? `${r.error} (${saved.join(" and ")} saved)` : r.error });
+  const notes: string[] = [];
+
+  // Insurance with a policy number: name every missing detail at once, from what is typed, before saving anything.
+  if (issuing) {
+    const user = await authorize("Proposal.Create");
+    const p = await db.proposal.findFirst({
+      where: { id: text("proposalId"), tenantId: user.tenantId, productType: "Insurance", status: { not: "Issued" } },
+      include: { product: { include: { schemes: { where: { active: true }, select: { id: true, tenureMonths: true } } } }, quotationItem: { select: { category: true } } },
+    });
+    if (p) {
+      const scheme = p.product?.schemes.find((s) => s.id === text("schemeId"));
+      const missing = missingInsuranceDetails({
+        health: isHealthCover({ invoiceRule: p.product?.invoiceRule, category: p.quotationItem?.category }), hasPlans: !!p.product?.schemes.length,
+        pptShown: !p.product || p.product.fields.includes("premiumPayingTerm"),
+        startDate: text("startDate"), sumAssured: form.has("sumInsured") ? text("sumInsured") : p.sumInsured, schemeId: scheme?.id,
+        termMonths: text("term") || scheme?.tenureMonths, premiumPayingTermMonths: text("premiumPayingTerm"), premiumOk: form.has("premium") ? Number(text("premium")) > 0 : p.premium.gt(0),
+      });
+      if (missing.length) return { ok: false, error: `Fill in before the policy number: ${missing.join(", ")}` };
+    }
+  }
+
+  if (text("startDate") || issuing) {
+    const r = await savePolicyDetails(prev, form);
+    if (!r.ok) return stop(r);
+    saved.push("policy details");
+  }
+  if (form.has("jointAccount")) {
+    const r = await saveJointAccount(prev, form);
+    if (!r.ok) return stop(r);
+    if (r.message) notes.push(r.message);
+    saved.push("account holders");
+  }
+  if (text("aadhaar") || text("pan") || form.get("consent") === "on") {
+    const r = await saveKyc(prev, form);
+    if (!r.ok) return stop(r);
+    if (r.message === "Consent recorded" && !text("aadhaar") && !text("pan")) notes.push("Consent recorded");
+    saved.push("Aadhaar / PAN");
+  }
+  if (!issuing) {
+    const where = text("startDate") ? "it stays in Proposals until the policy number is entered" : "add the start date before the policy number";
+    return { ok: true, message: [`Proposal saved – ${where}`, ...notes].join(". ") };
+  }
+  const issued = await issuePolicy(prev, form);
+  return issued.ok ? { ...issued, message: "Policy issued; customer and renewals created" } : stop({ ...issued, error: `Policy not issued: ${issued.error}` });
+}
+
 /** The customer whose main or extra mobile this is (oldest first). */
 function customerByMobile(tx: Tx, tenantId: string, mobile: string) {
   return tx.customer.findFirst({ where: { tenantId, OR: [{ mobile }, { mobiles: { some: { number: mobile } } }] }, orderBy: { createdAt: "asc" } });
@@ -238,6 +314,7 @@ const jointSchema = z.object({
   // CIFs given by the post office / insurer to each holder (optional until issued, typed like the policy number)
   firstHolderCif: z.string().trim().toUpperCase().max(40, "CIF is too long").default(""),
   secondHolderCif: z.string().trim().toUpperCase().max(40, "CIF is too long").default(""),
+  folioNo: z.string().trim().toUpperCase().max(40, "Folio number is too long").default(""), // mutual funds only
 });
 
 /**
@@ -258,10 +335,16 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
     if ("error" in r) return { ok: false, error: r.error };
     const { p } = r;
     if (p.status === "Issued") return { ok: false, error: "Policy already issued; the holders can't be changed here" };
+    // Company CIFs only for post office products; a folio only for mutual funds (owner, 3 Nov 2026). Values already
+    // stored on other products are kept as they are.
+    const postal = isPostal({ productType: p.productType, partner: p.insurer });
+    if (!postal) Object.assign(v, { firstHolderCif: p.firstHolderCif ?? "", secondHolderCif: p.secondHolderCif ?? "" });
+    const folioNo = p.productType === "MutualFund" ? v.folioNo || null : p.folioNo;
+    const folioText = p.productType === "MutualFund" ? ` · folio ${folioNo ?? "—"}` : "";
 
     // The company CIF belongs to one person per company (Post Office, LIC…).
     const firstPerson = { customerId: p.customerId ?? (await customerByMobile(tx, user.tenantId, p.mobile))?.id, mobile: p.mobile };
-    if (v.firstHolderCif) {
+    if (postal && v.firstHolderCif) {
       const duplicate = await duplicateCompanyCif(tx, user.tenantId, p.insurer, v.firstHolderCif, firstPerson, p.id);
       if (duplicate) return { ok: false, error: `${v.firstHolderCif}: ${duplicateMessage(duplicate)}`, duplicate, fieldErrors: { firstHolderCif: "Already used" } };
     }
@@ -269,12 +352,12 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
     if (v.jointAccount === "off") {
       // Single holder: only the holder's CIF from the company is kept.
       const cif = v.firstHolderCif || null;
-      if (!p.jointAccount && p.firstHolderCif === cif) return { ok: true };
-      await tx.proposal.update({ where: { id: p.id }, data: { jointAccount: false, secondHolderId: null, secondHolderName: null, secondHolderMobile: null, firstHolderCif: cif, secondHolderCif: null } });
+      if (!p.jointAccount && p.firstHolderCif === cif && p.folioNo === folioNo) return { ok: true };
+      await tx.proposal.update({ where: { id: p.id }, data: { jointAccount: false, secondHolderId: null, secondHolderName: null, secondHolderMobile: null, firstHolderCif: cif, secondHolderCif: postal ? null : p.secondHolderCif, folioNo } });
       await audit(tx, user, {
         entity: "Proposal", entityId: p.id, action: "Updated",
-        summary: `${p.proposalNo}: ${p.jointAccount ? "joint account removed · " : ""}holder CIF ${cif ?? "—"}`,
-        before: { cif: p.firstHolderCif }, after: { cif },
+        summary: `${p.proposalNo}: ${[p.jointAccount && "joint account removed", postal && `holder CIF ${cif ?? "—"}`].filter(Boolean).join(" · ") || "account holders"}${folioText}`,
+        before: { cif: p.firstHolderCif, folio: p.folioNo }, after: { cif, folio: folioNo },
       });
       return { ok: true };
     }
@@ -285,6 +368,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
       second = await tx.customer.findFirst({ where: { id: v.secondHolderId, tenantId: user.tenantId }, select: { id: true, name: true, cifNo: true } });
       if (!second) return { ok: false, error: "Pick the second holder again" };
     } else {
+      if (!v.secondHolderName && !v.secondHolderMobile) return { ok: false, error: "Pick the second holder, or untick Joint account", fieldErrors: { secondHolderId: "Required" } };
       if (v.secondHolderName.length < 2) return { ok: false, error: "Enter the second holder's name", fieldErrors: { secondHolderName: "Required" } };
       if (!v.secondHolderMobile) return { ok: false, error: "Enter the second holder's mobile", fieldErrors: { secondHolderMobile: "Required" } };
       if (v.secondHolderMobile === p.mobile) return { ok: false, error: "That is the first holder's mobile", fieldErrors: { secondHolderMobile: "Same as first holder" } };
@@ -295,16 +379,19 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
       }
     }
     if (second && second.id === p.customerId) return { ok: false, error: "The second holder can't be the first holder" };
+    const unchanged = p.jointAccount && (p.firstHolderCif ?? "") === v.firstHolderCif && (p.secondHolderCif ?? "") === v.secondHolderCif && p.folioNo === folioNo
+      && (second ? p.secondHolderId === second.id : !p.secondHolderId && p.secondHolderName === v.secondHolderName && p.secondHolderMobile === v.secondHolderMobile);
+    if (unchanged) return { ok: true, message }; // nothing to save or log
 
     if (v.firstHolderCif && v.firstHolderCif === v.secondHolderCif) return { ok: false, error: "The two holders can't have the same CIF", fieldErrors: { secondHolderCif: "Same CIF" } };
-    if (v.secondHolderCif) {
+    if (postal && v.secondHolderCif) {
       const secondPerson = second
         ? { customerId: second.id, mobile: (await tx.customer.findUnique({ where: { id: second.id }, select: { mobile: true } }))?.mobile }
         : { mobile: v.secondHolderMobile };
       const duplicate = await duplicateCompanyCif(tx, user.tenantId, p.insurer, v.secondHolderCif, secondPerson, p.id);
       if (duplicate) return { ok: false, error: `${v.secondHolderCif}: ${duplicateMessage(duplicate)}`, duplicate, fieldErrors: { secondHolderCif: "Already used" } };
     }
-    const cifs = { firstHolderCif: v.firstHolderCif || null, secondHolderCif: v.secondHolderCif || null };
+    const cifs = { firstHolderCif: v.firstHolderCif || null, secondHolderCif: v.secondHolderCif || null, folioNo };
     await tx.proposal.update({
       where: { id: p.id },
       data: second
@@ -314,7 +401,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
     await audit(tx, user, {
       entity: "Proposal", entityId: p.id, action: "Updated",
       summary: `${p.proposalNo}: joint account – second holder ${second ? `${second.name} (${second.cifNo})` : `${v.secondHolderName} (new customer on issue)`}`
-        + ` · company CIFs ${v.firstHolderCif || "—"} / ${v.secondHolderCif || "—"}`,
+        + (postal ? ` · company CIFs ${v.firstHolderCif || "—"} / ${v.secondHolderCif || "—"}` : "") + folioText,
     });
     return { ok: true, message };
   });

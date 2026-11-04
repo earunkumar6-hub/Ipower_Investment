@@ -26,7 +26,7 @@ export function OwnerPaidForm({ items }: { items: Option[] }) {
       <div className="space-y-1.5">
         <Label htmlFor="renewalItemId">Bill</Label>
         <NativeSelect id="renewalItemId" name="renewalItemId" className="w-full" defaultValue="">
-          <NativeSelectOption value="">Pick the bill</NativeSelectOption>
+          <NativeSelectOption value=""></NativeSelectOption>
           {items.map((i) => <NativeSelectOption key={i.id} value={i.id}>{i.label}</NativeSelectOption>)}
         </NativeSelect>
       </div>
@@ -56,7 +56,7 @@ export function ReturnToOwnerForm({ slips }: { slips: (Option & { amount: string
       <div className="space-y-1.5">
         <Label htmlFor="slipId">Slip</Label>
         <NativeSelect id="slipId" name="slipId" className="w-full" value={slipId} onChange={(e) => setSlipId(e.target.value)}>
-          <NativeSelectOption value="">{slips.length ? "Pick a slip" : "Nothing to return"}</NativeSelectOption>
+          <NativeSelectOption value="">{slips.length ? "" : "Nothing to return"}</NativeSelectOption>
           {slips.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
         </NativeSelect>
       </div>

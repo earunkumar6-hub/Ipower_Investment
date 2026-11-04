@@ -26,6 +26,21 @@ export function financialYear(date: Date): string {
 export const fmtDate = (date: Date) =>
   date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
+/** "12/03/1985" (dd/mm/yyyy) for a DATE value, e.g. date of birth. */
+export const fmtDmy = (date: Date) => isoToDmy(date.toISOString().slice(0, 10));
+
+/** "1985-03-12" → "12/03/1985"; "" when it isn't yyyy-mm-dd. */
+export const isoToDmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
+
+/** "12/03/1985" → "1985-03-12"; "" unless it is a real calendar date. */
+export function dmyToIso(dmy: string) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dmy);
+  if (!m) return "";
+  const iso = `${m[3]}-${m[2]}-${m[1]}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : "";
+}
+
 /** "3:42 pm" for timestamps, shown in IST. */
 export const fmtTime = (date: Date) =>
   date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });

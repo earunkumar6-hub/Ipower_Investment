@@ -51,7 +51,7 @@ export function BankAccountForm({ value }: { value?: BankValues }) {
         </Field>
         <Field id="accountKind" label="Account type" error={err.accountKind}>
           <NativeSelect id="accountKind" name="accountKind" defaultValue={value?.accountKind ?? ""} className="w-full">
-            <NativeSelectOption value="">Pick…</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             <NativeSelectOption value="Savings">Savings</NativeSelectOption>
             <NativeSelectOption value="Current">Current</NativeSelectOption>
           </NativeSelect>
@@ -84,7 +84,7 @@ export function WalletForm({ value }: { value?: WalletValues }) {
       <div className="grid grid-cols-2 gap-3">
         <Field id="walletKind" label="Wallet" error={err.walletKind}>
           <NativeSelect id="walletKind" name="walletKind" value={kind} onChange={(e) => setKind(e.target.value)} className="w-full">
-            <NativeSelectOption value="">Pick…</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             <NativeSelectOption value="CSC">CSC wallet</NativeSelectOption>
             <NativeSelectOption value="ESevai">E-Sevai wallet</NativeSelectOption>
             <NativeSelectOption value="Other">Other</NativeSelectOption>

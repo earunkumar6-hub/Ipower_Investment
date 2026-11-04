@@ -38,7 +38,7 @@ export function DepositStatusForm({ receiptId, amount, company, isRd, accounts, 
         <div className="space-y-1.5">
           <Label htmlFor="accountId">Paid from</Label>
           <NativeSelect id="accountId" name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full">
-            <NativeSelectOption value="">Pick account</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
           </NativeSelect>
         </div>

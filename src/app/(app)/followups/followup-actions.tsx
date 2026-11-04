@@ -51,7 +51,7 @@ export function ScheduleCallButton({ options }: { options: ScheduleOptions }) {
             <div className="space-y-1.5">
               <Label htmlFor="refId">{KINDS.find(([k]) => k === kind)![1]}</Label>
               <NativeSelect key={kind} id="refId" name="refId" defaultValue="" className="w-full" aria-invalid={!!err.refId}>
-                <NativeSelectOption value="">{list.length ? "Pick" : "Nothing to call about"}</NativeSelectOption>
+                <NativeSelectOption value="">{list.length ? "" : "Nothing to call about"}</NativeSelectOption>
                 {list.map((o) => <NativeSelectOption key={o.id} value={o.id}>{o.label}</NativeSelectOption>)}
               </NativeSelect>
             </div>

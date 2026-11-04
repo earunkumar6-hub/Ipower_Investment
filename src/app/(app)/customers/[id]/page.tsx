@@ -20,7 +20,7 @@ import { daysBetween, overdueText } from "@/lib/overdue";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
-import { fmtTenure } from "@/lib/products";
+import { fmtTenure, isPostal, ordinal } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { EditCustomerButton, HoldingsTable } from "./customer-forms";
@@ -92,7 +92,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           cover: p.sumAssured ? fmtINR(p.sumAssured) : null,
           policyNumber: p.policyNumber,
           amount: fmtINR(p.premiumAmount),
-          per: PER_LABEL[p.frequency],
+          per: `${PER_LABEL[p.frequency]}${p.sipDay ? ` · SIP on ${ordinal(p.sipDay)}` : ""}`,
           rate: p.rateAtOpen ? `${p.rateAtOpen.toFixed(2)}%` : "—",
           commenced: fmtDate(p.startDate),
           tenure: p.termMonths ? fmtTenure(p.termMonths) : p.productType === "MutualFund" ? "Open-ended" : "—",
@@ -119,14 +119,14 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <div className="mt-3">
             <h3 className="mb-1 text-sm font-medium">Joint accounts – second holder</h3>
             <Table>
-              <TableHeader><TableRow><TableHead>Policy / account</TableHead><TableHead>Plan</TableHead><TableHead>First holder</TableHead><TableHead>Company CIF (first / second)</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Policy / account</TableHead><TableHead>Plan</TableHead><TableHead>First holder</TableHead><TableHead>Post office CIF / folio</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {c.jointPolicies.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>{p.policyNumber}</TableCell>
                     <TableCell>{p.partner} · {p.productName}</TableCell>
                     <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link> <span className="text-xs text-muted-foreground">{p.customer.cifNo}</span></TableCell>
-                    <TableCell>{p.firstHolderCif ?? "—"} / {p.secondHolderCif ?? "—"}</TableCell>
+                    <TableCell>{isPostal(p) ? `${p.firstHolderCif ?? "—"} / ${p.secondHolderCif ?? "—"}` : p.folioNo ? `Folio ${p.folioNo}` : "—"}</TableCell>
                     <TableCell className="text-right">{fmtINR(p.premiumAmount)} {PER_LABEL[p.frequency]}</TableCell>
                     <TableCell>{POLICY_STATUS[p.status]}</TableCell>
                   </TableRow>

@@ -109,7 +109,7 @@ export function DeleteUserButton({ userId, name, work, others }: { userId: strin
               <div className="space-y-1.5">
                 <Label htmlFor="du-to">{name} has {owned}. Hand them over to</Label>
                 <NativeSelect id="du-to" name="handOverTo" defaultValue="" className="w-full" aria-invalid={!!err.handOverTo}>
-                  <NativeSelectOption value="">Pick a staff member…</NativeSelectOption>
+                  <NativeSelectOption value=""></NativeSelectOption>
                   {others.map((o) => <NativeSelectOption key={o.id} value={o.id}>{o.label}</NativeSelectOption>)}
                 </NativeSelect>
               </div>

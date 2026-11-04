@@ -86,7 +86,7 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="policyId">{withDues.length ? "Or another payment – policy / account" : "Policy / account"}</Label>
             <NativeSelect id="policyId" value={otherPolicyId} className="w-full" aria-invalid={!!err.policyId} onChange={(e) => setOtherPolicyId(e.target.value)}>
-              <NativeSelectOption value="">Pick…</NativeSelectOption>
+              <NativeSelectOption value=""></NativeSelectOption>
               {policies.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
             </NativeSelect>
           </div>

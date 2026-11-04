@@ -44,7 +44,7 @@ beforeAll(async () => {
   const p = await prisma.proposal.create({
     data: {
       tenantId: users.arun.tenantId, proposalNo: `P-VT12-${started.getTime()}`, customerId: first.id, customerName: first.name, mobile: first.mobile,
-      insurer: "LIC", productName: "Vitest Joint Plan", premium: "5000", ownerId: users.arun.id, frequency: "Yearly", startDate: new Date(), termMonths: 60,
+      insurer: "Post Office", productType: "PoSsa", productName: "Vitest Joint Plan", premium: "5000", ownerId: users.arun.id, frequency: "Yearly", startDate: new Date(), termMonths: 60,
     },
   });
   proposalId = p.id;
@@ -89,9 +89,11 @@ describe("Joint account on a proposal (#12)", () => {
   });
 
   it("off clears the second holder; logged", async () => {
+    const logged = await prisma.auditLog.count({ where: { entityId: proposalId } });
     expect(await saveJointAccount({ ok: false }, form({ proposalId, jointAccount: "off" }))).toEqual({ ok: true });
     expect(await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } })).toMatchObject({ jointAccount: false, secondHolderId: null, secondHolderName: null });
-    expect(await prisma.auditLog.count({ where: { entityId: proposalId } })).toBeGreaterThanOrEqual(3);
+    // a save that changes nothing writes no line (Save proposal saves the holders every time, 3 Nov 2026)
+    expect(await prisma.auditLog.count({ where: { entityId: proposalId } })).toBe(logged + 1);
   });
 
   it("a single holder keeps the CIF given by the company", async () => {

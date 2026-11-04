@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { addDays, isoDate, istToday } from "@/lib/dates";
+import { DmyDateInput } from "@/components/dmy-date-input";
+import { isoToDmy } from "@/lib/dates";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL } from "@/lib/lead-labels";
 
 export type LeadDetails = {
@@ -38,11 +39,15 @@ export function LeadDetailFields({ initial, err, products }: { initial: LeadDeta
       <div className="grid grid-cols-2 gap-3">
         <Field label="First name" name="firstName" defaultValue={initial.firstName} error={err.firstName} required />
         <Field label="Last name" name="lastName" defaultValue={initial.lastName} />
-        <Field label="Date of birth" name="dob" type="date" defaultValue={initial.dob} max={isoDate(addDays(istToday(), -1))} error={err.dob} required />
+        <div className="space-y-1.5">
+          <Label htmlFor="dob">Date of birth<span className="text-destructive"> *</span></Label>
+          <DmyDateInput name="dob" defaultValue={initial.dob} error={err.dob} />
+          {err.dob && <p className="text-xs text-destructive">{err.dob}</p>}
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="gender">Gender<span className="text-destructive"> *</span></Label>
           <NativeSelect id="gender" name="gender" defaultValue={initial.gender} className="w-full" aria-invalid={!!err.gender}>
-            <NativeSelectOption value="">Pick</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             {Object.entries(GENDER_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
           </NativeSelect>
           {err.gender && <p className="text-xs text-destructive">{err.gender}</p>}
@@ -53,7 +58,7 @@ export function LeadDetailFields({ initial, err, products }: { initial: LeadDeta
         <div className="space-y-1.5">
           <Label htmlFor="source">Business type<span className="text-destructive"> *</span></Label>
           <NativeSelect id="source" name="source" value={source} onChange={(e) => setSource(e.target.value as LeadSource)} className="w-full" aria-invalid={!!err.source}>
-            <NativeSelectOption value="">Pick</NativeSelectOption>
+            <NativeSelectOption value=""></NativeSelectOption>
             {Object.entries(LEAD_SOURCE_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
           </NativeSelect>
           {err.source && <p className="text-xs text-destructive">{err.source}</p>}
@@ -64,7 +69,7 @@ export function LeadDetailFields({ initial, err, products }: { initial: LeadDeta
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="interest">Interested product</Label>
-        <Input id="interest" name="interest" list="lead-products" defaultValue={initial.interest} placeholder="Pick from the list or type" />
+        <Input id="interest" name="interest" list="lead-products" defaultValue={initial.interest} />
         <datalist id="lead-products">{products.map((p) => <option key={p} value={p} />)}</datalist>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -79,7 +84,6 @@ export function LeadDetailFields({ initial, err, products }: { initial: LeadDeta
   );
 }
 
-const fmtDob = (iso: string) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
 
 /** Rows for the "Check before saving" pop-up. */
 export function summarizeLead(form: FormData): SummaryRow[] {
@@ -89,7 +93,7 @@ export function summarizeLead(form: FormData): SummaryRow[] {
   const source = get("source") as LeadSource;
   return [
     ["Name", [get("firstName"), get("lastName")].filter(Boolean).join(" ")],
-    ["Date of birth", fmtDob(get("dob"))],
+    ["Date of birth", isoToDmy(get("dob")) || get("dob")],
     ["Gender", GENDER_LABEL[get("gender") as Gender] ?? ""],
     ["Mobile", mobiles.map((m) => `${m.n}${m.w ? " (WhatsApp)" : ""}`).join(", ")],
     ["Business type", source ? `${LEAD_SOURCE_LABEL[source]}${source === "Referral" && get("referrerName") ? ` – ${get("referrerName")}` : ""}` : ""],

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ADVISOR } from "@/lib/brand";
-import { fmtDate, fmtTime, istDate } from "@/lib/dates";
+import { fmtDate, fmtDmy, fmtTime, istDate } from "@/lib/dates";
 import type { Cell, ColType, Sheet } from "@/lib/excel";
 import { fmtINR, sum } from "@/lib/money";
 import { esc, htmlToPdf, PDF_STYLE, pdfHeader } from "@/lib/pdf";
@@ -13,7 +13,7 @@ function text(v: Cell, type: ColType): string {
   if (v === null || v === undefined || v === "") return "";
   if (type === "money" && isAmount(v)) return fmtINR(v);
   // DATE columns are UTC midnight already; timestamps are shown in IST.
-  if (v instanceof Date) return type === "datetime" ? `${fmtDate(istDate(v))}, ${fmtTime(v)}` : fmtDate(v);
+  if (v instanceof Date) return type === "datetime" ? `${fmtDate(istDate(v))}, ${fmtTime(v)}` : type === "dmy" ? fmtDmy(v) : fmtDate(v);
   return String(v);
 }
 

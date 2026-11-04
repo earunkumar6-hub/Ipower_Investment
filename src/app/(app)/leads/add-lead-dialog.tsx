@@ -57,7 +57,7 @@ export function AddLeadDialog({ owners, products }: { owners: { id: string; name
               <div className="space-y-1.5">
                 <Label htmlFor="status">Lead status<span className="text-destructive"> *</span></Label>
                 <NativeSelect id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} className="w-full" aria-invalid={!!err.status}>
-                  <NativeSelectOption value="">Pick</NativeSelectOption>
+                  <NativeSelectOption value=""></NativeSelectOption>
                   {Object.entries(LEAD_STATUS_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
                 </NativeSelect>
                 {err.status && <p className="text-xs text-destructive">{err.status}</p>}

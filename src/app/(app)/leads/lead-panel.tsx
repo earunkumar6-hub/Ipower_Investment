@@ -21,7 +21,7 @@ type PanelLead = {
   leadNo: string;
   name: string;
   details: LeadDetails; // for Edit
-  dobLabel: string | null; // "12 Mar 1985"
+  dobLabel: string | null; // "12/03/1985"
   status: LeadStatus;
   stage: LeadStage;
   notInterestedReason: string | null;

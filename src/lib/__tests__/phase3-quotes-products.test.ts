@@ -19,7 +19,7 @@ vi.mock("@/lib/session", async () => {
 });
 
 const { createProposalsFromSelected, markNotAccepted, deleteQuotation } = await import("@/app/(app)/quotations/actions");
-const { savePolicyDetails, issuePolicy, saveKyc } = await import("@/app/(app)/proposals/actions");
+const { savePolicyDetails, issuePolicy, saveKyc, saveProposal } = await import("@/app/(app)/proposals/actions");
 const { addProductDirect } = await import("@/app/(app)/customers/actions");
 const { uploadAttachment, removeAttachment } = await import("@/app/(app)/attachments/actions");
 const { decryptJson } = await import("@/lib/crypto");
@@ -134,6 +134,11 @@ describe("Proposal policy details", () => {
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: "CARE-T-1" }))).error).toMatch(/pay mode and start date/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "1", premiumPayingTerm: "2", startDate: today }))).error).toMatch(/longer than the term/);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today }))).ok).toBe(true);
+    // insurance (3 Nov 2026): health cover needs DOC, sum assured, plan and premium before the policy number – not term / PPT
+    expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: "CARE-T-2" }))).error).toBe("Fill in before the policy number: sum assured, plan");
+    const individual = await prisma.scheme.findFirstOrThrow({ where: { name: "Individual", product: { name: "Care Supreme" } } });
+    expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, schemeId: individual.id, sumInsured: "500000", premium: "20000" }))).ok).toBe(true);
+    expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, premium: "0" }))).error).toBe("Premium must be more than 0");
     // Aadhaar / PAN: only after "Customer consent taken" (#1); then any time, one without the other
     expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "1234 5678 9012" }))).fieldErrors).toHaveProperty("consent");
     expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "1234 5678 9012" }))).ok).toBe(true);
@@ -142,6 +147,30 @@ describe("Proposal policy details", () => {
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: `CARE-T-${Date.now() % 100000}` }))).ok).toBe(true);
     const policy = await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id }, include: { renewals: true, customer: true } });
     expect([policy.frequency, policy.termMonths, policy.productId !== null, policy.renewals.length, policy.customer.aadhaarLast4]).toEqual(["Yearly", 36, true, 1, "9012"]);
+  });
+
+  it("one Save (3 Nov 2026): blank policy number saves the details only; with a number it also issues", async () => {
+    as(users.arun);
+    const p = await prisma.proposal.findFirstOrThrow({ where: { quotationItemId: quote.itemIds[1] } });
+    const plan20 = await prisma.scheme.findFirstOrThrow({ where: { name: "Plan 20 years", product: { name: "Jeevan Anand" } } });
+    // life cover: term and premium paying term are needed too
+    const missing = await saveProposal({ ok: false }, form({ proposalId: p.id, frequency: "HalfYearly", term: "", premiumPayingTerm: "", startDate: today, schemeId: "", sumInsured: "", policyNumber: "LIC-T-MISSING" }));
+    // every missing detail is named at once, before anything is saved
+    expect(missing.error).toBe("Fill in before the policy number: sum assured, plan, term, premium paying term");
+    const details = { proposalId: p.id, frequency: "HalfYearly", term: "20", premiumPayingTerm: "15", startDate: today, schemeId: plan20.id, sumInsured: "1000000" };
+    const blank = await saveProposal({ ok: false }, form({ ...details, policyNumber: "  " }));
+    expect([blank.ok, blank.message]).toEqual([true, expect.stringMatching(/stays in Proposals/)]);
+    expect(await prisma.proposal.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "Draft", termMonths: 240, premiumPayingTermMonths: 180 });
+    // a number that already exists: details saved, policy not issued
+    const taken = (await prisma.policy.findFirstOrThrow({ where: { tenantId: users.arun.tenantId } })).policyNumber;
+    const dup = await saveProposal({ ok: false }, form({ ...details, term: "21", policyNumber: taken }));
+    expect(dup.error).toBe(`Policy not issued: Policy number ${taken} already exists (policy details saved)`);
+    expect(await prisma.proposal.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "Draft", termMonths: 252 });
+    // bad details stop everything
+    expect((await saveProposal({ ok: false }, form({ ...details, premiumPayingTerm: "30", policyNumber: "LIC-T-X" }))).error).toMatch(/longer than the term/);
+    const ok = await saveProposal({ ok: false }, form({ ...details, policyNumber: `lic-t-${Date.now() % 100000}` }));
+    expect([ok.ok, ok.message]).toEqual([true, "Policy issued; customer and renewals created"]);
+    expect(await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id } })).toMatchObject({ frequency: "HalfYearly", termMonths: 240, premiumPayingTermMonths: 180 });
   });
 });
 

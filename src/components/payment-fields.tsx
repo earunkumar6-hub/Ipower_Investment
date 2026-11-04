@@ -54,7 +54,7 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
             <div className="space-y-1.5">
               <Label htmlFor="netType">Transfer type</Label>
               <NativeSelect id="netType" value={value.netType} className="w-full" aria-invalid={!!errors.netType} onChange={(e) => set({ netType: e.target.value })}>
-                <NativeSelectOption value="">Pick…</NativeSelectOption>
+                <NativeSelectOption value=""></NativeSelectOption>
                 {NET_TYPES.map((t) => <NativeSelectOption key={t} value={t}>{t}</NativeSelectOption>)}
               </NativeSelect>
             </div>
@@ -63,7 +63,7 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
             <div className="space-y-1.5">
               <Label htmlFor="bankName">Customer&apos;s bank</Label>
               <NativeSelect id="bankName" value={value.bankName} className="w-full" aria-invalid={!!errors.bankName} onChange={(e) => set({ bankName: e.target.value })}>
-                <NativeSelectOption value="">Pick the bank</NativeSelectOption>
+                <NativeSelectOption value=""></NativeSelectOption>
                 {banks.map((b) => <NativeSelectOption key={b} value={b}>{b}</NativeSelectOption>)}
               </NativeSelect>
             </div>
@@ -75,7 +75,7 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
           <div className="space-y-1.5">
             <Label htmlFor="intoAccountId">Received into</Label>
             <NativeSelect id="intoAccountId" value={value.intoAccountId} className="w-full" aria-invalid={!!errors.intoAccountId} onChange={(e) => set({ intoAccountId: e.target.value })}>
-              <NativeSelectOption value="">Pick the bank account</NativeSelectOption>
+              <NativeSelectOption value=""></NativeSelectOption>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.label}</NativeSelectOption>)}
             </NativeSelect>
             {accounts.length === 0 && <p className="text-xs text-destructive">No active bank account – add one in Settings → Bank accounts and wallets</p>}

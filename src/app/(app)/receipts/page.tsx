@@ -245,7 +245,7 @@ async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string;
                 // Plain GET form: opens /receipts/new?groupId=… for the group picked.
                 <form action="/receipts/new" className="flex items-center gap-2">
                   <NativeSelect name="groupId" size="sm" required aria-label="Bill group" defaultValue="">
-                    <NativeSelectOption value="" disabled>Pick a bill group</NativeSelectOption>
+                    <NativeSelectOption value="" disabled></NativeSelectOption>
                     {groupsWithPolicies.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}
                   </NativeSelect>
                   <Button type="submit" size="sm" className="bg-brand-600 hover:bg-brand-700">New family receipt</Button>
