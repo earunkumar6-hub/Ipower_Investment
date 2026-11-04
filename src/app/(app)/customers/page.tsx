@@ -3,13 +3,16 @@ import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fmtDate, istToday } from "@/lib/dates";
+import { CUSTOMER_IN_USE, inUseReason } from "@/lib/customer-delete";
+import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { maskMobile } from "@/lib/lead-labels";
 import { customerFilter, HOLDING_STATUS, PRODUCT_SHORT, RENEWAL_PRODUCTS } from "@/lib/lists";
 import { fmtINR } from "@/lib/money";
 import { refreshOverdue, renewalFilterOptions } from "@/lib/renewals";
 import { requirePermission } from "@/lib/session";
+import { hasPermission } from "@/lib/permissions";
+import { CustomerActions } from "./customer-actions";
 import { CustomerFilters } from "./customer-filters";
 
 type Search = { q?: string; product?: string; company?: string; scheme?: string; status?: string };
@@ -22,7 +25,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     db.customer.findMany({
       where: f.where,
       include: {
-        _count: { select: { mobiles: true } },
+        _count: { select: { mobiles: true, ...CUSTOMER_IN_USE } },
         policies: {
           select: { productType: true, renewals: { where: { status: { in: ["Due", "Overdue"] } }, orderBy: { dueDate: "asc" }, take: 1, select: { dueDate: true, status: true, premiumAmount: true } } },
         },
@@ -40,6 +43,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       })
     : [];
 
+  // Action menu (owner, 4 Nov 2026): items follow the user's permissions.
+  const can = {
+    edit: hasPermission(user.role, "Policy.Create"), receipt: hasPermission(user.role, "Receipt.Create"),
+    quote: hasPermission(user.role, "Quote.Create"), delete: hasPermission(user.role, "Customer.Delete"),
+  };
+  const today = isoDate(istToday());
+
   return (
     <>
       <PageHeader title="Partners / Customers" user={user} actions={
@@ -54,7 +64,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             <TableRow>
               <TableHead>Customer</TableHead><TableHead>Mobile</TableHead><TableHead>Holdings</TableHead>
               {f.filtered && <TableHead>Matching holdings</TableHead>}
-              <TableHead>Next due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead />
+              <TableHead>Next due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -72,9 +82,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                       {mine.map((p) => <div key={p.policyNumber}>{p.policyNumber} · {p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}</div>)}
                     </TableCell>
                   )}
-                  <TableCell>{next ? fmtDate(next.dueDate) : "—"}</TableCell>
+                  <TableCell>{next ? fmtDate(next.dueDate) : "—"}{next?.status === "Overdue" && <> <StatusBadge tone="red">Overdue</StatusBadge></>}</TableCell>
                   <TableCell className="text-right">{next ? fmtINR(next.premiumAmount) : ""}</TableCell>
-                  <TableCell>{next?.status === "Overdue" && <StatusBadge tone="red">Overdue</StatusBadge>}</TableCell>
+                  <TableCell><CustomerActions customer={{ id: c.id, name: c.name, cifNo: c.cifNo }} can={can} inUse={inUseReason(c._count)} today={today} /></TableCell>
                 </TableRow>
               );
             })}

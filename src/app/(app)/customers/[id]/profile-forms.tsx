@@ -42,13 +42,14 @@ export function CustomerPhoto({ customerId, name, initials, hasPhoto }: { custom
 }
 
 /** "Add follow-up" on the customer record: the call goes to the customer's owner and joins "calls open". */
-export function AddFollowUpForm({ customerId, today }: { customerId: string; today: string }) {
+export function AddFollowUpForm({ customerId, today, onDone }: { customerId: string; today: string; onDone?: () => void }) {
   const [key, setKey] = useState(0);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await scheduleCall(prev, form);
     if (r.ok) {
       toast.success("Follow-up added");
       setKey((k) => k + 1);
+      onDone?.();
     }
     return r;
   }, { ok: false });

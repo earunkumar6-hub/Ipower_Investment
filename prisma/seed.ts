@@ -514,6 +514,73 @@ async function main() {
   await seedProducts(tenantId, { admin: users.admin, owner: users.owner });
   await linkPolicies(tenantId);
 
+  // ── Samples for the 3 Nov 2026 change list: SIP date + folio, post office CIF, PLI, drafts to try "Save proposal",
+  //    a mutual fund quotation. Kept off the customers the automated tests use, dated a few days back. ──
+  const productOf = (partner: string, name: string) =>
+    prisma.product.findFirstOrThrow({ where: { tenantId, partner, name }, include: { schemes: { orderBy: { name: "asc" } } } });
+  const person = async (name: string) => {
+    const c = await prisma.customer.findUniqueOrThrow({ where: { id: customers[name].id } });
+    return { customerId: c.id, customerName: c.name, mobile: c.mobile, ownerId: c.ownerId };
+  };
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
+  // Every mutual fund SIP gets a SIP date (its start day, at most 28) and the folio from the AMC.
+  for (const p of await prisma.policy.findMany({ where: { tenantId, productType: "MutualFund", frequency: "Monthly" } })) {
+    await prisma.policy.update({ where: { id: p.id }, data: { sipDay: Math.min(p.startDate.getUTCDate(), 28), folioNo: p.policyNumber.replace(/^FOLIO-/, "") } });
+  }
+  // Hari Prasad: a Lumpsum and a second SIP in the same folio (folios are not unique).
+  const sbiBluechip = await productOf("SBI MF", "Bluechip SIP"), sbiElss = await productOf("SBI MF", "ELSS SIP");
+  const hari = customers["Hari Prasad"];
+  await prisma.policy.create({ data: {
+    tenantId, customerId: hari.id, ownerId: hari.ownerId, productType: "MutualFund", partner: "SBI MF", productName: sbiBluechip.name, productId: sbiBluechip.id, schemeId: sbiBluechip.schemes[0]?.id,
+    policyNumber: "SBIMF-LS-778812", folioNo: "778812", premiumAmount: "50000.00", frequency: "OneTime", startDate: addMonths(today, -2),
+  } });
+  await prisma.policy.create({ data: {
+    tenantId, customerId: hari.id, ownerId: hari.ownerId, productType: "MutualFund", partner: "SBI MF", productName: sbiElss.name, productId: sbiElss.id, schemeId: sbiElss.schemes[0]?.id,
+    policyNumber: "SBIMF-SIP-778812-2", folioNo: "778812", sipDay: 10, premiumAmount: "2000.00", frequency: "Monthly", startDate: addMonths(today, -1),
+  } });
+  // Post office holder CIFs (one per person; Lakshmi's two RDs share hers).
+  for (const [key, cif] of [["rajesh-rd", "PO-CIF-100245"], ["rajesh-td", "PO-CIF-100245"], ["lakshmi-rd1", "PO-CIF-100311"], ["lakshmi-rd2", "PO-CIF-100311"]] as const) {
+    await prisma.policy.update({ where: { id: policies[key].id }, data: { firstHolderCif: cif } });
+  }
+  // Postal Life Insurance (Santosh), monthly for Gayathri V: two months paid, this month due today, next month due.
+  const pli = await productOf("Post Office", "Postal Life Insurance");
+  const santosh = pli.schemes.find((s) => s.name.startsWith("Santosh"));
+  const pliStart = addMonths(today, -3);
+  const gayathri = customers["Gayathri V"];
+  const pliPolicy = await prisma.policy.create({ data: {
+    tenantId, customerId: gayathri.id, ownerId: gayathri.ownerId, productType: "Insurance", partner: "Post Office", productName: pli.name, productId: pli.id, schemeId: santosh?.id,
+    policyNumber: "PLI-TN-2026-0418", premiumAmount: "1450.00", frequency: "Monthly", startDate: pliStart, termMonths: 240, premiumPayingTermMonths: 240,
+    sumAssured: "500000.00", firstHolderCif: "PO-CIF-100502", nominee: "V. Ramesh",
+  } });
+  for (let k = 1; k <= 4; k++) {
+    const due = addMonths(pliStart, k);
+    await renewal(pliPolicy, due, due < today ? "Paid" : "Due", due < today ? due : undefined);
+  }
+  // Draft proposals to try the one "Save proposal": LIC (life details), HDFC SIP (SIP date + folio), PLI (CIF + life details).
+  const lic = await productOf("LIC", "Jeevan Anand"), hdfcFlexi = await productOf("HDFC MF", "Flexi Cap SIP");
+  await prisma.proposal.create({ data: {
+    tenantId, proposalNo: "P-0001", ...(await person("Indira G")), insurer: "LIC", productName: lic.name, productId: lic.id, productType: "Insurance",
+    premium: "24000.00", frequency: "Yearly", status: "Draft", createdAt: daysAgo(3),
+  } });
+  await prisma.proposal.create({ data: {
+    tenantId, proposalNo: "P-0002", ...(await person("Jayakumar T")), insurer: "HDFC MF", productName: hdfcFlexi.name, productId: hdfcFlexi.id, schemeId: hdfcFlexi.schemes[0]?.id,
+    productType: "MutualFund", premium: "3000.00", frequency: "Monthly", status: "Draft", createdAt: daysAgo(2),
+  } });
+  await prisma.proposal.create({ data: {
+    tenantId, proposalNo: "P-0003", ...(await person("Kavitha S")), insurer: "Post Office", productName: pli.name, productId: pli.id, productType: "Insurance",
+    premium: "1200.00", sumInsured: "300000.00", frequency: "Monthly", status: "Draft", createdAt: daysAgo(1),
+  } });
+  // A mutual fund quotation (SIP + Lumpsum) for lead Iniyan M.
+  await prisma.quotation.create({ data: {
+    tenantId, quoteNo: "Q-0417", leadId: leads["L-2023"], customerName: "Iniyan M", mobile: String(9790050000 + 2023),
+    validUpto: addDays(today, 15), subtotal: "30000.00", total: "30000.00", ownerId: users.arun, createdAt: daysAgo(1),
+    items: { create: [
+      { category: "Mutual fund", insurer: "HDFC MF", productName: "Flexi Cap SIP", premium: "5000.00", total: "5000.00", payMode: "Monthly" },
+      { category: "Mutual fund", insurer: "SBI MF", productName: "Bluechip SIP", premium: "25000.00", total: "25000.00", payMode: "OneTime" },
+    ] },
+  } });
+  await prisma.lead.update({ where: { id: leads["L-2023"] }, data: { stage: "Quotation" } });
+
   // ── Other income today (P&L): insurer incentives received in SBI ──
   await db.$transaction((tx) => post(tx, {
     tenantId, entryDate: today, sourceType: "Manual", sourceId: "seed-other-income", createdById: users.admin,

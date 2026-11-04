@@ -7,6 +7,7 @@ export const PERMISSIONS = [
   "Quote.View", "Quote.Create",
   "Proposal.View", "Proposal.Create", "PII.Edit",
   "Policy.View", "Policy.Create",
+  "Customer.Delete", // delete a customer that has no records (Admin, Super Admin)
   "Renewal.View",
   "Receipt.View", "Receipt.Create", "Receipt.Cancel",
   "BillGroup.Manage", // create bill groups, add / remove policies (Admin, Super Admin)
@@ -31,7 +32,7 @@ export type Action = Split<Permission>[1];
 export type AppAbility = MongoAbility<[Action, Subject]>;
 
 const STAFF_DENIED: Permission[] = [
-  "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
+  "Customer.Delete", "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
   "DayBook.Verify", "DayBook.Close", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "PnL.View", "Report.Export",
   "Settings.Edit", "Audit.View", "Data.SeeAll", "Access.Manage",
 ];
@@ -81,7 +82,7 @@ export const ROLE_LABEL: Record<Role, string> = { SuperAdmin: "Super Admin", Adm
 export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[] = [
   { area: "Leads and follow-ups", items: [["Lead.View", "See leads and follow-ups"], ["Lead.Create", "Add leads, schedule calls"], ["Lead.Edit", "Edit leads"]] },
   { area: "Quotations and proposals", items: [["Quote.View", "See quotations"], ["Quote.Create", "Make quotations"], ["Proposal.View", "See proposals"], ["Proposal.Create", "Make / edit proposals"], ["PII.Edit", "Enter Aadhaar / PAN"]] },
-  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
+  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
   { area: "Receipts", items: [["Receipt.View", "See receipts"], ["Receipt.Create", "Take receipts, direct bills"], ["Receipt.Cancel", "Cancel receipts"], ["BillGroup.Manage", "Create / change bill groups"]] },
   { area: "E-Sevai", items: [["Service.Record", "Record E-Sevai entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
   { area: "Expenses", items: [["Expense.View", "See expenses"], ["Expense.Create", "Add expenses"], ["Expense.Approve", "Approve expenses"]] },

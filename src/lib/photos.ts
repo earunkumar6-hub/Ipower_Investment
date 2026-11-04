@@ -23,6 +23,8 @@ export async function savePhoto(file: File, customerId: string, previous: string
   return name;
 }
 
+export const deletePhoto = (name: string) => unlink(path.join(DIR, path.basename(name))).catch(() => {});
+
 export async function readPhoto(name: string) {
   const ext = path.extname(name).slice(1);
   const type = Object.entries(TYPES).find(([, e]) => e === ext)?.[0] ?? "application/octet-stream";

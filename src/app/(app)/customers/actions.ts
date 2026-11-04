@@ -12,7 +12,9 @@ import { AADHAAR_RE, duplicateCompanyCif, duplicateIdentity, duplicateMessage, i
 import { canActOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
-import { photoProblem, savePhoto } from "@/lib/photos";
+import { deleteStoredFile } from "@/lib/attachments";
+import { CUSTOMER_IN_USE, inUseReason } from "@/lib/customer-delete";
+import { deletePhoto, photoProblem, savePhoto } from "@/lib/photos";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { BANK_FIELDS, isHealthCover, isPostal, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
@@ -322,4 +324,36 @@ export async function saveCustomerIdentity(_: ActionResult, form: FormData): Pro
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, error: "That Aadhaar / PAN was just saved on another customer; reload and check" };
     throw e;
   }
+}
+
+// ── Delete ──
+
+/**
+ * Delete a customer that has no records (owner, 4 Nov 2026): no products, joint accounts, proposals, quotations,
+ * receipts, payments, owner-paid slips, direct bills or E-Sevai entries. Their follow-ups, extra mobiles, photo and
+ * attached files go too. `Customer.Delete` (Admin, Super Admin); type DELETE to confirm; logged.
+ */
+export async function deleteCustomer(customerId: string, confirmText: string): Promise<ActionResult> {
+  const user = await authorize("Customer.Delete");
+  if (confirmText.trim() !== "DELETE") return fail("Type DELETE to confirm");
+  const res = await db.$transaction(async (tx) => {
+    const c = await tx.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId }, include: { _count: { select: CUSTOMER_IN_USE } } });
+    if (!c) return { ok: false as const, error: "Customer not found" };
+    if (!canActOn(user, c.ownerId)) return { ok: false as const, error: "This customer belongs to another user" };
+    const reason = inUseReason(c._count);
+    if (reason) return { ok: false as const, error: reason };
+    const where = { tenantId: user.tenantId, ownerType: "Customer" as const, ownerId: c.id };
+    const files = (await tx.attachment.findMany({ where, select: { storedName: true } })).map((f) => f.storedName);
+    await tx.attachment.deleteMany({ where });
+    await tx.call.deleteMany({ where: { customerId: c.id } });
+    await tx.customerMobile.deleteMany({ where: { customerId: c.id } });
+    await tx.customer.delete({ where: { id: c.id } });
+    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Deleted", summary: `${c.cifNo} ${c.name}: customer deleted (no records)` });
+    return { ok: true as const, files, photo: c.photoPath, name: c.name };
+  });
+  if (!res.ok) return res;
+  for (const f of res.files) await deleteStoredFile(f);
+  if (res.photo) await deletePhoto(res.photo);
+  revalidatePath("/customers");
+  return { ok: true, message: `${res.name} deleted` };
 }

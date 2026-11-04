@@ -21,9 +21,10 @@ import { ClosePolicyButton } from "./close-policy-dialog";
 type Details = { id: string; name: string; email: string; address: string; mobiles: MobileEntry[] };
 
 /** Correct the customer's name, mobile numbers, email and address (logged). */
-export function EditCustomerButton({ customer }: { customer: Details }) {
+/** `startOpen`: opened from the Customers list "Action → Edit details" (?edit=1). */
+export function EditCustomerButton({ customer, startOpen = false }: { customer: Details; startOpen?: boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await editCustomer(prev, form);
     if (r.ok) {

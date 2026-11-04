@@ -35,7 +35,8 @@ const SLIP: Record<string, [string, Tone]> = {
 const monthLabel = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
 
 /** Customer 360: every holding, renewal, receipt, owner-paid slip and linked entry for one person. */
-export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ edit?: string }> }) {
+  const openEdit = (await searchParams).edit === "1";
   const user = await requirePermission("Policy.View");
   const data = await loadCustomer360(user, (await params).id);
   if (!data) notFound();
@@ -63,7 +64,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{c.cifNo}</span>
             {c.consentAt && <StatusBadge tone="green">Consent taken {fmtDate(c.consentAt)}</StatusBadge>}
             {nextFollowUp && <StatusBadge tone={nextFollowUp.dueAt <= new Date() ? "red" : "orange"}>Follow-up due {fmtDateTime(nextFollowUp.dueAt)}</StatusBadge>}
-            {canEdit && <EditCustomerButton customer={{ id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) }} />}
+            {canEdit && <EditCustomerButton startOpen={openEdit} customer={{ id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) }} />}
           </div>
           <p className="text-sm text-muted-foreground">
             {mobiles.map((m) => `${m.number}${m.isWhatsApp ? " (WhatsApp)" : ""}`).join(" · ")}{c.email && ` · ${c.email}`}{c.address && ` · ${c.address}`} · Owner: {owner?.name}
