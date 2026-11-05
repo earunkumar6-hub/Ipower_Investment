@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { markMatured, markNotRenewed, sendMaturityReminder, sendRenewalReminder } from "./actions";
 
+/** Reminder buttons: filled saffron (logo colour) next to the crimson "Take payment" (owner, 4 Nov 2026). */
+const REMIND = "bg-saffron-500 from-saffron-400 to-saffron-500 text-saffron-900 shadow-saffron-900/20 hover:from-saffron-300 hover:to-saffron-400 hover:shadow-saffron-900/25";
+
 /** Maturity reminder row: send the (mock) WhatsApp; once a one-time deposit has matured, mark it matured. */
 export function MaturityRowActions({ policyId, matured }: { policyId: string; matured: boolean }) {
   const [pending, start] = useTransition();
   return (
     <div className="flex justify-end gap-1">
-      <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
+      <Button size="sm" disabled={pending} className={REMIND} onClick={() => start(async () => {
         const r = await sendMaturityReminder(policyId);
         if (r.ok) toast.success("Maturity reminder logged in Sent messages (mock WhatsApp)"); else toast.error(r.error);
       })}>Send maturity reminder</Button>
@@ -32,12 +35,12 @@ export function RenewalRowActions({ renewalItemId, customerId, overdue }: { rene
   const [pending, start] = useTransition();
   return (
     <div className="flex justify-end gap-1">
-      <Button size="sm" variant="outline" disabled={pending} onClick={() => start(async () => {
+      <Button size="sm" disabled={pending} className={REMIND} onClick={() => start(async () => {
         const r = await sendRenewalReminder(renewalItemId);
         if (r.ok) toast.success("Reminder logged in Sent messages (mock WhatsApp)");
         else toast.error(r.error);
       })}>Send reminder</Button>
-      <Link href={`/receipts/new?customerId=${customerId}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Take payment</Link>
+      <Link href={`/receipts/new?customerId=${customerId}`} className={`${buttonVariants({ size: "sm" })} bg-brand-600 text-white hover:bg-brand-700`}>Take payment</Link>
       {overdue && <NotRenewedButton renewalItemId={renewalItemId} />}
     </div>
   );

@@ -7,7 +7,6 @@ import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
-import { db } from "@/lib/db";
 import { PAID_TO, RANGE_PICKS, rangeLabel, RENEWAL_PRODUCTS, RENEWAL_TABS as TABS } from "@/lib/lists";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
@@ -30,8 +29,6 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
   const r = await loadRenewals(user, sp, today, 200);
   const { tab, product, company, scheme, paidTo, range, rows, customers, total } = r;
   const [options, cards] = await Promise.all([renewalFilterOptions(user, product, company), renewalCards(user.tenantId, r.policyWhere, today)]);
-  const canPay = tab === "paid" && hasPermission(user.role, "DayBook.Create");
-  const accounts = canPay ? await db.account.findMany({ where: { tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true, type: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] }) : [];
   // Tabs keep the product filter; each tab has its own default date range.
   const filter = { ...(product !== "all" && { product }), ...(company && { company }), ...(scheme && { scheme }) };
   const rangeParams = range?.pick === "custom" ? { from: isoDate(range.from), to: isoDate(range.to) } : range && range.pick !== "within" && sp.range ? { range: range.pick } : sp.within ? { within: sp.within } : {};
@@ -81,7 +78,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
         </div>
         <p className="mb-2 text-sm text-muted-foreground">{summary}</p>
 
-        {tab === "paid" && <PaidTable rows={paidRows} accounts={accounts} today={isoDate(today)} canPay={canPay} />}
+        {tab === "paid" && <PaidTable rows={paidRows} />}
 
         {(tab === "due" || tab === "overdue") && (() => {
           // Post office schemes: tick rows (or all) to send reminders or take one combined receipt.

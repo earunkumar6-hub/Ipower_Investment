@@ -162,6 +162,22 @@ describe("Receipts filters (#22)", () => {
     expect(todays.every((r) => r.receiptDate.toISOString().slice(0, 10) === today)).toBe(true);
   });
 
+  it("post office scheme and RD status (4 Nov 2026)", async () => {
+    const admin = users.admin;
+    const rdOnly = await find(admin, { scheme: "PoRd" });
+    expect(rdOnly.length).toBeGreaterThan(0);
+    expect(rdOnly.every((r) => r.policy?.productType === "PoRd")).toBe(true);
+    expect((await find(admin, { scheme: "PoSsa" })).every((r) => r.policy?.productType === "PoSsa")).toBe(true);
+    // a scheme narrows past "Product"; an unknown one is ignored
+    expect((await find(admin, { product: "po", scheme: "PoRd" })).map((r) => r.id).sort()).toEqual(rdOnly.map((r) => r.id).sort());
+    expect((await find(admin, { scheme: "Nonsense" })).length).toBe((await find(admin, {})).length);
+    const collected = await find(admin, { rd: "Collected" });
+    expect(collected.length).toBeGreaterThan(0);
+    expect(collected.every((r) => r.rdStatus === "Collected")).toBe(true);
+    expect((await find(admin, { rd: "Deposited", scheme: "PoRd" })).every((r) => r.rdStatus === "Deposited" && r.policy?.productType === "PoRd")).toBe(true);
+    expect(receiptFilter(admin, { rd: "Collected" }).active).toBe(true);
+  });
+
   it("a User only ever sees receipts they entered, whatever the filters", async () => {
     const mine = await find(users.arun, {});
     expect(mine.every((r) => r.createdById === users.arun.id)).toBe(true);

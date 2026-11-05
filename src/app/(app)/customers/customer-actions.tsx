@@ -43,8 +43,8 @@ export function CustomerActions({ customer, can, inUse, today }: {
   return (
     <>
       <Menu.Root>
-        <Menu.Trigger className={buttonVariants({ variant: "outline", size: "xs" })} aria-label={`Actions for ${customer.name}`}>
-          Action<ChevronDown className="transition-transform group-data-popup-open/button:rotate-180" />
+        <Menu.Trigger className={`${buttonVariants({ size: "xs" })} bg-brand-600 text-white hover:bg-brand-700 data-popup-open:bg-brand-700`} aria-label={`Actions for ${customer.name}`}>
+          Action<ChevronDown className="text-white transition-transform group-data-popup-open/button:rotate-180" />
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner align="end" sideOffset={6} className="z-50">

@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { addMonths, fmtDate, istToday } from "@/lib/dates";
+import { addMonths, fmtDate, isoDate, istToday } from "@/lib/dates";
 import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
@@ -16,8 +16,10 @@ import { OWNER_PAYABLE } from "@/lib/dues";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { monthLabel, RECEIPT_TABS, receiptFilter, receiptTab, type ReceiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
 import { fmtINR, sum, ZERO } from "@/lib/money";
+import { hasPermission } from "@/lib/permissions";
 import { requirePermission, type SessionUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { MarkPaidAll, MarkPaidBox, MarkPaidProvider, type PayableReceipt } from "./mark-paid";
 import { OwnerPaidForm, ReturnToOwnerForm } from "./owner-paid-forms";
 import { ReceiptFilters } from "./receipt-filters";
 
@@ -60,20 +62,20 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
           </Link>
         ))}
       </div>
-      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} f={f} total={count.customer} />
+      {tab === "customer" ? <CustomerReceipts tenantId={user.tenantId} f={f} total={count.customer} canPay={hasPermission(user.role, "DayBook.Create")} />
         : tab === "owner" ? <OwnerPaid user={user} f={f} />
         : <GroupedReceipts tenantId={user.tenantId} f={f} kind={tab === "combined" ? "Combined" : "BillGroup"} total={count[tab]} />}
     </>
   );
 }
 
-async function CustomerReceipts({ tenantId, f, total }: { tenantId: string; f: Filter; total: number }) {
+async function CustomerReceipts({ tenantId, f, total, canPay }: { tenantId: string; f: Filter; total: number; canPay: boolean }) {
   const deposit = f.deposit;
   const receipts = await db.receipt.findMany({
     where: f.receiptWhere,
     include: {
       customer: { select: { name: true } },
-      policy: { select: { partner: true, productName: true, policyNumber: true } },
+      policy: { select: { partner: true, productName: true, policyNumber: true, productType: true } },
       payment: { select: { id: true, paymentNo: true } },
       companyPayment: depositStatusSelect.companyPayment,
       poDepositLine: depositStatusSelect.poDepositLine,
@@ -85,19 +87,25 @@ async function CustomerReceipts({ tenantId, f, total }: { tenantId: string; f: F
   // Every account, switched off ones too: old receipts keep showing where the money went.
   const accountName = (id: string) => { const a = accounts.find((x) => x.id === id); return a ? accountLabel(a) : "—"; };
   const nameOf = nameLookup(users);
+  // Tick boxes (owner, 4 Nov 2026): receipts still waiting to be paid on to their company (RD: the PO deposit).
+  const payable: PayableReceipt[] = canPay
+    ? receipts.flatMap((r) => {
+        if (!r.policy || r.status !== "Saved" || r.ownerPaid) return [];
+        const rd = r.rdStatus === "Collected";
+        const waiting = rd || (!r.rdStatus && !r.companyPaymentId && r.policy.productType !== "PoRd");
+        return waiting ? [{ id: r.id, paise: Math.round(r.amount.toNumber() * 100), company: r.policy.partner, rd }] : [];
+      })
+    : [];
+  const payableIds = new Set(payable.map((p) => p.id));
+  const payAccounts = canPay
+    ? await db.account.findMany({ where: { tenantId, type: { in: ["Cash", "Bank"] }, active: true }, select: { id: true, name: true, type: true }, orderBy: [{ type: "asc" }, { isDefault: "desc" }, { name: "asc" }] })
+    : [];
 
-  return (
-    <div className="rounded-xl border bg-white p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Deposit status:</span>
-        {([["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const).map(([k, label]) => (
-          <Link key={k} href={href(f.params, { deposit: k === "all" ? undefined : k })}
-            className={cn("rounded-full px-3 py-0.5", deposit === k ? "bg-saffron-100 text-saffron-900" : "text-muted-foreground hover:bg-slate-100")}>{label}</Link>
-        ))}
-      </div>
-      <Table>
+  const table = (
+    <Table>
         <TableHeader>
           <TableRow>
+            {canPay && <TableHead className="w-8"><MarkPaidAll /></TableHead>}
             <TableHead>Receipt no.</TableHead><TableHead>Bill date</TableHead><TableHead>Txn date</TableHead><TableHead>Customer</TableHead><TableHead>For</TableHead>
             <TableHead>Mode</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Amount</TableHead>
             <TableHead>Collected by</TableHead><TableHead>Status</TableHead><TableHead>Deposit status</TableHead>
@@ -108,6 +116,7 @@ async function CustomerReceipts({ tenantId, f, total }: { tenantId: string; f: F
             const dep = r.policy && r.status !== "Cancelled" ? companyStatus(r, r.policy.partner, nameOf) : null;
             return (
               <TableRow key={r.id} className={cn(r.status === "Cancelled" && "text-muted-foreground")}>
+                {canPay && <TableCell>{payableIds.has(r.id) && <MarkPaidBox id={r.id} label={`Mark ${r.receiptNo} paid`} />}</TableCell>}
                 <TableCell>
                   <Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link>
                   {r.payment && <Link href={`/payments/${r.payment.id}`} className="block text-xs text-muted-foreground hover:underline">{r.payment.paymentNo}</Link>}
@@ -131,10 +140,22 @@ async function CustomerReceipts({ tenantId, f, total }: { tenantId: string; f: F
             );
           })}
           {receipts.length === 0 && (
-            <TableRow><TableCell colSpan={11} className="py-8 text-center text-muted-foreground">{f.active || deposit !== "all" ? "No receipts match these filters." : "No receipts yet."}</TableCell></TableRow>
+            <TableRow><TableCell colSpan={canPay ? 12 : 11} className="py-8 text-center text-muted-foreground">{f.active || deposit !== "all" ? "No receipts match these filters." : "No receipts yet."}</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
+  );
+
+  return (
+    <div className="rounded-xl border bg-white p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Deposit status:</span>
+        {([["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const).map(([k, label]) => (
+          <Link key={k} href={href(f.params, { deposit: k === "all" ? undefined : k })}
+            className={cn("rounded-full px-3 py-0.5", deposit === k ? "bg-saffron-100 text-saffron-900" : "text-muted-foreground hover:bg-slate-100")}>{label}</Link>
+        ))}
+      </div>
+      {canPay ? <MarkPaidProvider receipts={payable} accounts={payAccounts} today={isoDate(istToday())}>{table}</MarkPaidProvider> : table}
       <p className="mt-3 text-xs text-muted-foreground">
         {total > receipts.length && `Showing the latest ${receipts.length} of ${total}; narrow the filters or export to see all. `}
         Only Admin and Super Admin can cancel a receipt; the number is never reused.

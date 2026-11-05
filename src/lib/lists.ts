@@ -1,4 +1,4 @@
-import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, ProductType } from "@prisma/client";
+import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, ProductType, RdStatus } from "@prisma/client";
 import type { Tone } from "@/components/status-badge";
 import { addDays } from "@/lib/dates";
 import { DEPOSIT_WHERE } from "@/lib/deposit-status";
@@ -218,7 +218,9 @@ export const receiptTab = (sp: Params): ReceiptTab => RECEIPT_TABS.find(([k]) =>
 export const depositFilter = (sp: Params) => (sp.deposit === "pending" || sp.deposit === "paid" ? sp.deposit : "all");
 
 /** The Receipts filter fields, as search params (also what the export link carries). */
-export const RECEIPT_FILTER_KEYS = ["q", "cif", "group", "product", "policy", "mode", "account", "status", "from", "to", "deposit"] as const;
+export const RECEIPT_FILTER_KEYS = ["q", "cif", "group", "product", "scheme", "rd", "policy", "mode", "account", "status", "from", "to", "deposit"] as const;
+/** Receipts filter "RD status" (owner, 4 Nov 2026): Collected = not yet deposited at the post office. */
+export const RD_STATUSES: RdStatus[] = ["Collected", "Deposited", "Verified"];
 
 /**
  * Receipts screen filters: name or mobile, customer ID, bill group, product, policy / account no., mode, account,
@@ -237,6 +239,9 @@ export function receiptFilter(user: SessionUser, sp: Params) {
   const status = sp.status === "Saved" || sp.status === "Cancelled" ? sp.status : undefined;
   const from = isoDay(sp.from), to = isoDay(sp.to);
   const deposit = depositFilter(sp);
+  // Post office scheme (RD, TD, MIS, …) and RD status filters (owner, 4 Nov 2026). A scheme narrows past "Product".
+  const scheme = PO_SCHEMES.find((s) => s === sp.scheme);
+  const rd = RD_STATUSES.find((s) => s === sp.rd);
 
   const customer: Prisma.CustomerWhereInput = {
     ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }] }),
@@ -246,6 +251,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(product === "insurance" && { productType: "Insurance" }),
     ...(product === "mf" && { productType: "MutualFund" }),
     ...(product === "po" && { productType: { in: [...PO_SCHEMES] } }),
+    ...(scheme && { productType: scheme }),
     ...(policyNo && { policyNumber: { contains: policyNo, mode: "insensitive" } }),
     ...(group && { billGroup: { billGroupId: group } }),
   };
@@ -259,6 +265,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(mode && { mode }),
     ...(account && { accountId: account }),
     ...(status && { status }),
+    ...(rd && { rdStatus: rd }),
     ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
     ...(deposit !== "all" && DEPOSIT_WHERE[deposit]),
     AND: [{ OR: [{ paymentId: null }, { payment: { kind: "Customer" } }] }],
@@ -277,6 +284,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(cif && { customer: { cifNo: { contains: cif, mode: "insensitive" } } }),
     ...(byPolicy && { policy }),
     ...(account && { accountId: account }),
+    ...(rd && { rdStatus: rd }),
   };
   const paymentWhere = (kind: "Combined" | "BillGroup"): Prisma.PaymentWhereInput => ({
     tenantId: user.tenantId, kind,
@@ -291,7 +299,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
   });
   const params: Params = Object.fromEntries(RECEIPT_FILTER_KEYS.map((k) => [k, k === "deposit" ? (deposit === "all" ? undefined : deposit) : text(sp[k])]));
   const active = RECEIPT_FILTER_KEYS.some((k) => k !== "deposit" && params[k]);
-  return { q, cif, group, product, policyNo, mode, account, status, from: sp.from, to: sp.to, deposit, receiptWhere, slipWhere, paymentWhere, params, active };
+  return { q, cif, group, product, scheme, rd, policyNo, mode, account, status, from: sp.from, to: sp.to, deposit, receiptWhere, slipWhere, paymentWhere, params, active };
 }
 
 /** A past or today's date from ?date=YYYY-MM-DD; anything else is today. */

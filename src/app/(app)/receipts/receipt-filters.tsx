@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { RENEWAL_PRODUCTS, type receiptFilter } from "@/lib/lists";
+import { PO_SCHEMES, PRODUCT_SHORT, RD_STATUSES, RENEWAL_PRODUCTS, type receiptFilter } from "@/lib/lists";
 import { MODE_LABEL } from "@/lib/payment-modes";
 
 type Filter = ReturnType<typeof receiptFilter>;
@@ -22,6 +22,14 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
       </NativeSelect>
       <NativeSelect name="product" defaultValue={f.product} aria-label="Product" className={cls}>
         {RENEWAL_PRODUCTS.map(([k, label]) => <NativeSelectOption key={k} value={k}>{label}</NativeSelectOption>)}
+      </NativeSelect>
+      <NativeSelect name="scheme" defaultValue={f.scheme ?? ""} aria-label="Post office scheme" className={cls}>
+        <NativeSelectOption value="">All post office schemes</NativeSelectOption>
+        {PO_SCHEMES.map((s) => <NativeSelectOption key={s} value={s}>{PRODUCT_SHORT[s]}</NativeSelectOption>)}
+      </NativeSelect>
+      <NativeSelect name="rd" defaultValue={f.rd ?? ""} aria-label="RD status" className={cls}>
+        <NativeSelectOption value="">Any RD status</NativeSelectOption>
+        {RD_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>RD {s.toLowerCase()}</NativeSelectOption>)}
       </NativeSelect>
       <Input id="rf-policy" name="policy" defaultValue={f.policyNo} placeholder="Policy / account no." aria-label="Policy / account no." className={cls} />
       <NativeSelect name="mode" defaultValue={f.mode ?? ""} aria-label="Payment mode" className={cls}>
