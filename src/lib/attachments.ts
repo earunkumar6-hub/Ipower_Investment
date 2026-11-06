@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
 import { seesAll } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
+import { ticketScope } from "@/lib/tickets";
 
 // Files on quotations, proposals and customers. Like expense bills they live in ./storage (outside /public)
 // and are served only through /api/attachments/[id] after the same owner check as the record itself.
@@ -39,6 +40,11 @@ export const deleteStoredFile = (storedName: string) => unlink(path.join(DIR, pa
 /** The record a file belongs to, if this user may see it (same rule as the record's own page). */
 export async function attachmentOwner(user: SessionUser, ownerType: AttachmentOwner, ownerId: string) {
   const where = { id: ownerId, tenantId: user.tenantId };
+  if (ownerType === "Ticket") {
+    // Tickets: whoever raised it, or anyone who works on tickets (not the customer-owner rule).
+    const t = await db.ticket.findFirst({ where: { ...where, ...ticketScope(user) }, select: { ticketNo: true, status: true } });
+    return t && { ownerId: user.id, label: t.ticketNo, closed: t.status === "Closed" };
+  }
   const rec = ownerType === "Quotation" ? await db.quotation.findFirst({ where, select: { ownerId: true, quoteNo: true, deletedAt: true } }).then((r) => r && { ownerId: r.ownerId, label: r.quoteNo, closed: !!r.deletedAt })
     : ownerType === "Proposal" ? await db.proposal.findFirst({ where, select: { ownerId: true, proposalNo: true } }).then((r) => r && { ownerId: r.ownerId, label: r.proposalNo, closed: false })
     : await db.customer.findFirst({ where, select: { ownerId: true, name: true } }).then((r) => r && { ownerId: r.ownerId, label: r.name, closed: false });

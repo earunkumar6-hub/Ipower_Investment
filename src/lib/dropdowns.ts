@@ -10,6 +10,7 @@ export const DROPDOWN_LISTS = {
   attachmentQuotation: "File types – quotations",
   attachmentProposal: "File types – proposals",
   attachmentCustomer: "File types – customers",
+  attachmentTicket: "File types – tickets",
 } as const;
 export type DropdownList = keyof typeof DROPDOWN_LISTS;
 export const OTHER = "Other";
@@ -21,12 +22,14 @@ export const DEFAULT_DROPDOWN_VALUES: Record<DropdownList, string[]> = {
   attachmentQuotation: ["Health declaration", "Brochure"],
   attachmentProposal: ["Aadhaar", "PAN", "Photo", "Proposal form"],
   attachmentCustomer: ["Aadhaar", "PAN", "Policy document", "Bank passbook"],
+  attachmentTicket: ["Screenshot", "Error message"],
 };
 
 export const ATTACHMENT_LIST: Record<AttachmentOwner, DropdownList> = {
   Quotation: "attachmentQuotation",
   Proposal: "attachmentProposal",
   Customer: "attachmentCustomer",
+  Ticket: "attachmentTicket",
 };
 
 /** Active values of a list, in display order ("Other" not included). */

@@ -91,9 +91,11 @@ export async function adminDashboard(user: SessionUser) {
     })).map((e) => e.sourceId),
   );
   const earlierOpen = await earliestOpenDayBefore(db as unknown as Tx, tenantId, today);
-  const [{ dayCloseGraceDays }, ownerPending] = await Promise.all([
+  const [{ dayCloseGraceDays }, ownerPending, ticketsPastTarget] = await Promise.all([
     db.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { dayCloseGraceDays: true } }),
     db.ownerEntry.findMany({ where: { tenantId, status: "Pending" }, select: { amount: true } }),
+    // Same rule as isPastTarget (src/lib/tickets.ts): still with the developer and past the target date.
+    db.ticket.count({ where: { tenantId, status: { in: ["Open", "InProgress"] }, targetDate: { lt: today } } }),
   ]);
   const pastGrace = await daysPastGrace(db as unknown as Tx, tenantId, today, dayCloseGraceDays);
   const counted = cashClose?.physical ?? null;
@@ -132,6 +134,7 @@ export async function adminDashboard(user: SessionUser) {
       pastGrace, // alert: days past the grace period, not closed (Super Admin only can close them)
       graceDays: dayCloseGraceDays,
       ownerPending: { count: ownerPending.length, amount: sumAmt(ownerPending) },
+      ticketsPastTarget,
       todayStatus: cashClose?.status === "Closed" ? "Closed" : counted === null ? "Open – not counted" : "Open – counted",
       rdNotDeposited: { count: collectedRd.length, amount: sumAmt(collectedRd), oldestDays: oldestRd ? Math.round((today.getTime() - oldestRd.getTime()) / 86_400_000) : 0 },
     },
@@ -154,6 +157,7 @@ export function actionItems(a: Awaited<ReturnType<typeof adminDashboard>>["actio
     });
   }
   if (a.ownerPending.count) actions.push({ item: "Owner entries to confirm", detail: `${a.ownerPending.count} · ${fmtINR(a.ownerPending.amount)}`, who: "Super Admin", href: "/daybook" });
+  if (a.ticketsPastTarget) actions.push({ item: "Tickets past target", detail: `${a.ticketsPastTarget} open ticket(s) not fixed by their target date`, who: "Admin", href: "/tickets?tab=developer" });
   if (a.earlierOpen) actions.push({ item: "Previous Day Book open", detail: `${fmtDate(a.earlierOpen)} is not closed`, who: "Admin", href: `/daybook?date=${isoDate(a.earlierOpen)}` });
   actions.push({ item: "Day Book today", detail: a.todayStatus, who: "Admin", href: "/daybook" });
   if (a.rdNotDeposited.count) actions.push({ item: "RD collected, not deposited", detail: `${a.rdNotDeposited.count} receipts · ${fmtINR(a.rdNotDeposited.amount)} · oldest ${a.rdNotDeposited.oldestDays ? `${a.rdNotDeposited.oldestDays} d` : "today"}`, who: "Users", href: "/daybook" });

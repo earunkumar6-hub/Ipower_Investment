@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   "Message.View",
   "Report.Export",
   "Settings.Edit", "Audit.View",
+  "Ticket.Create", // raise tickets, follow and close one's own
+  "Ticket.Manage", // see every ticket, change status / priority, close any (Admin, Super Admin)
   "Data.SeeAll", // see every customer / record, not only one's own
   "Access.Manage", // Settings → Roles and access, Users (Super Admin only, can't be given away)
 ] as const;
@@ -34,7 +36,7 @@ export type AppAbility = MongoAbility<[Action, Subject]>;
 const STAFF_DENIED: Permission[] = [
   "Customer.Delete", "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
   "DayBook.Verify", "DayBook.Close", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "PnL.View", "Report.Export",
-  "Settings.Edit", "Audit.View", "Data.SeeAll", "Access.Manage",
+  "Settings.Edit", "Audit.View", "Ticket.Manage", "Data.SeeAll", "Access.Manage",
 ];
 
 /** Only the owner (Super Admin) by default. */
@@ -91,5 +93,6 @@ export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[
       ["DayBook.Close", "Close the day, record other income"], ["DayBook.CloseLate", "Close a day after the grace period"], ["Owner.Confirm", "Confirm / reject owner money"]],
   },
   { area: "Money reports", items: [["Commission.View", "Commission received"], ["PnL.View", "Profit & Loss"], ["Report.Export", "Download Excel / PDF"], ["Message.View", "See sent messages"]] },
+  { area: "Tickets", items: [["Ticket.Create", "Raise tickets (see and close own)"], ["Ticket.Manage", "Work on every ticket (status, priority, close)"]] },
   { area: "Settings", items: [["Settings.Edit", "Change settings"], ["Audit.View", "See the change log"], ["Access.Manage", "Roles and access, users (Super Admin only)"]] },
 ];

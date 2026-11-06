@@ -13,6 +13,7 @@ const SERIES = {
   slip: { table: "OwnerPaidSlip", column: "slipNo", prefix: "OWN-", width: 4 },
   service: { table: "ServiceTransaction", column: "txnNo", prefix: "SVC-", width: 4 },
   expense: { table: "Expense", column: "expenseNo", prefix: "EXP-", width: 4 },
+  ticket: { table: "Ticket", column: "ticketNo", prefix: "TK-", width: 4 },
 } as const;
 
 export async function nextNumber(tx: Tx, tenantId: string, series: keyof typeof SERIES) {

@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 import { seesAll } from "@/lib/permissions";
 import { authorize } from "@/lib/session";
 
-const PATH: Record<AttachmentOwner, string> = { Quotation: "/quotations", Proposal: "/proposals", Customer: "/customers" };
+const PATH: Record<AttachmentOwner, string> = { Quotation: "/quotations", Proposal: "/proposals", Customer: "/customers", Ticket: "/tickets" };
 
 const uploadSchema = z.object({ ownerType: z.enum(AttachmentOwner), ownerId: z.string().min(1), kind: z.string().min(1, "Pick what the file is") });
 

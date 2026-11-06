@@ -22,6 +22,8 @@ model Tenant {
   id                String   @id @default(cuid())
   name              String
   dayCloseGraceDays Int      @default(3) // a day can be closed this many days later; after that only the Super Admin
+  ticketAlertMobile String? // developer alerts for new tickets (WhatsApp, mocked into MessageLog)
+  ticketAlertEmail  String? // developer alerts for new tickets (email, mocked into MessageLog)
   createdAt         DateTime @default(now())
   users             User[]
 }
@@ -1169,6 +1171,7 @@ enum AttachmentOwner {
   Quotation
   Proposal
   Customer
+  Ticket
 }
 
 /**
@@ -1356,4 +1359,64 @@ model RolePermission {
   updatedAt   DateTime @updatedAt
 
   @@unique([tenantId, role, permission])
+}
+
+// ── Tickets: problems and change requests raised by staff (/tickets) ──
+
+/// Declared High first, so sorting by priority puts High on top.
+enum TicketPriority {
+  High
+  Medium
+  Low
+}
+
+enum TicketType {
+  Problem
+  NewFeature
+  Question
+}
+
+enum TicketStatus {
+  Open
+  InProgress
+  WaitingForYou // waiting for the person who raised it
+  Fixed // fixed – please check
+  Closed
+}
+
+model Ticket {
+  id         String          @id @default(cuid())
+  tenantId   String
+  ticketNo   String // TK-0001
+  title      String
+  screen     String // menu / screen it is about
+  type       TicketType
+  priority   TicketPriority
+  details    String
+  status     TicketStatus    @default(Open)
+  targetDate DateTime        @db.Date // fix target from the priority (src/lib/tickets.ts)
+  raisedById String
+  closedById String?
+  closedAt   DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  comments   TicketComment[]
+
+  @@unique([tenantId, ticketNo])
+  @@index([tenantId, status])
+}
+
+/// The ticket's thread: comments and status / priority changes, oldest first.
+model TicketComment {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  body       String?
+  statusFrom TicketStatus?
+  statusTo   TicketStatus?
+  change     String? // "Priority Low → High", …
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId])
 }

@@ -23,6 +23,7 @@ export const MESSAGE_TEMPLATE: Record<string, string> = {
   direct_bill: "Direct bill",
   renewal_reminder: "Renewal reminder",
   low_wallet_balance: "Low wallet balance",
+  ticketAlert: "New ticket (developer alert)",
 };
 
 export const SLIP_STATUS: Record<OwnerPaidSlipStatus, [string, Tone]> = {

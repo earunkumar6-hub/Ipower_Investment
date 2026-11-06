@@ -18,5 +18,6 @@ export const MENU: MenuItem[] = [
   // { href: "/commission", label: "Commission", permission: "Commission.View" },
   { href: "/pnl", label: "Profit & Loss", permission: "PnL.View" },
   { href: "/messages", label: "Sent messages", permission: "Message.View" },
+  { href: "/tickets", label: "Tickets", permission: "Ticket.Create" },
   { href: "/settings", label: "Settings", permission: "Settings.Edit" },
 ];
