@@ -20,17 +20,8 @@ export const TICKET_STATUS: Record<TicketStatus, [string, Tone]> = {
 /** What a ticket can be about: every menu, plus the login page and the app as a whole. */
 export const TICKET_SCREENS = ["Login", ...MENU.map((m) => m.label), "Whole app"];
 
-/** Fix target from the priority: High the same day, Medium 2 working days (Sundays skipped), Low 7 days. */
-export function ticketTarget(priority: TicketPriority, raisedOn: Date) {
-  if (priority === "High") return raisedOn;
-  if (priority === "Low") return addDays(raisedOn, 7);
-  let d = raisedOn;
-  for (let n = 0; n < 2; ) {
-    d = addDays(d, 1);
-    if (d.getUTCDay() !== 0) n++;
-  }
-  return d;
-}
+/** Fix target from the priority: at least 72 hours whatever the priority (owner, 6 Nov 2026) – High and Medium 3 days, Low 7 days. */
+export const ticketTarget = (priority: TicketPriority, raisedOn: Date) => addDays(raisedOn, priority === "Low" ? 7 : 3);
 
 /** Past its target while still with the developer (not while waiting for the person who raised it). */
 export const isPastTarget = (t: { status: TicketStatus; targetDate: Date }, today: Date) =>

@@ -13,8 +13,8 @@ import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-rules";
 import { raiseTicket } from "../actions";
 
 const PRIORITIES = [
-  ["High", "High – work is stopped / money is wrong (same day)"],
-  ["Medium", "Medium – a problem with a way around it (2 working days)"],
+  ["High", "High – work is stopped / money is wrong (3 days)"],
+  ["Medium", "Medium – a problem with a way around it (3 days)"],
   ["Low", "Low – small issue or idea (7 days)"],
 ] as const;
 const TYPES = [["Problem", "Problem"], ["NewFeature", "New feature"], ["Question", "Question"]] as const;

@@ -96,7 +96,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
           </TableBody>
         </Table>
         <p className="mt-3 text-xs text-muted-foreground">
-          Fix targets: High the same day, Medium 2 working days, Low 7 days. Sorted by priority, oldest first.
+          Fix targets: at least 72 hours for every ticket – High and Medium 3 days, Low 7 days. Sorted by priority, oldest first.
         </p>
       </div>
       {hasPermission(user.role, "Settings.Edit") && (

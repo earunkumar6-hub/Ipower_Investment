@@ -53,10 +53,10 @@ afterAll(async () => {
 });
 
 describe("Ticket target dates", () => {
-  it("High the same day, Medium 2 working days (Sunday skipped), Low 7 days", () => {
+  it("at least 72 hours whatever the priority: High and Medium 3 days, Low 7 days", () => {
     const friday = new Date("2026-11-06T00:00:00Z");
-    expect(isoDate(ticketTarget("High", friday))).toBe("2026-11-06");
-    expect(isoDate(ticketTarget("Medium", friday))).toBe("2026-11-09"); // Sat, (Sun skipped), Mon
+    expect(isoDate(ticketTarget("High", friday))).toBe("2026-11-09");
+    expect(isoDate(ticketTarget("Medium", friday))).toBe("2026-11-09");
     expect(isoDate(ticketTarget("Low", friday))).toBe("2026-11-13");
   });
 });
@@ -147,6 +147,6 @@ describe("Working on a ticket", () => {
     as(users.admin);
     expect(await update(id!, { priority: "High" })).toMatchObject({ ok: true, message: "Priority Low → High" });
     const t = await ticket(id!);
-    expect([t.priority, isoDate(t.targetDate)]).toEqual(["High", isoDate(istToday())]);
+    expect([t.priority, isoDate(t.targetDate)]).toEqual(["High", isoDate(ticketTarget("High", istToday()))]);
   });
 });
