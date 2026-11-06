@@ -150,7 +150,7 @@ export function JointAccountPanel({ issued, first, joint, second, newSecond, cif
       )}
       <p className="text-xs text-muted-foreground">
         {postal && "CIF: optional until the policy is issued; enter it like the policy number. "}
-        {kind === "mf" && "Folio number: optional until issued; several SIPs can share one folio. "}
+        {kind === "mf" && "Folio number: leave blank until the AMC gives it; with it, Save proposal issues the investment. Several SIPs can share one folio. "}
         Customer ID (CIF-000…) is this CRM&apos;s own number. Saved with &ldquo;Save proposal&rdquo;.
       </p>
     </div>

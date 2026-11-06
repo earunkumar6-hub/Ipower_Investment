@@ -251,6 +251,14 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
  */
 export async function saveProposal(prev: ActionResult, form: FormData): Promise<ActionResult> {
   const text = (k: string) => String(form.get(k) ?? "").trim();
+  // Mutual funds have no policy number box: the folio number issues them, and the policy is numbered
+  // FOLIO-proposal no. so several SIPs can share one folio (owner, 6 Nov 2026).
+  const folio = text("folioNo").toUpperCase();
+  if (!text("policyNumber") && folio) {
+    const user = await authorize("Proposal.Create");
+    const mf = await db.proposal.findFirst({ where: { id: text("proposalId"), tenantId: user.tenantId, productType: "MutualFund", status: { not: "Issued" } }, select: { proposalNo: true } });
+    if (mf) form.set("policyNumber", `${folio}-${mf.proposalNo}`);
+  }
   const issuing = !!text("policyNumber");
   const saved: string[] = [];
   const stop = (r: ActionResult): ActionResult => ({ ...r, error: saved.length ? `${r.error} (${saved.join(" and ")} saved)` : r.error });
@@ -293,7 +301,8 @@ export async function saveProposal(prev: ActionResult, form: FormData): Promise<
     saved.push("Aadhaar / PAN");
   }
   if (!issuing) {
-    const where = text("startDate") ? "it stays in Proposals until the policy number is entered" : "add the start date before the policy number";
+    const number = form.has("folioNo") ? "folio number" : "policy number"; // the folio box is on mutual fund proposals only
+    const where = text("startDate") ? `it stays in Proposals until the ${number} is entered` : `add the start date before the ${number}`;
     return { ok: true, message: [`Proposal saved – ${where}`, ...notes].join(". ") };
   }
   const issued = await issuePolicy(prev, form);

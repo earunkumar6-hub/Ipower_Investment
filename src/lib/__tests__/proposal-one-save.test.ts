@@ -70,17 +70,24 @@ describe("Save proposal", () => {
     expect([p.firstHolderCif, p.panMasked, !!p.consentAt, p.startDate]).toEqual([`CIF-ONE-${stamp}`, `ONExxxxx${stamp.slice(-1)}Q`, true, null]);
   });
 
-  it("CIF only for post office products, folio only for mutual funds", async () => {
-    const make = (insurer: string, productType: "Insurance" | "MutualFund") => prisma.proposal.create({
-      data: { tenantId: arun.tenantId, proposalNo: `P-ONE${stamp}-${productType}`, customerName: "Vitest", mobile: "6000033344", insurer, productName: "Vitest plan", premium: "100", status: "Draft", ownerId: arun.id, productType },
+  it("CIF only for post office products; mutual funds: the folio number issues them (no policy number box)", async () => {
+    const make = (insurer: string, productType: "Insurance" | "MutualFund", customerId?: string) => prisma.proposal.create({
+      data: { tenantId: arun.tenantId, proposalNo: `P-ONE${stamp}-${productType}`, customerId, customerName: "Vitest", mobile: "6000033344", insurer, productName: "Vitest plan", premium: "100", status: "Draft", ownerId: arun.id, productType },
     });
-    const lic = await make("LIC", "Insurance"), mf = await make("HDFC MF", "MutualFund");
+    const lic = await make("LIC", "Insurance"), mf = await make("HDFC MF", "MutualFund", rajeshId);
     try {
       expect((await saveProposal({ ok: false }, form({ ...base(), proposalId: lic.id, firstHolderCif: "LIC-CIF-1", folioNo: "F-1" }))).ok).toBe(true);
       expect(await prisma.proposal.findUniqueOrThrow({ where: { id: lic.id } })).toMatchObject({ firstHolderCif: null, folioNo: null });
-      expect((await saveProposal({ ok: false }, form({ ...base(), proposalId: mf.id, firstHolderCif: "MF-CIF-1", folioNo: "f-777/1" }))).ok).toBe(true);
-      expect(await prisma.proposal.findUniqueOrThrow({ where: { id: mf.id } })).toMatchObject({ firstHolderCif: null, folioNo: "F-777/1" });
+      // The folio issues, so the start date is needed first (as with a typed policy number).
+      expect((await saveProposal({ ok: false }, form({ ...base(), proposalId: mf.id, folioNo: "f-777/1" }))).error).toBe("Pick the start date");
+      const r = await saveProposal({ ok: false }, form({ ...base(), proposalId: mf.id, frequency: "OneTime", startDate: isoDate(istToday()), firstHolderCif: "MF-CIF-1", folioNo: "f-777/1" }));
+      expect(r).toMatchObject({ ok: true, message: "Policy issued; customer and renewals created" });
+      expect(await prisma.proposal.findUniqueOrThrow({ where: { id: mf.id } })).toMatchObject({ status: "Issued", firstHolderCif: null, folioNo: "F-777/1", policyNumber: `F-777/1-P-ONE${stamp}-MUTUALFUND` });
+      expect(await prisma.policy.findFirstOrThrow({ where: { proposalId: mf.id } })).toMatchObject({ folioNo: "F-777/1", policyNumber: `F-777/1-P-ONE${stamp}-MUTUALFUND` });
     } finally {
+      const made = await prisma.policy.findMany({ where: { proposalId: mf.id }, select: { id: true } });
+      await prisma.renewalItem.deleteMany({ where: { policyId: { in: made.map((m) => m.id) } } });
+      await prisma.policy.deleteMany({ where: { id: { in: made.map((m) => m.id) } } });
       await prisma.auditLog.deleteMany({ where: { entityId: { in: [lic.id, mf.id] } } });
       await prisma.proposal.deleteMany({ where: { id: { in: [lic.id, mf.id] } } });
     }
