@@ -28,7 +28,7 @@ export function TicketUpdateForm({ ticketId, statuses, priorities, hint }: { tic
       <input type="hidden" name="ticketId" value={ticketId} />
       <div className="space-y-1.5">
         <Label htmlFor="comment">Comment</Label>
-        <Textarea id="comment" name="comment" rows={3} maxLength={4000} placeholder="Reply, what was done, what is still wrong…" aria-invalid={!!state.fieldErrors?.comment} />
+        <Textarea id="comment" name="comment" rows={3} maxLength={4000} aria-invalid={!!state.fieldErrors?.comment} />
       </div>
       <div className="flex flex-wrap items-end gap-3">
         {statuses.length > 0 && (

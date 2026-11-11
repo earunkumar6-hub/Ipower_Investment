@@ -46,7 +46,7 @@ export function TicketForm({ screens }: { screens: string[] }) {
     <form onSubmit={onSubmit} className="max-w-3xl space-y-3 rounded-xl border bg-white p-4">
       <h2 className="font-semibold">Raise ticket</h2>
       <Field label="Title" error={err.title}>
-        <Input id="title" name="title" maxLength={120} placeholder="e.g. Receipt PDF not opening" aria-invalid={!!err.title} />
+        <Input id="title" name="title" maxLength={120} aria-invalid={!!err.title} />
       </Field>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Screen" error={err.screen}>
@@ -69,8 +69,7 @@ export function TicketForm({ screens }: { screens: string[] }) {
         </Field>
       </div>
       <Field label="Details" error={err.details}>
-        <Textarea id="details" name="details" rows={6} maxLength={4000} aria-invalid={!!err.details}
-          placeholder="What were you doing, what happened, what did you expect? For a new feature: what should it do and why." />
+        <Textarea id="details" name="details" rows={6} maxLength={4000} aria-invalid={!!err.details} />
       </Field>
       <Field label="Screenshot (optional)" error={clientError ?? err.screenshot}>
         <Input id="screenshot" name="screenshot" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="text-xs" />

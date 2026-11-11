@@ -52,7 +52,7 @@ export function FindPoliciesToAdd({ billGroupId }: { billGroupId: string }) {
       <form onSubmit={(e) => { e.preventDefault(); search(); }} className="flex items-end gap-2">
         <div className="space-y-1">
           <Label htmlFor="bg-find" className="text-xs">Find policies to add</Label>
-          <Input id="bg-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Customer name, mobile or policy no." className="h-8 w-96" />
+          <Input id="bg-find" value={q} onChange={(e) => setQ(e.target.value)} className="h-8 w-96" />
         </div>
         <Button type="submit" size="sm" variant="outline" disabled={searching}>{searching ? "Searching…" : "Search"}</Button>
       </form>
@@ -103,7 +103,7 @@ export function CreateBillGroupForm() {
   return (
     <form onSubmit={submitKeepingValues(action)} className="space-y-3 rounded-xl border bg-white p-4">
       <h2 className="font-semibold">New bill group</h2>
-      <div className="space-y-1.5"><Label htmlFor="bg-name">Group name</Label><Input id="bg-name" name="name" placeholder="e.g. Ramesh family" aria-invalid={!!err.name} /></div>
+      <div className="space-y-1.5"><Label htmlFor="bg-name">Group name</Label><Input id="bg-name" name="name" aria-invalid={!!err.name} /></div>
       <div className="space-y-1.5"><Label htmlFor="bg-contact">Usually paid by (optional)</Label><Input id="bg-contact" name="contactName" /></div>
       <div className="space-y-1.5"><Label htmlFor="bg-mobile">Payer&apos;s mobile (optional)</Label><Input id="bg-mobile" name="contactMobile" inputMode="numeric" maxLength={10} aria-invalid={!!err.contactMobile} /></div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}

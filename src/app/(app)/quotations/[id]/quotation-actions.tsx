@@ -101,7 +101,7 @@ export function ReasonButton({ quotationId, kind }: { quotationId: string; kind:
           <DialogTitle className="text-lg font-semibold">{del ? "Delete quotation" : "Customer did not accept"}</DialogTitle>
           <div className="space-y-1.5">
             <Label htmlFor={`reason-${kind}`}>Reason</Label>
-            <Input id={`reason-${kind}`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={del ? "e.g. Entered twice" : "e.g. Premium too high"} />
+            <Input id={`reason-${kind}`} value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <p className="text-xs text-muted-foreground">{del ? "Allowed only while no proposal has been made. The quotation is hidden but kept in the change log." : "All products are marked not accepted."}</p>

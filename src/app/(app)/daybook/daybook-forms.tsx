@@ -59,7 +59,7 @@ export function AtmForm({ date, closed, banks, staff, me }: { date: string; clos
               {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
             </NativeSelect>
           </div>
-          <div className="space-y-1.5"><Label htmlFor="atmAmount">Amount</Label><Input id="atmAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="18000" /></div>
+          <div className="space-y-1.5"><Label htmlFor="atmAmount">Amount</Label><Input id="atmAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></div>
           <div className="space-y-1.5"><Label htmlFor="atmRef">Transaction no.</Label><Input id="atmRef" name="reference" /></div>
           <div className="space-y-1.5">
             <Label htmlFor="atmBy">Withdrawn by</Label>
@@ -68,7 +68,7 @@ export function AtmForm({ date, closed, banks, staff, me }: { date: string; clos
             </NativeSelect>
           </div>
         </div>
-        <div className="space-y-1.5"><Label htmlFor="atmReason">Reason</Label><Input id="atmReason" name="reason" placeholder="Cash for UPI-paid RD" /></div>
+        <div className="space-y-1.5"><Label htmlFor="atmReason">Reason</Label><Input id="atmReason" name="reason" /></div>
         <CashDenominationGrid amount={paise(amount)} idPrefix="atm" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : "Record ATM withdrawal"}</Button>
@@ -185,7 +185,7 @@ function OwnerEntryRow({ r, canDecide }: { r: OwnerRow; canDecide: boolean }) {
           <form onSubmit={submitKeepingValues(action)} className="flex items-center gap-2">
             <input type="hidden" name="ownerEntryId" value={r.id} />
             <input type="hidden" name="decision" value={rejecting ? "Reject" : "Confirm"} />
-            {rejecting && <Input name="reason" placeholder="Why rejected" className="h-7 w-48" aria-label="Reject reason" />}
+            {rejecting && <Input name="reason" className="h-7 w-48" aria-label="Reject reason" />}
             <Button type="submit" size="xs" disabled={pending}
               className={rejecting ? "" : "bg-brand-600 hover:bg-brand-700"} variant={rejecting ? "destructive" : "default"}>
               {rejecting ? "Reject" : "Confirm"}
@@ -208,7 +208,7 @@ export function OtherIncomeForm({ date, closed, accounts }: { date: string; clos
       <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
         <input type="hidden" name="date" value={date} />
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5"><Label htmlFor="oiAmount">Amount</Label><Input id="oiAmount" name="amount" inputMode="decimal" placeholder="2400" /></div>
+          <div className="space-y-1.5"><Label htmlFor="oiAmount">Amount</Label><Input id="oiAmount" name="amount" inputMode="decimal" /></div>
           <div className="space-y-1.5">
             <Label htmlFor="oiAccount">Received in</Label>
             <NativeSelect id="oiAccount" name="accountId" defaultValue="" className="w-full">
@@ -217,7 +217,7 @@ export function OtherIncomeForm({ date, closed, accounts }: { date: string; clos
             </NativeSelect>
           </div>
         </div>
-        <div className="space-y-1.5"><Label htmlFor="oiReason">What is it for</Label><Input id="oiReason" name="reason" placeholder="e.g. SBI savings interest, LIC incentive" /></div>
+        <div className="space-y-1.5"><Label htmlFor="oiReason">What is it for</Label><Input id="oiReason" name="reason" /></div>
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" variant="outline" disabled={pending} className="w-full">{pending ? "Saving…" : "Record other income"}</Button>
         <p className="text-xs text-muted-foreground">Counted as income in Profit and Loss. Not for premiums or bills collected for others.</p>
@@ -238,7 +238,7 @@ export function CashCountForm({ date, closed, initial }: { date: string; closed:
           {CASH_SOURCES.map((s: CashSource) => (
             <div key={s} className="space-y-1.5">
               <Label htmlFor={`cash-${s}`}>{CASH_SOURCE_LABEL[s]}</Label>
-              <Input id={`cash-${s}`} name={s} value={values[s] ?? ""} onChange={(e) => setValues({ ...values, [s]: e.target.value })} inputMode="decimal" placeholder="0" />
+              <Input id={`cash-${s}`} name={s} value={values[s] ?? ""} onChange={(e) => setValues({ ...values, [s]: e.target.value })} inputMode="decimal" />
             </div>
           ))}
           <div className="space-y-1.5"><Label>Total counted</Label><div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm font-semibold">{inr(total)}</div></div>
@@ -304,7 +304,7 @@ export function PoDepositForm({ date, closed, receipts, atmToday, isAdmin }: { d
           <Stat label="UPI vs ATM" value={inr(upiGap)} warn={upiGap !== 0 && selected.length > 0} />
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <div className="space-y-1.5"><Label htmlFor="poReceiptNo">Post office receipt no.</Label><Input id="poReceiptNo" name="poReceiptNo" placeholder="7781 2290" /></div>
+          <div className="space-y-1.5"><Label htmlFor="poReceiptNo">Post office receipt no.</Label><Input id="poReceiptNo" name="poReceiptNo" /></div>
           <div className="space-y-1.5"><Label htmlFor="depAmount">Amount deposited</Label><Input id="depAmount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={inr(total)} inputMode="decimal" /></div>
           <div className="space-y-1.5">
             <Label htmlFor="upiReason">If UPI ≠ ATM, why?</Label>
@@ -321,7 +321,7 @@ export function PoDepositForm({ date, closed, receipts, atmToday, isAdmin }: { d
           </div>
         )}
         {selected.length > 0 && <CashDenominationGrid amount={deposited} idPrefix="po" />}
-        <Input name="note" placeholder="Note (optional)" />
+        <Input name="note" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" disabled={pending || selected.length === 0} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save deposit"}</Button>
       </form>

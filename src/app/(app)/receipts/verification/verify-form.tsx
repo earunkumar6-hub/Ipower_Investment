@@ -27,7 +27,7 @@ export function VerifyForm({ kind, id }: { kind: "PoDeposit" | "CompanyPayment";
         <NativeSelectOption value="Verified">Verified</NativeSelectOption>
         <NativeSelectOption value="Mismatch">Mismatch</NativeSelectOption>
       </NativeSelect>
-      {status === "Mismatch" && <Input name="note" placeholder="What doesn't match" className="w-44" aria-invalid={!!state.fieldErrors?.note} />}
+      {status === "Mismatch" && <Input name="note" className="w-44" aria-invalid={!!state.fieldErrors?.note} />}
       <Button type="submit" size="sm" variant="outline" disabled={pending || !status}>{pending ? "Saving…" : "Save"}</Button>
       {state.error && <p className="w-full text-xs text-destructive">{state.error}</p>}
     </form>

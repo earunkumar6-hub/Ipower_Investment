@@ -23,7 +23,7 @@ export function CancelDirectBillForm({ billId, billNo }: { billId: string; billN
       <input type="hidden" name="billId" value={billId} />
       <div className="space-y-1.5">
         <Label htmlFor="reason">Reason (required)</Label>
-        <Input id="reason" name="reason" placeholder="e.g. Entered twice by mistake" />
+        <Input id="reason" name="reason" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" variant="destructive" disabled={pending} className="w-full"><TriangleAlert />{pending ? "Cancelling…" : "Cancel bill"}</Button>

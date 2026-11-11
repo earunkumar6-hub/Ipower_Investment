@@ -25,7 +25,7 @@ export function OtherSelect({ value, other, onChange, options, placeholder, erro
         <NativeSelectOption value={OTHER}>{OTHER}</NativeSelectOption>
       </NativeSelect>
       {value === OTHER && (
-        <Input value={other} required placeholder="Type it here" aria-label={`${label ?? "Value"} – other`} aria-invalid={!!error}
+        <Input value={other} required aria-label={`${label ?? "Value"} – other`} aria-invalid={!!error}
           className={size === "sm" ? "h-7" : undefined} onChange={(e) => onChange(OTHER, e.target.value)} />
       )}
     </div>

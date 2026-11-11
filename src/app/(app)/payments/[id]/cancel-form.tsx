@@ -23,7 +23,7 @@ export function CancelPaymentForm({ paymentId, paymentNo, lines }: { paymentId: 
       <input type="hidden" name="paymentId" value={paymentId} />
       <div className="space-y-1.5">
         <Label htmlFor="reason">Reason (required)</Label>
-        <Input id="reason" name="reason" placeholder="e.g. Customer paid twice by mistake" />
+        <Input id="reason" name="reason" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" variant="destructive" disabled={pending} className="w-full"><TriangleAlert />{pending ? "Cancelling…" : "Cancel payment"}</Button>

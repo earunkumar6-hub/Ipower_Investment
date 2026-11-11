@@ -36,7 +36,7 @@ export function DmyDateInput({ name, defaultValue = "", error, value, onChange, 
   return (
     <>
       <div className="relative flex items-center gap-1">
-        <Input id={name} {...props} ref={box} disabled={disabled} value={text} inputMode="numeric" maxLength={10} placeholder="dd/mm/yyyy" autoComplete="off"
+        <Input id={name} {...props} ref={box} disabled={disabled} value={text} inputMode="numeric" maxLength={10} autoComplete="off"
           aria-invalid={!!error || !!props["aria-invalid"] || (!!problem && (!!iso || text.length === 10))}
           onChange={(e) => {
             if (isoToDmy(e.target.value)) return set(isoToDmy(e.target.value)); // a pasted yyyy-mm-dd

@@ -50,7 +50,7 @@ export function DirectBillForm({ modes, banks, accounts, receivedBy }: { modes: 
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label htmlFor="purpose">Purpose</Label>
-          <Input id="purpose" value={f.purpose} placeholder="e.g. Form filling charges, document copy" onChange={set("purpose")} aria-invalid={!!err.purpose} />
+          <Input id="purpose" value={f.purpose} onChange={set("purpose")} aria-invalid={!!err.purpose} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="amount">Amount received (₹)</Label>

@@ -55,21 +55,21 @@ export function ProductForm({ product }: { product: ProductValues }) {
     <form onSubmit={submitKeepingValues(action)} className="space-y-4">
       {product.id && <input type="hidden" name="id" value={product.id} />}
       <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-1.5"><Label htmlFor="name">Product name</Label><Input id="name" name="name" defaultValue={product.name} placeholder="Post Office TD" /></div>
+        <div className="space-y-1.5"><Label htmlFor="name">Product name</Label><Input id="name" name="name" defaultValue={product.name} /></div>
         <div className="space-y-1.5">
           <Label htmlFor="productType">Category</Label>
           <NativeSelect id="productType" name="productType" value={type} onChange={(e) => setType(e.target.value as ProductType)} className="w-full">
             {Object.entries(PRODUCT_TYPE_LABEL).map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </div>
-        <div className="space-y-1.5"><Label htmlFor="partner">Partner</Label><Input id="partner" name="partner" defaultValue={product.partner} placeholder="Post Office, LIC, Star Health…" /></div>
+        <div className="space-y-1.5"><Label htmlFor="partner">Partner</Label><Input id="partner" name="partner" defaultValue={product.partner} /></div>
         <div className="space-y-1.5">
           <Label htmlFor="invoiceRule">Bills (invoice rule)</Label>
           <NativeSelect id="invoiceRule" name="invoiceRule" defaultValue={product.invoiceRule} className="w-full">
             {Object.entries(INVOICE_RULE_LABEL).map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </div>
-        <div className="space-y-1.5"><Label htmlFor="lockInMonths">Lock-in period (months)</Label><Input id="lockInMonths" name="lockInMonths" inputMode="numeric" defaultValue={product.lockInMonths ?? ""} placeholder="e.g. 6 – blank for none" /></div>
+        <div className="space-y-1.5"><Label htmlFor="lockInMonths">Lock-in period (months)</Label><Input id="lockInMonths" name="lockInMonths" inputMode="numeric" defaultValue={product.lockInMonths ?? ""} /></div>
         <div className="space-y-1.5">
           <Label>Pay modes</Label>
           <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
@@ -135,9 +135,9 @@ export function AddSchemeForm({ productId, today }: { productId: string; today: 
   return (
     <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-3">
       <input type="hidden" name="productId" value={productId} />
-      <div className="space-y-1.5"><Label htmlFor="scheme-name">Scheme / tenure</Label><Input id="scheme-name" name="name" placeholder="TD 2 years" className="w-40" /></div>
+      <div className="space-y-1.5"><Label htmlFor="scheme-name">Scheme / tenure</Label><Input id="scheme-name" name="name" className="w-40" /></div>
       <TenureInputs />
-      <div className="space-y-1.5"><Label htmlFor="scheme-rate">Interest rate %</Label><Input id="scheme-rate" name="rate" inputMode="decimal" placeholder="7.0 – optional" className="w-28" /></div>
+      <div className="space-y-1.5"><Label htmlFor="scheme-rate">Interest rate %</Label><Input id="scheme-rate" name="rate" inputMode="decimal" className="w-28" /></div>
       <div className="space-y-1.5"><Label htmlFor="scheme-from">Rate from</Label><DmyDateInput id="scheme-from" name="effectiveFrom" defaultValue={today} className="w-36" /></div>
       <Button type="submit" variant="outline" disabled={pending}>{pending ? "Adding…" : "+ Add scheme"}</Button>
       <div className="w-full"><FormError state={state} /></div>
@@ -151,7 +151,7 @@ function TenureInputs({ months }: { months?: number | null }) {
     <div className="space-y-1.5">
       <Label htmlFor="scheme-tenure">Tenure</Label>
       <div className="flex gap-1">
-        <Input id="scheme-tenure" name="tenure" inputMode="numeric" defaultValue={months ? (inYears ? months / 12 : months) : ""} placeholder="blank = open" className="w-24" />
+        <Input id="scheme-tenure" name="tenure" inputMode="numeric" defaultValue={months ? (inYears ? months / 12 : months) : ""} className="w-24" />
         <NativeSelect name="tenureUnit" defaultValue={inYears ? "years" : "months"} aria-label="Tenure unit">
           <NativeSelectOption value="years">years</NativeSelectOption>
           <NativeSelectOption value="months">months</NativeSelectOption>
@@ -188,7 +188,7 @@ export function RateForm({ schemeId, today }: { schemeId: string; today: string 
   return (
     <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="schemeId" value={schemeId} />
-      <div className="space-y-1.5"><Label htmlFor={`r-${schemeId}`}>New rate %</Label><Input id={`r-${schemeId}`} name="rate" inputMode="decimal" placeholder="7.5" className="w-24" /></div>
+      <div className="space-y-1.5"><Label htmlFor={`r-${schemeId}`}>New rate %</Label><Input id={`r-${schemeId}`} name="rate" inputMode="decimal" className="w-24" /></div>
       <div className="space-y-1.5"><Label htmlFor={`f-${schemeId}`}>From</Label><DmyDateInput id={`f-${schemeId}`} name="effectiveFrom" defaultValue={today} className="w-36" /></div>
       <Button type="submit" size="sm" variant="outline" disabled={pending}>{pending ? "Saving…" : "Change rate"}</Button>
       <div className="w-full"><FormError state={state} /></div>
@@ -214,14 +214,14 @@ export function AddCustomFieldForm({ productId }: { productId: string }) {
   return (
     <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-3">
       <input type="hidden" name="productId" value={productId} />
-      <div className="space-y-1.5"><Label htmlFor="cf-label">Custom field</Label><Input id="cf-label" name="label" placeholder="Post office branch" className="w-44" /></div>
+      <div className="space-y-1.5"><Label htmlFor="cf-label">Custom field</Label><Input id="cf-label" name="label" className="w-44" /></div>
       <div className="space-y-1.5">
         <Label htmlFor="cf-type">Type</Label>
         <NativeSelect id="cf-type" name="type" value={type} onChange={(e) => setType(e.target.value as CustomFieldType)}>
           {Object.entries(CUSTOM_FIELD_TYPE_LABEL).map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
         </NativeSelect>
       </div>
-      {type === "Dropdown" && <div className="space-y-1.5"><Label htmlFor="cf-options">Values (comma separated)</Label><Input id="cf-options" name="options" placeholder="Yearly, To bank" className="w-52" /></div>}
+      {type === "Dropdown" && <div className="space-y-1.5"><Label htmlFor="cf-options">Values (comma separated)</Label><Input id="cf-options" name="options" className="w-52" /></div>}
       <div className="pb-1.5"><Check name="required" label="Required" /></div>
       <Button type="submit" variant="outline" disabled={pending}>{pending ? "Adding…" : "+ Add custom field"}</Button>
       <div className="w-full"><FormError state={state} /></div>

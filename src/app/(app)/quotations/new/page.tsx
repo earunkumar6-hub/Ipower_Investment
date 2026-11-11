@@ -61,7 +61,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
       <div className="max-w-2xl rounded-xl border bg-white p-4">
         <h2 className="mb-3 font-semibold">Who is this quotation for?</h2>
         <form className="mb-4 flex gap-2">
-          <Input name="q" defaultValue={q} placeholder="Search customer or lead by name or mobile" autoFocus />
+          <Input name="q" defaultValue={q} autoFocus />
           <Button type="submit" variant="outline">Search</Button>
         </form>
         <div className="grid grid-cols-2 gap-6 text-sm">

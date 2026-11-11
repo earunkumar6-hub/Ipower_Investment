@@ -65,7 +65,7 @@ export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, ba
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="payerName">Paid by</Label>
-          <Input id="payerName" value={payerName} onChange={(e) => setPayerName(e.target.value)} placeholder="Who handed over the money" aria-invalid={!!err.payerName} />
+          <Input id="payerName" value={payerName} onChange={(e) => setPayerName(e.target.value)} aria-invalid={!!err.payerName} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="payerMobile">Payer&apos;s mobile (receipt goes here on WhatsApp)</Label>

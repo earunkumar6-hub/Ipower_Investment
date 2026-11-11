@@ -37,13 +37,11 @@ export function KycForm({ unlocked, panMasked, aadhaarLast4, consent, allowed }:
       </label>
       <div className="space-y-1.5">
         <Label htmlFor="aadhaar">Aadhaar</Label>
-        <Input id="aadhaar" form={PROPOSAL_FORM} name="aadhaar" readOnly={!open} disabled={!open} inputMode="numeric" maxLength={14}
-          placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : editable ? "12 digits (optional)" : "Not entered"} />
+        <Input id="aadhaar" form={PROPOSAL_FORM} name="aadhaar" readOnly={!open} disabled={!open} inputMode="numeric" maxLength={14} placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : undefined} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="pan">PAN</Label>
-        <Input id="pan" form={PROPOSAL_FORM} name="pan" readOnly={!open} disabled={!open} maxLength={10} className="not-placeholder-shown:uppercase"
-          placeholder={panMasked ?? (editable ? "ABCDE1234F (optional)" : "Not entered")} />
+        <Input id="pan" form={PROPOSAL_FORM} name="pan" readOnly={!open} disabled={!open} maxLength={10} className="not-placeholder-shown:uppercase" placeholder={panMasked ?? undefined} />
       </div>
       <p className="rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
         Optional; needs the consent tick. Stored encrypted, shown masked (PAN ABCxxxxx4M, Aadhaar last 4). A number that already belongs to another customer is refused.
@@ -137,8 +135,8 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
           </NativeSelect>
         </div>
         <div className="space-y-1.5"><Label htmlFor="premium">{amountLabel}{star(!!insurance)}</Label><Input id="premium" name="premium" inputMode="decimal" defaultValue={initial.premium} /></div>
-        {insurance && <div className="space-y-1.5"><Label htmlFor="sumInsured">Sum assured (SA){star(true)}</Label><Input id="sumInsured" name="sumInsured" inputMode="decimal" defaultValue={initial.sumInsured} placeholder="e.g. 1000000" /></div>}
-        <div className="space-y-1.5"><Label htmlFor="term">Term (years){star(life)}</Label><Input id="term" name="term" inputMode="decimal" defaultValue={initial.term} placeholder="e.g. 5" /></div>
+        {insurance && <div className="space-y-1.5"><Label htmlFor="sumInsured">Sum assured (SA){star(true)}</Label><Input id="sumInsured" name="sumInsured" inputMode="decimal" defaultValue={initial.sumInsured} /></div>}
+        <div className="space-y-1.5"><Label htmlFor="term">Term (years){star(life)}</Label><Input id="term" name="term" inputMode="decimal" defaultValue={initial.term} /></div>
         {showPpt
           ? <div className="space-y-1.5"><Label htmlFor="premiumPayingTerm">Premium paying term (PPT, years){star(life)}</Label><Input id="premiumPayingTerm" name="premiumPayingTerm" inputMode="decimal" defaultValue={initial.ppt} /></div>
           : <input type="hidden" name="premiumPayingTerm" value="" />}
@@ -162,7 +160,7 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
           {!mf && (
             <div className="space-y-1.5">
               <Label htmlFor="policyNumber">Policy number (leave blank until issued)</Label>
-              <Input id="policyNumber" name="policyNumber" className="w-64 not-placeholder-shown:uppercase" placeholder="e.g. STAR-P-700123" />
+              <Input id="policyNumber" name="policyNumber" className="w-64 not-placeholder-shown:uppercase" />
             </div>
           )}
           <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save proposal"}</Button>

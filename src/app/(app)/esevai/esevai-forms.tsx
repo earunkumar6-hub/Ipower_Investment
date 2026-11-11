@@ -109,7 +109,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
           </NativeSelect>
         </div>
         {code === "OTHER" ? (
-          <div className="space-y-1.5"><Label htmlFor="serviceName">Service name</Label><Input id="serviceName" name="serviceName" placeholder="e.g. Ration card" aria-invalid={!!err.serviceName} /></div>
+          <div className="space-y-1.5"><Label htmlFor="serviceName">Service name</Label><Input id="serviceName" name="serviceName" aria-invalid={!!err.serviceName} /></div>
         ) : <input type="hidden" name="serviceName" value="" />}
         <div className="space-y-1.5">
           <Label htmlFor="providerRef">{code === "EB" ? "Consumer / service no." : "Service / application no."}</Label>
@@ -212,7 +212,7 @@ export function RechargeForm({ wallets, banks }: { wallets: Opt[]; banks: Opt[] 
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="rechargeAmount">Amount</Label>
-        <Input id="rechargeAmount" name="amount" inputMode="decimal" className="w-28" placeholder="2000" />
+        <Input id="rechargeAmount" name="amount" inputMode="decimal" className="w-28" />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="bankAccountId">From bank account</Label>

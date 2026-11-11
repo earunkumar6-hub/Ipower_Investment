@@ -23,8 +23,8 @@ export function ToggleButton({ kind, id, active }: { kind: "payOption" | "dropdo
   );
 }
 
-function OneFieldForm({ label, name, placeholder, submit, hidden, action: serverAction, done }: {
-  label: string; name: string; placeholder?: string; submit: string; hidden?: Record<string, string>;
+function OneFieldForm({ label, name, submit, hidden, action: serverAction, done }: {
+  label: string; name: string; submit: string; hidden?: Record<string, string>;
   action: (prev: ActionResult, form: FormData) => Promise<ActionResult>; done: string;
 }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
@@ -37,7 +37,7 @@ function OneFieldForm({ label, name, placeholder, submit, hidden, action: server
       {Object.entries(hidden ?? {}).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <Label htmlFor={name}>{label}</Label>
       <div className="flex gap-2">
-        <Input id={name} name={name} placeholder={placeholder} aria-invalid={!!state.error} />
+        <Input id={name} name={name} aria-invalid={!!state.error} />
         <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : submit}</Button>
       </div>
       {state.error && <p className="text-xs text-destructive">{state.error}</p>}
@@ -46,7 +46,7 @@ function OneFieldForm({ label, name, placeholder, submit, hidden, action: server
 }
 
 export const AddCustomerBankForm = () => (
-  <OneFieldForm label="Add a bank to the list" name="name" placeholder="e.g. Karur Vysya Bank" submit="Add" action={addCustomerBank} done="Bank added" />
+  <OneFieldForm label="Add a bank to the list" name="name" submit="Add" action={addCustomerBank} done="Bank added" />
 );
 
 export const AddDropdownValueForm = ({ list, label }: { list: string; label: string }) => (

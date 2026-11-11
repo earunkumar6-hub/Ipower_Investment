@@ -39,7 +39,6 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
     isPostOfficeCategory(it.category === OTHER ? it.categoryOther : it.category)
     && !isPostOfficeInsurance(props.plans.find((p) => p.partner === it.insurer && p.name === it.productName)?.productType, it.productName);
   const noCover = (it: Item) => isMf(it) || postOfficeInvestment(it);
-  const amountOptional = postOfficeInvestment;
   /** Patch for a row that has just changed: a sum insured typed earlier is dropped when the row no longer has cover. */
   const changed = (it: Item, patch: Partial<Item>): Partial<Item> => ({ ...patch, ...(noCover({ ...it, ...patch }) && { sumInsured: "" }) });
   const setCategory = (n: number, category: string, categoryOther: string) => {
@@ -102,21 +101,21 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
                   <OtherSelect value={it.category} other={it.categoryOther} options={categories} label="Product"
                     onChange={(category, categoryOther) => setCategory(n, category, categoryOther)} />
                 </TableCell>
-                <TableCell><Input list={mf ? "amcs" : "insurers"} value={it.insurer} onChange={(e) => set(n, changed(it, { insurer: e.target.value }))} aria-label={mf ? "AMC" : "Insurer/scheme"} placeholder={mf ? "HDFC MF" : "Star Health"} /></TableCell>
+                <TableCell><Input list={mf ? "amcs" : "insurers"} value={it.insurer} onChange={(e) => set(n, changed(it, { insurer: e.target.value }))} aria-label={mf ? "AMC" : "Insurer/scheme"} /></TableCell>
                 <TableCell>
                   <Input list={`plans-${n}`} value={it.productName} onChange={(e) => {
                     const plan = props.plans.find((p) => p.partner === it.insurer && p.name === e.target.value);
                     set(n, changed(it, { productName: e.target.value, ...(plan && !plan.payModes.includes(it.payMode) && { payMode: plan.payModes[0] }) }));
-                  }} aria-label={mf ? "Scheme" : "Plan"} placeholder={mf ? "Flexi Cap SIP" : "Family Health Optima"} />
+                  }} aria-label={mf ? "Scheme" : "Plan"} />
                   <datalist id={`plans-${n}`}>{props.plans.filter((p) => (p.productType === "MutualFund") === mf && (!it.insurer || p.partner === it.insurer)).map((p) => <option key={`${p.partner}-${p.name}`} value={p.name} />)}</datalist>
                 </TableCell>
-                {!allNoCover && <TableCell>{noCover(it) ? <span className="text-muted-foreground">—</span> : <Input value={it.sumInsured} onChange={(e) => set(n, { sumInsured: e.target.value })} aria-label="Sum insured" inputMode="decimal" placeholder="1000000" />}</TableCell>}
+                {!allNoCover && <TableCell>{noCover(it) ? <span className="text-muted-foreground">—</span> : <Input value={it.sumInsured} onChange={(e) => set(n, { sumInsured: e.target.value })} aria-label="Sum insured" inputMode="decimal" />}</TableCell>}
                 <TableCell>
                   <NativeSelect value={it.payMode} onChange={(e) => set(n, { payMode: e.target.value as Frequency })} aria-label={mf ? "SIP or Lumpsum" : "Pay mode"} className="w-full">
                     {(mf ? MF_PAY_MODES : PAY_MODES).map((m) => <NativeSelectOption key={m} value={m}>{payModeLabel(m, mf)}</NativeSelectOption>)}
                   </NativeSelect>
                 </TableCell>
-                <TableCell><Input value={it.premium} onChange={(e) => set(n, { premium: e.target.value })} aria-label={AMOUNT_WORD[kind(it)]} inputMode="decimal" placeholder={mf ? "5000" : amountOptional(it) ? "optional" : "18983"} /></TableCell>
+                <TableCell><Input value={it.premium} onChange={(e) => set(n, { premium: e.target.value })} aria-label={AMOUNT_WORD[kind(it)]} inputMode="decimal" /></TableCell>
                 <TableCell>
                   {items.length > 1 && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, i) => i !== n))}>Remove</Button>

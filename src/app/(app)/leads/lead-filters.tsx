@@ -21,7 +21,7 @@ export function LeadFilters({ status, source, q }: { status?: string; source?: s
     <form className="mb-4 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); apply(e.currentTarget); }}>
       <div className="space-y-1.5">
         <Label htmlFor="q">Search</Label>
-        <Input id="q" name="q" defaultValue={q} placeholder="Name, mobile or lead no." className="w-56" />
+        <Input id="q" name="q" defaultValue={q} className="w-56" />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="status">Status</Label>

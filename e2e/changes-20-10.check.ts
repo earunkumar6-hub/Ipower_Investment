@@ -347,7 +347,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
   test("#31 Expense notes mandatory and #30 'Other' needs typed text, added to the list", async () => {
     await user.goto("/expenses");
     await user.locator("#category").selectOption("Other");
-    const other = user.getByPlaceholder(/type|what/i).or(user.getByLabel(/other purpose|type the purpose|what is it/i)).first();
+    const other = user.getByLabel(/– other$/).first();
     await expect(other).toBeVisible(); // #30 a text box appears for "Other"
     await user.locator("#description").fill("Courier charges");
     await user.locator("#amount").fill("300");

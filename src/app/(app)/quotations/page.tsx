@@ -44,7 +44,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       </>} />
       <div className="rounded-xl border bg-white p-4">
         <h2 className="mb-2 font-semibold">Recent quotations</h2>
-        <ListSearch q={q} placeholder="Mobile, customer name or quote no." />
+        <ListSearch q={q} />
         <Table>
           <TableHeader>
             <TableRow>

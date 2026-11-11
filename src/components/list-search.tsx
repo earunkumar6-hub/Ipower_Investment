@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /** Search box + button for a list page. The term lives in the URL (?q=) like the other list filters. */
-export function ListSearch({ q, placeholder }: { q?: string; placeholder: string }) {
+export function ListSearch({ q }: { q?: string }) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -21,7 +21,7 @@ export function ListSearch({ q, placeholder }: { q?: string; placeholder: string
     >
       <div className="space-y-1.5">
         <Label htmlFor="q">Search</Label>
-        <Input id="q" name="q" defaultValue={q} placeholder={placeholder} className="w-72" />
+        <Input id="q" name="q" defaultValue={q} className="w-72" />
       </div>
       <Button type="submit" variant="outline">Search</Button>
     </form>

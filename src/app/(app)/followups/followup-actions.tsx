@@ -60,7 +60,7 @@ export function ScheduleCallButton({ options }: { options: ScheduleOptions }) {
               <div className="space-y-1.5"><Label htmlFor="sc-date">Date</Label><DmyDateInput id="sc-date" name="callDate" defaultValue={tomorrowIst()} aria-invalid={!!err.callDate} /></div>
               <div className="space-y-1.5"><Label htmlFor="sc-time">Time</Label><Input id="sc-time" name="callTime" type="time" defaultValue="11:00" /></div>
             </div>
-            <div className="space-y-1.5"><Label htmlFor="sc-note">Note</Label><Textarea id="sc-note" name="note" rows={2} placeholder="e.g. Promised to pay by Friday" /></div>
+            <div className="space-y-1.5"><Label htmlFor="sc-note">Note</Label><Textarea id="sc-note" name="note" rows={2} /></div>
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

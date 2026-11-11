@@ -71,13 +71,13 @@ export function JointAccountPanel({ issued, first, joint, second, newSecond, cif
         {postal && (
           <div className="space-y-1">
             <Label htmlFor="jh-cif1" className="text-xs">{on ? "First holder CIF" : "Holder CIF"} (given by the post office)</Label>
-            <Input id="jh-cif1" form={PROPOSAL_FORM} name="firstHolderCif" defaultValue={cifs.first ?? ""} placeholder="e.g. PO CIF" className="h-8" />
+            <Input id="jh-cif1" form={PROPOSAL_FORM} name="firstHolderCif" defaultValue={cifs.first ?? ""} className="h-8" />
           </div>
         )}
         {kind === "mf" && (
           <div className="space-y-1">
             <Label htmlFor="folioNo" className="text-xs">Folio number (given by the AMC)</Label>
-            <Input id="folioNo" form={PROPOSAL_FORM} name="folioNo" defaultValue={folio ?? ""} placeholder="e.g. 1234567/89" className="h-8 not-placeholder-shown:uppercase" />
+            <Input id="folioNo" form={PROPOSAL_FORM} name="folioNo" defaultValue={folio ?? ""} className="h-8 not-placeholder-shown:uppercase" />
           </div>
         )}
       </div>
@@ -116,7 +116,7 @@ export function JointAccountPanel({ issued, first, joint, second, newSecond, cif
               ) : (
                 <div className="relative">
                   <Label htmlFor="jh-search" className="text-xs">Find by name or mobile</Label>
-                  <Input id="jh-search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && e.preventDefault()} placeholder="e.g. Ravi or 98400" className="h-8" />
+                  <Input id="jh-search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && e.preventDefault()} className="h-8" />
                   {results.length > 0 && (
                     <ul className="absolute z-10 mt-1 w-full rounded-md border bg-white shadow">
                       {results.map((r) => (

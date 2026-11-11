@@ -60,7 +60,7 @@ export function AddFollowUpForm({ customerId, today, onDone }: { customerId: str
       <input type="hidden" name="refId" value={customerId} />
       <div className="space-y-1"><Label htmlFor="fu-date" className="text-xs">Date</Label><DmyDateInput id="fu-date" name="callDate" min={today} defaultValue={today} className="h-8" /></div>
       <div className="space-y-1"><Label htmlFor="fu-time" className="text-xs">Time</Label><Input id="fu-time" name="callTime" type="time" className="h-8" /></div>
-      <div className="space-y-1"><Label htmlFor="fu-note" className="text-xs">Notes</Label><Input id="fu-note" name="note" placeholder="What to discuss" className="h-8" /></div>
+      <div className="space-y-1"><Label htmlFor="fu-note" className="text-xs">Notes</Label><Input id="fu-note" name="note" className="h-8" /></div>
       <Button type="submit" size="sm" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Adding…" : "Add follow-up"}</Button>
       {state.error && <p className="col-span-4 text-xs text-destructive">{state.error}</p>}
     </form>
@@ -96,11 +96,11 @@ export function IdentityButton({ customerId, consent, panMasked, aadhaarLast4 }:
             </label>
             <div className="space-y-1.5">
               <Label htmlFor="ci-aadhaar">Aadhaar</Label>
-              <Input id="ci-aadhaar" name="aadhaar" disabled={!ticked} inputMode="numeric" maxLength={14} placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : "12 digits"} aria-invalid={!!state.fieldErrors?.aadhaar} />
+              <Input id="ci-aadhaar" name="aadhaar" disabled={!ticked} inputMode="numeric" maxLength={14} placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : undefined} aria-invalid={!!state.fieldErrors?.aadhaar} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ci-pan">PAN</Label>
-              <Input id="ci-pan" name="pan" disabled={!ticked} maxLength={10} className="not-placeholder-shown:uppercase" placeholder={panMasked ?? "ABCDE1234F"} aria-invalid={!!state.fieldErrors?.pan} />
+              <Input id="ci-pan" name="pan" disabled={!ticked} maxLength={10} className="not-placeholder-shown:uppercase" placeholder={panMasked ?? undefined} aria-invalid={!!state.fieldErrors?.pan} />
             </div>
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <Button type="submit" disabled={pending || !ticked} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save"}</Button>

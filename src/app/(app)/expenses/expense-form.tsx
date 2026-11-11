@@ -51,16 +51,16 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
           <OtherOptionSelect name="category" id="category" options={categories} defaultValue={categories[0]} label="Purpose" error={err.category} />
         </Field>
         <Field label="Description" error={err.description}>
-          <Input id="description" name="description" placeholder="Printer paper, pens" aria-invalid={!!err.description} />
+          <Input id="description" name="description" aria-invalid={!!err.description} />
         </Field>
         <Field label="Amount" error={err.amount}>
-          <Input id="amount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="3200" aria-invalid={!!err.amount} />
+          <Input id="amount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" aria-invalid={!!err.amount} />
         </Field>
         <Field label="Vendor" error={err.vendor}>
-          <Input id="vendor" name="vendor" placeholder="Sri Stationers" aria-invalid={!!err.vendor} />
+          <Input id="vendor" name="vendor" aria-invalid={!!err.vendor} />
         </Field>
         <Field label="Bill number" error={err.billNo}>
-          <Input id="billNo" name="billNo" placeholder="B-1045" className="not-placeholder-shown:uppercase" aria-invalid={!!err.billNo} />
+          <Input id="billNo" name="billNo" className="not-placeholder-shown:uppercase" aria-invalid={!!err.billNo} />
         </Field>
         <Field label="Date" error={err.expenseDate}>
           <DmyDateInput name="expenseDate" defaultValue={today} max={today} />
@@ -101,7 +101,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
         )}
         <div className="col-span-3">
           <Field label="Notes (required)" error={err.notes}>
-            <Input id="notes" name="notes" required placeholder="Why it was needed, who asked for it…" aria-invalid={!!err.notes} />
+            <Input id="notes" name="notes" required aria-invalid={!!err.notes} />
           </Field>
         </div>
       </div>

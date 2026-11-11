@@ -90,7 +90,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
       <div className="max-w-xl rounded-xl border bg-white p-4">
         <h2 className="mb-3 font-semibold">Who is paying?</h2>
         <form className="mb-4 flex gap-2">
-          <Input name="q" defaultValue={q} placeholder="Search customer by name or mobile" autoFocus />
+          <Input name="q" defaultValue={q} autoFocus />
           <Button type="submit" variant="outline">Search</Button>
         </form>
         <ul className="space-y-1 text-sm">

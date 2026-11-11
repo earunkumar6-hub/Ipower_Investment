@@ -68,7 +68,7 @@ export function CancelCommission({ id }: { id: string }) {
   return (
     <form onSubmit={submitKeepingValues(action)} className="flex items-center gap-1">
       <input type="hidden" name="id" value={id} />
-      <Input name="reason" placeholder="Why" className="h-7 w-32" aria-label="Cancel reason" />
+      <Input name="reason" className="h-7 w-32" aria-label="Cancel reason" />
       <Button type="submit" size="xs" variant="destructive" disabled={pending}>Cancel entry</Button>
       {state.error && <span className="text-xs text-destructive">{state.error}</span>}
     </form>

@@ -77,7 +77,7 @@ export function AddLeadDialog({ owners, products }: { owners: { id: string; name
             </div>
             {status === "NotInterested" ? (
               <>
-                <Field label="Reason" name="reason" error={err.reason} required placeholder="e.g. Already has a policy" />
+                <Field label="Reason" name="reason" error={err.reason} required />
                 <input type="hidden" name="callDate" value="" /><input type="hidden" name="callTime" value="" />
               </>
             ) : (

@@ -15,7 +15,7 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
     <form className="mb-4 grid grid-cols-2 gap-2 rounded-xl border bg-white p-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
       <input type="hidden" name="tab" value={tab} />
       {f.deposit !== "all" && <input type="hidden" name="deposit" value={f.deposit} />}
-      <Input id="rf-q" name="q" defaultValue={f.q} placeholder="Name or mobile" aria-label="Name or mobile" className={cls} />
+      <Input id="rf-q" name="q" defaultValue={f.q} aria-label="Name or mobile" className={cls} />
       <NativeSelect name="group" defaultValue={f.group ?? ""} aria-label="Bill group" className={cls}>
         <NativeSelectOption value="">Any bill group</NativeSelectOption>
         {groups.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}
@@ -31,7 +31,7 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
         <NativeSelectOption value="">Any RD status</NativeSelectOption>
         {RD_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>RD {s.toLowerCase()}</NativeSelectOption>)}
       </NativeSelect>
-      <Input id="rf-policy" name="policy" defaultValue={f.policyNo} placeholder="Policy / account no." aria-label="Policy / account no." className={cls} />
+      <Input id="rf-policy" name="policy" defaultValue={f.policyNo} aria-label="Policy / account no." className={cls} />
       <NativeSelect name="mode" defaultValue={f.mode ?? ""} aria-label="Payment mode" className={cls}>
         <NativeSelectOption value="">All modes</NativeSelectOption>
         {Object.entries(MODE_LABEL).map(([k, label]) => <NativeSelectOption key={k} value={k}>{label}</NativeSelectOption>)}

@@ -44,7 +44,7 @@ export function BankAccountForm({ value }: { value?: BankValues }) {
       <input type="hidden" name="type" value="Bank" />
       {editing && <input type="hidden" name="id" value={value.id} />}
       <div className="grid grid-cols-2 gap-3">
-        <Field id="bankName" label="Bank" error={err.bankName}><Input id="bankName" name="bankName" defaultValue={value?.bankName} placeholder="e.g. SBI" /></Field>
+        <Field id="bankName" label="Bank" error={err.bankName}><Input id="bankName" name="bankName" defaultValue={value?.bankName} /></Field>
         <Field id="branch" label="Branch" error={err.branch}><Input id="branch" name="branch" defaultValue={value?.branch} /></Field>
         <Field id="accountNo" label={editing ? `Account number (now ••••${value.last4 ?? ""}; blank keeps it)` : "Account number"} error={err.accountNo}>
           <Input id="accountNo" name="accountNo" inputMode="numeric" autoComplete="off" />
@@ -56,9 +56,9 @@ export function BankAccountForm({ value }: { value?: BankValues }) {
             <NativeSelectOption value="Current">Current</NativeSelectOption>
           </NativeSelect>
         </Field>
-        <Field id="ifsc" label="IFSC" error={err.ifsc}><Input id="ifsc" name="ifsc" defaultValue={value?.ifsc} className="uppercase" placeholder="SBIN0001234" /></Field>
-        <Field id="micr" label="MICR code" error={err.micr}><Input id="micr" name="micr" defaultValue={value?.micr} inputMode="numeric" maxLength={9} placeholder="9 digits" /></Field>
-        {!editing && <Field id="openingBalance" label="Opening balance today (₹)" error={err.openingBalance}><Input id="openingBalance" name="openingBalance" inputMode="decimal" placeholder="0" /></Field>}
+        <Field id="ifsc" label="IFSC" error={err.ifsc}><Input id="ifsc" name="ifsc" defaultValue={value?.ifsc} className="uppercase" /></Field>
+        <Field id="micr" label="MICR code" error={err.micr}><Input id="micr" name="micr" defaultValue={value?.micr} inputMode="numeric" maxLength={9} /></Field>
+        {!editing && <Field id="openingBalance" label="Opening balance today (₹)" error={err.openingBalance}><Input id="openingBalance" name="openingBalance" inputMode="decimal" /></Field>}
       </div>
       <p className="text-xs text-muted-foreground">The account number is stored encrypted and shown as ••••1234.{!editing && " The opening balance can't be changed later."}</p>
       {state.error && !Object.keys(err).length && <p className="text-sm text-destructive">{state.error}</p>}
@@ -92,9 +92,9 @@ export function WalletForm({ value }: { value?: WalletValues }) {
         </Field>
         {kind === "Other" && <Field id="otherName" label="Wallet name" error={err.otherName}><Input id="otherName" name="otherName" defaultValue={value?.otherName} /></Field>}
         <Field id="lowBalanceThreshold" label="Low-balance alert below (₹)" error={err.lowBalanceThreshold}>
-          <Input id="lowBalanceThreshold" name="lowBalanceThreshold" inputMode="decimal" defaultValue={value?.lowBalanceThreshold} placeholder="blank for none" />
+          <Input id="lowBalanceThreshold" name="lowBalanceThreshold" inputMode="decimal" defaultValue={value?.lowBalanceThreshold} />
         </Field>
-        {!editing && <Field id="wOpening" label="Opening balance today (₹)" error={err.openingBalance}><Input id="wOpening" name="openingBalance" inputMode="decimal" placeholder="0" /></Field>}
+        {!editing && <Field id="wOpening" label="Opening balance today (₹)" error={err.openingBalance}><Input id="wOpening" name="openingBalance" inputMode="decimal" /></Field>}
       </div>
       {state.error && !Object.keys(err).length && <p className="text-sm text-destructive">{state.error}</p>}
       <div className="flex gap-2">

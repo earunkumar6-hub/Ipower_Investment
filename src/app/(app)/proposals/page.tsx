@@ -36,7 +36,7 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader title="Proposals" user={user} actions={<ExportButton report="proposals" user={user} />} />
       <div className="rounded-xl border bg-white p-4">
-        <ListSearch q={q} placeholder="Mobile, first holder name or proposal no." />
+        <ListSearch q={q} />
         <Table>
           <TableHeader>
             <TableRow>

@@ -16,7 +16,7 @@ export function MobilesField({ initial, error }: { initial: MobileEntry[]; error
       <Label>Mobile number<span className="text-destructive"> *</span></Label>
       {rows.map((m, i) => (
         <div key={m.key} className="flex items-center gap-2">
-          <Input name="mobile" defaultValue={m.number} inputMode="numeric" maxLength={10} placeholder={i === 0 ? "Main number" : `Mobile number ${i + 1}`}
+          <Input name="mobile" defaultValue={m.number} inputMode="numeric" maxLength={10}
             aria-label={`Mobile number ${i + 1}`} aria-invalid={!!error} className="flex-1" />
           <label className="flex shrink-0 items-center gap-1.5 text-xs">
             <input type="checkbox" name="whatsApp" value={i} defaultChecked={m.isWhatsApp} className="size-4 accent-brand-600" /> Same as WhatsApp

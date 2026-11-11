@@ -60,7 +60,7 @@ function NotRenewedButton({ renewalItemId }: { renewalItemId: string }) {
           <DialogTitle className="text-lg font-semibold">Not renewed</DialogTitle>
           <div className="space-y-1.5">
             <Label htmlFor={`nr-${renewalItemId}`}>Reason</Label>
-            <Input id={`nr-${renewalItemId}`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Moved to another insurer" />
+            <Input id={`nr-${renewalItemId}`} value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <p className="text-xs text-muted-foreground">The policy becomes Lapsed (shown on the customer page); its unpaid instalments lapse and no more reminders go out.</p>

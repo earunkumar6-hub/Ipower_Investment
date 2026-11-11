@@ -144,7 +144,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
       <input type="hidden" name="callId" value={call.id} />
       <div className="space-y-1.5">
         <Label htmlFor="note">Notes</Label>
-        <Textarea id="note" name="note" rows={2} placeholder="What did they say?" />
+        <Textarea id="note" name="note" rows={2} />
       </div>
       <fieldset className="space-y-1.5">
         <legend className="text-sm font-medium">Outcome</legend>
@@ -168,7 +168,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
       ) : outcome === "NotInterested" ? (
         <div className="space-y-1.5">
           <Label htmlFor="reason">Reason</Label>
-          <Input id="reason" name="reason" aria-invalid={!!err.reason} placeholder="e.g. Already has a policy" />
+          <Input id="reason" name="reason" aria-invalid={!!err.reason} />
           <input type="hidden" name="callDate" value="" />
           <input type="hidden" name="callTime" value="" />
         </div>

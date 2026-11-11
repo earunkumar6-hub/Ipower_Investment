@@ -35,13 +35,13 @@ export function DenominationInputs({ value, onChange, amount, error, idPrefix = 
         {NOTES.map((n) => (
           <div key={n} className="space-y-1">
             <Label htmlFor={`${idPrefix}-${n}`} className="text-xs text-muted-foreground">₹{n} ×</Label>
-            <Input id={`${idPrefix}-${n}`} inputMode="numeric" value={value.notes[n] ?? ""} placeholder="0" aria-invalid={!!error} className="min-w-0 text-right"
+            <Input id={`${idPrefix}-${n}`} inputMode="numeric" value={value.notes[n] ?? ""} aria-invalid={!!error} className="min-w-0 text-right"
               onChange={(e) => onChange({ ...value, notes: { ...value.notes, [n]: e.target.value.replace(/\D/g, "") } })} />
           </div>
         ))}
         <div className="space-y-1">
           <Label htmlFor={`${idPrefix}-coins`} className="text-xs text-muted-foreground">Coins ₹</Label>
-          <Input id={`${idPrefix}-coins`} inputMode="decimal" value={value.coins} placeholder="0" className="min-w-0 text-right" onChange={(e) => onChange({ ...value, coins: e.target.value })} />
+          <Input id={`${idPrefix}-coins`} inputMode="decimal" value={value.coins} className="min-w-0 text-right" onChange={(e) => onChange({ ...value, coins: e.target.value })} />
         </div>
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">Total</span>

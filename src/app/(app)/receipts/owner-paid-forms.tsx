@@ -32,7 +32,7 @@ export function OwnerPaidForm({ items }: { items: Option[] }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="poReceiptNo">Reference no. (required)</Label>
-        <Input id="poReceiptNo" name="poReceiptNo" placeholder="PO receipt no. or insurer txn no." />
+        <Input id="poReceiptNo" name="poReceiptNo" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save owner-paid slip"}</Button>

@@ -103,7 +103,7 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
           )}
         </div>
       )}
-      {search && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find by customer, policy / account no. or bill no." className="h-8 max-w-md" aria-label="Find bills" />}
+      {search && <Input value={q} onChange={(e) => setQ(e.target.value)} className="h-8 max-w-md" aria-label="Find bills" />}
       {withDues.length === 0 && settled.length === 0 ? <p className="text-sm text-muted-foreground">No bills to pay.</p> : (
         <Table>
           <TableHeader>

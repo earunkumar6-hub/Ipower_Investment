@@ -32,7 +32,7 @@ export function DepositStatusForm({ receiptId, amount, company, isRd, accounts, 
       <input type="hidden" name="receiptIds" value={receiptId} />
       <div className="space-y-1.5">
         <Label htmlFor="reference">{isRd ? "Post office receipt / transaction ID" : `${company} receipt / transaction ID`}</Label>
-        <Input id="reference" name="reference" placeholder={isRd ? "7781 2290" : "UTR or company receipt no."} />
+        <Input id="reference" name="reference" />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5"><Label htmlFor="paidOn">Paid on</Label><DmyDateInput name="paidOn" defaultValue={today} max={today} /></div>

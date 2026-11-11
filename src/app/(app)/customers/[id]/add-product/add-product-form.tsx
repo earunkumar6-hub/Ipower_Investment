@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { isoToDmy } from "@/lib/dates";
-import { BANK_FIELDS, BILLED_FROM_AMOUNT, fmtTenure, isHealthCover, isPostal, isPostalInvestmentType, needsSipDay, payModeLabel, PRODUCT_TYPE_LABEL, SIP_DAYS, sipDateLabel, type BankField } from "@/lib/products";
+import { BANK_FIELDS, fmtTenure, isHealthCover, isPostal, isPostalInvestmentType, needsSipDay, payModeLabel, PRODUCT_TYPE_LABEL, SIP_DAYS, sipDateLabel, type BankField } from "@/lib/products";
 import { addProductDirect } from "../../actions";
 
 export type CatalogueProduct = {
@@ -121,14 +121,14 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
           </Field>
         )}
         <Field label="Policy / account number" name="policyNumber" error={err.policyNumber}>
-          <Input id="policyNumber" name="policyNumber" placeholder="Leave blank until issued" className="not-placeholder-shown:uppercase" />
+          <Input id="policyNumber" name="policyNumber" className="not-placeholder-shown:uppercase" />
         </Field>
       </div>
 
       {product && (
         <>
           <div className="grid grid-cols-4 gap-3">
-            <Field label={mf ? "Investment amount" : amountOptional ? "Amount" : "Amount / premium"} name="amount" required={!amountOptional} error={err.amount}><Input id="amount" name="amount" inputMode="decimal" placeholder={mf ? "5000" : amountOptional ? (product && BILLED_FROM_AMOUNT[product.productType] ? "needed with the policy no." : "optional") : "100000"} /></Field>
+            <Field label={mf ? "Investment amount" : amountOptional ? "Amount" : "Amount / premium"} name="amount" required={!amountOptional} error={err.amount}><Input id="amount" name="amount" inputMode="decimal" /></Field>
             <Field label={mf ? "SIP / Lumpsum" : "Pay mode"} name="frequency" required error={err.frequency}>
               <NativeSelect id="frequency" name="frequency" value={payMode} onChange={(e) => setFrequency(e.target.value)} className="w-full">
                 {product.payModes.map((m) => <NativeSelectOption key={m} value={m}>{payModeLabel(m, mf)}</NativeSelectOption>)}
@@ -148,7 +148,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
             {scheme?.tenureMonths ? (
               <Field label="Term" name="term"><div className="flex h-8 items-center text-sm">{fmtTenure(scheme.tenureMonths)} <span className="ml-1 text-xs text-muted-foreground">(from scheme)</span></div><input type="hidden" name="term" value="" /></Field>
             ) : (
-              <Field label="Term (years)" name="term" required={life} error={err.term}><Input id="term" name="term" inputMode="decimal" value={term} onChange={(e) => setTerm(e.target.value)} placeholder={life ? "e.g. 20" : "blank = open-ended"} /></Field>
+              <Field label="Term (years)" name="term" required={life} error={err.term}><Input id="term" name="term" inputMode="decimal" value={term} onChange={(e) => setTerm(e.target.value)} /></Field>
             )}
           </div>
 
@@ -160,14 +160,14 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            {insurance && <Field label="Sum assured (SA)" name="sumAssured" required error={err.sumAssured}><Input id="sumAssured" name="sumAssured" inputMode="decimal" placeholder="e.g. 1000000" /></Field>}
+            {insurance && <Field label="Sum assured (SA)" name="sumAssured" required error={err.sumAssured}><Input id="sumAssured" name="sumAssured" inputMode="decimal" /></Field>}
             {shown("premiumPayingTerm") && (
               <Field label="Premium paying term (PPT, years)" name="premiumPayingTerm" required={needed("premiumPayingTerm") || life} error={err.premiumPayingTerm}>
                 <Input id="premiumPayingTerm" name="premiumPayingTerm" inputMode="decimal" />
               </Field>
             )}
-            {postal && <Field label="Holder CIF (given by the post office)" name="firstHolderCif" error={err.firstHolderCif}><Input id="firstHolderCif" name="firstHolderCif" placeholder="optional" className="not-placeholder-shown:uppercase" /></Field>}
-            {mf && <Field label="Folio number" name="folioNo" error={err.folioNo}><Input id="folioNo" name="folioNo" placeholder="from the AMC (optional)" className="not-placeholder-shown:uppercase" /></Field>}
+            {postal && <Field label="Holder CIF (given by the post office)" name="firstHolderCif" error={err.firstHolderCif}><Input id="firstHolderCif" name="firstHolderCif" className="not-placeholder-shown:uppercase" /></Field>}
+            {mf && <Field label="Folio number" name="folioNo" error={err.folioNo}><Input id="folioNo" name="folioNo" className="not-placeholder-shown:uppercase" /></Field>}
             {shown("nominee") && <Field label="Nominee" name="nominee" required={needed("nominee")} error={err.nominee}><Input id="nominee" name="nominee" /></Field>}
             {product.customFields.map((f) => (
               <Field key={f.id} label={f.label} name={`cf_${f.id}`} required={f.required} error={err[`cf_${f.id}`]}>

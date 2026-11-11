@@ -21,11 +21,11 @@ export function AlertContactsForm({ mobile, email }: { mobile: string; email: st
     <form onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-end gap-3">
       <div className="space-y-1.5">
         <Label htmlFor="alert-mobile">WhatsApp mobile</Label>
-        <Input id="alert-mobile" name="mobile" defaultValue={mobile} inputMode="numeric" maxLength={10} placeholder="10 digits (optional)" className="w-48" aria-invalid={!!err.mobile} />
+        <Input id="alert-mobile" name="mobile" defaultValue={mobile} inputMode="numeric" maxLength={10} className="w-48" aria-invalid={!!err.mobile} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="alert-email">Email</Label>
-        <Input id="alert-email" name="email" type="email" defaultValue={email} placeholder="developer@example.com (optional)" className="w-72" aria-invalid={!!err.email} />
+        <Input id="alert-email" name="email" type="email" defaultValue={email} className="w-72" aria-invalid={!!err.email} />
       </div>
       <Button type="submit" variant="outline" disabled={pending}>{pending ? "Saving…" : "Save"}</Button>
       {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}

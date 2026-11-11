@@ -75,8 +75,8 @@ export function PasswordForm({ userId }: { userId: string }) {
   return (
     <form onSubmit={submitKeepingValues(action)} className="flex items-center gap-1">
       <input type="hidden" name="userId" value={userId} />
-      <Input name="password" type="password" placeholder="New password" autoComplete="new-password" className="h-7 w-32" aria-label="New password" />
-      <Input name="confirm" type="password" placeholder="Again" autoComplete="new-password" className="h-7 w-24" aria-label="New password again" />
+      <Input name="password" type="password" autoComplete="new-password" className="h-7 w-32" aria-label="New password" />
+      <Input name="confirm" type="password" autoComplete="new-password" className="h-7 w-24" aria-label="New password again" />
       <Button type="submit" size="xs" disabled={pending} className="bg-brand-600 hover:bg-brand-700">Set</Button>
       <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
       {state.error && <span className="text-xs text-destructive">{state.error}</span>}

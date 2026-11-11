@@ -45,7 +45,7 @@ export function ClosePolicyButton({ policyId, label, isMf, today, startDate, loc
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="reason">Reason{isMf ? " (optional)" : ""}</Label>
-              <Input id="reason" name="reason" placeholder={isMf ? "e.g. Customer redeemed" : "e.g. Customer needed the money"} aria-invalid={!!state.fieldErrors?.reason} />
+              <Input id="reason" name="reason" aria-invalid={!!state.fieldErrors?.reason} />
             </div>
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <p className="text-xs text-muted-foreground">Unpaid instalments stop and no more reminders go out. Paid history stays. No money is recorded in the Day Book.</p>
