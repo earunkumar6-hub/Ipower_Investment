@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
+import { ListSearch } from "@/components/list-search";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,10 +13,24 @@ import { quotationStatus } from "@/lib/quotation";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
-export default async function QuotationsPage() {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requirePermission("Quote.View");
+  const q = (await searchParams).q?.trim() || undefined;
   const quotations = await db.quotation.findMany({
-    where: { tenantId: user.tenantId, ...ownerScope(user), deletedAt: null },
+    where: {
+      tenantId: user.tenantId,
+      ...ownerScope(user),
+      deletedAt: null,
+      ...(q && {
+        AND: [{
+          OR: [
+            { mobile: { contains: q } },
+            { customerName: { contains: q, mode: "insensitive" as const } },
+            { quoteNo: { contains: q, mode: "insensitive" as const } },
+          ],
+        }],
+      }),
+    },
     include: { items: { include: { proposal: { select: { status: true } } } } },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -29,6 +44,7 @@ export default async function QuotationsPage() {
       </>} />
       <div className="rounded-xl border bg-white p-4">
         <h2 className="mb-2 font-semibold">Recent quotations</h2>
+        <ListSearch q={q} placeholder="Mobile, customer name or quote no." />
         <Table>
           <TableHeader>
             <TableRow>
@@ -51,7 +67,7 @@ export default async function QuotationsPage() {
               );
             })}
             {quotations.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No quotations yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No quotations match "${q}".` : "No quotations yet."}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

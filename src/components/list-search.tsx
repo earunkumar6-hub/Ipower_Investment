@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-/** Search lives in the URL (?q=) like the other list filters. */
-export function ProposalSearch({ q }: { q?: string }) {
+/** Search box + button for a list page. The term lives in the URL (?q=) like the other list filters. */
+export function ListSearch({ q, placeholder }: { q?: string; placeholder: string }) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -20,8 +21,9 @@ export function ProposalSearch({ q }: { q?: string }) {
     >
       <div className="space-y-1.5">
         <Label htmlFor="q">Search</Label>
-        <Input id="q" name="q" defaultValue={q} placeholder="Mobile, first holder name or proposal no." className="w-72" />
+        <Input id="q" name="q" defaultValue={q} placeholder={placeholder} className="w-72" />
       </div>
+      <Button type="submit" variant="outline">Search</Button>
     </form>
   );
 }

@@ -7,8 +7,8 @@ import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
-import { holdersLabel, proposalNext, proposalStatusLabel } from "./labels";
-import { ProposalSearch } from "./proposal-search";
+import { holdersLabel, proposalStatusLabel } from "./labels";
+import { ListSearch } from "@/components/list-search";
 
 export default async function ProposalsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requirePermission("Proposal.View");
@@ -36,12 +36,12 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader title="Proposals" user={user} actions={<ExportButton report="proposals" user={user} />} />
       <div className="rounded-xl border bg-white p-4">
-        <ProposalSearch q={q} />
+        <ListSearch q={q} placeholder="Mobile, first holder name or proposal no." />
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>No.</TableHead><TableHead>Customer</TableHead><TableHead>Partner</TableHead>
-              <TableHead className="text-right">Premium</TableHead><TableHead>Consent</TableHead><TableHead>Status</TableHead><TableHead>Next</TableHead>
+              <TableHead className="text-right">Premium</TableHead><TableHead>Consent</TableHead><TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -55,12 +55,11 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
                   <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
                   <TableCell>{p.consentAt ? <StatusBadge tone="green">Taken</StatusBadge> : <StatusBadge tone="slate">Not ticked</StatusBadge>}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
-                  <TableCell className="text-muted-foreground">{proposalNext(p)}</TableCell>
                 </TableRow>
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">{q ? `No proposals match "${q}".` : "No proposals yet. Create them from a quotation, or add a product directly on a customer."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No proposals match "${q}".` : "No proposals yet. Create them from a quotation, or add a product directly on a customer."}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
