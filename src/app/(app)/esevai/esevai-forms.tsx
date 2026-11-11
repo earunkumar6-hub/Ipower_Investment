@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { CashDenominationGrid } from "@/components/cash-denomination-grid";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -95,7 +96,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="txnDate">Date</Label>
-          <Input id="txnDate" name="txnDate" type="date" defaultValue={today} max={today} required aria-invalid={!!err.txnDate} />
+          <DmyDateInput name="txnDate" defaultValue={today} max={today} required aria-invalid={!!err.txnDate} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="txnTime">Time</Label>
@@ -117,7 +118,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
         <div className="space-y-1.5">
           <Label htmlFor="customerMobile">Mobile</Label>
           <Input id="customerMobile" name="customerMobile" value={mobile} onChange={(e) => setMobile(e.target.value.trim())} inputMode="numeric" maxLength={10} aria-invalid={!!err.customerMobile} />
-          {match && <p className="text-xs text-green-700">Matches customer <Link href={`/customers/${match.id}`} className="underline" target="_blank">{match.name} ({match.cifNo})</Link></p>}
+          {match && <p className="text-xs text-green-700">Matches customer <Link href={`/customers/${match.id}`} className="underline" target="_blank">{match.name}</Link></p>}
         </div>
         <div className="space-y-1.5"><Label htmlFor="customerName">Name</Label><Input id="customerName" name="customerName" placeholder={match?.name} /></div>
         <div className="space-y-1.5">

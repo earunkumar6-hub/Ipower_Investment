@@ -5,12 +5,14 @@ import { useActionState, useState } from "react";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { useConfirmBeforeSave } from "@/components/confirm-save";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
+import { isoToDmy } from "@/lib/dates";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { OTHER, OtherSelect } from "@/components/other-option-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { isMfCategory, MF_PAY_MODES, payModeLabel } from "@/lib/products";
+import { AMOUNT_WORD, amountHeader, type AmountKind, isMfCategory, isPostOfficeCategory, isPostOfficeInsurance, MF_PAY_MODES, payModeLabel } from "@/lib/products";
 import { createQuotation } from "../actions";
 
 const INSURERS = ["Star Health", "Care Health", "SBI Life", "LIC", "HDFC Life", "ICICI Lombard", "Niva Bupa"];
@@ -31,23 +33,33 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
   const set = (n: number, patch: Partial<Item>) => setItems(items.map((it, i) => (i === n ? { ...it, ...patch } : it)));
   // A "Mutual fund" row reads AMC / Scheme / SIP or Lumpsum / Investment amount and has no cover.
   const isMf = (it: Item) => isMfCategory(it.category === OTHER ? it.categoryOther : it.category);
+  // "Post office": only PLI is insurance; every other plan (or none typed yet) has no sum insured and the premium may be
+  // left blank (owner, 11 Nov 2026). Mutual funds have no cover either.
+  const postOfficeInvestment = (it: Item) =>
+    isPostOfficeCategory(it.category === OTHER ? it.categoryOther : it.category)
+    && !isPostOfficeInsurance(props.plans.find((p) => p.partner === it.insurer && p.name === it.productName)?.productType, it.productName);
+  const noCover = (it: Item) => isMf(it) || postOfficeInvestment(it);
+  const amountOptional = postOfficeInvestment;
+  /** Patch for a row that has just changed: a sum insured typed earlier is dropped when the row no longer has cover. */
+  const changed = (it: Item, patch: Partial<Item>): Partial<Item> => ({ ...patch, ...(noCover({ ...it, ...patch }) && { sumInsured: "" }) });
   const setCategory = (n: number, category: string, categoryOther: string) => {
     const it = items[n], mf = isMfCategory(category === OTHER ? categoryOther : category);
     const payMode = mf ? (MF_PAY_MODES.includes(it.payMode) ? it.payMode : "Monthly") : isMf(it) ? "Yearly" : it.payMode;
-    set(n, { category, categoryOther, payMode, ...(mf && { sumInsured: "" }) });
+    set(n, changed(it, { category, categoryOther, payMode }));
   };
-  const anyMf = items.some(isMf), allMf = items.every(isMf);
+  const anyMf = items.some(isMf), allMf = items.every(isMf), allNoCover = items.every(noCover);
+  // Money column: Premium (insurance, PLI), Investment amount (mutual fund), Amount (other post office schemes).
+  const kind = (it: Item): AmountKind => (isMf(it) ? "investment" : postOfficeInvestment(it) ? "amount" : "premium");
   const head = (insurance: string, mf: string) => (allMf ? mf : anyMf ? `${insurance} / ${mf}` : insurance);
   const total = items.reduce((t, it) => t + paise(it.premium), 0);
-  const fmtValid = (iso: string) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
   const confirm = useConfirmBeforeSave(action, (form) => [
     ["Customer", String(form.get("customerName") ?? "")],
     ["Mobile", String(form.get("mobile") ?? "")],
-    ["Valid till", fmtValid(String(form.get("validUpto") ?? ""))],
+    ["Valid till", isoToDmy(String(form.get("validUpto") ?? ""))],
     ...items.filter((it) => it.insurer || it.productName || it.premium).map((it, n): [string, string] => [
-      `Product ${n + 1}`, `${it.category === OTHER ? it.categoryOther : it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${payModeLabel(it.payMode, isMf(it))}\n${inr(paise(it.premium))}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
+      `Product ${n + 1}`, `${it.category === OTHER ? it.categoryOther : it.category} · ${[it.insurer, it.productName].filter(Boolean).join(" ")} · ${payModeLabel(it.payMode, isMf(it))}\n${paise(it.premium) ? inr(paise(it.premium)) : "no amount"}${it.sumInsured ? ` · cover ${inr(paise(it.sumInsured))}` : ""}`,
     ]),
-    [allMf ? "Total investment" : "Total", inr(total)],
+    [allMf ? "Total investment" : "Total", total ? inr(total) : "—"],
   ]);
 
   return (
@@ -69,15 +81,15 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="validUpto">Valid till</Label>
-          <Input id="validUpto" name="validUpto" type="date" defaultValue={props.defaultValidUpto} />
+          <DmyDateInput name="validUpto" defaultValue={props.defaultValidUpto} />
         </div>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-40">Product</TableHead><TableHead>{head("Insurer", "AMC")}</TableHead><TableHead>{head("Plan", "Scheme")}</TableHead>
-            {!allMf && <TableHead className="w-36">Sum insured / cover</TableHead>}<TableHead className="w-36">{head("Pay mode", "SIP / Lumpsum")}</TableHead><TableHead className="w-32">{head("Premium", "Investment amount")}</TableHead>
+            <TableHead className="w-40">Product</TableHead><TableHead>{head("Insurer/scheme", "AMC")}</TableHead><TableHead>{head("Plan", "Scheme")}</TableHead>
+            {!allNoCover && <TableHead className="w-36">Sum insured / cover</TableHead>}<TableHead className="w-36">{head("Pay mode", "SIP / Lumpsum")}</TableHead><TableHead className="w-32">{amountHeader(items.map(kind))}</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
@@ -90,21 +102,21 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
                   <OtherSelect value={it.category} other={it.categoryOther} options={categories} label="Product"
                     onChange={(category, categoryOther) => setCategory(n, category, categoryOther)} />
                 </TableCell>
-                <TableCell><Input list={mf ? "amcs" : "insurers"} value={it.insurer} onChange={(e) => set(n, { insurer: e.target.value })} aria-label={mf ? "AMC" : "Insurer"} placeholder={mf ? "HDFC MF" : "Star Health"} /></TableCell>
+                <TableCell><Input list={mf ? "amcs" : "insurers"} value={it.insurer} onChange={(e) => set(n, changed(it, { insurer: e.target.value }))} aria-label={mf ? "AMC" : "Insurer/scheme"} placeholder={mf ? "HDFC MF" : "Star Health"} /></TableCell>
                 <TableCell>
                   <Input list={`plans-${n}`} value={it.productName} onChange={(e) => {
                     const plan = props.plans.find((p) => p.partner === it.insurer && p.name === e.target.value);
-                    set(n, { productName: e.target.value, ...(plan && !plan.payModes.includes(it.payMode) && { payMode: plan.payModes[0] }) });
+                    set(n, changed(it, { productName: e.target.value, ...(plan && !plan.payModes.includes(it.payMode) && { payMode: plan.payModes[0] }) }));
                   }} aria-label={mf ? "Scheme" : "Plan"} placeholder={mf ? "Flexi Cap SIP" : "Family Health Optima"} />
                   <datalist id={`plans-${n}`}>{props.plans.filter((p) => (p.productType === "MutualFund") === mf && (!it.insurer || p.partner === it.insurer)).map((p) => <option key={`${p.partner}-${p.name}`} value={p.name} />)}</datalist>
                 </TableCell>
-                {!allMf && <TableCell>{mf ? <span className="text-muted-foreground">—</span> : <Input value={it.sumInsured} onChange={(e) => set(n, { sumInsured: e.target.value })} aria-label="Sum insured" inputMode="decimal" placeholder="1000000" />}</TableCell>}
+                {!allNoCover && <TableCell>{noCover(it) ? <span className="text-muted-foreground">—</span> : <Input value={it.sumInsured} onChange={(e) => set(n, { sumInsured: e.target.value })} aria-label="Sum insured" inputMode="decimal" placeholder="1000000" />}</TableCell>}
                 <TableCell>
                   <NativeSelect value={it.payMode} onChange={(e) => set(n, { payMode: e.target.value as Frequency })} aria-label={mf ? "SIP or Lumpsum" : "Pay mode"} className="w-full">
                     {(mf ? MF_PAY_MODES : PAY_MODES).map((m) => <NativeSelectOption key={m} value={m}>{payModeLabel(m, mf)}</NativeSelectOption>)}
                   </NativeSelect>
                 </TableCell>
-                <TableCell><Input value={it.premium} onChange={(e) => set(n, { premium: e.target.value })} aria-label={mf ? "Investment amount" : "Premium"} inputMode="decimal" placeholder={mf ? "5000" : "18983"} /></TableCell>
+                <TableCell><Input value={it.premium} onChange={(e) => set(n, { premium: e.target.value })} aria-label={AMOUNT_WORD[kind(it)]} inputMode="decimal" placeholder={mf ? "5000" : amountOptional(it) ? "optional" : "18983"} /></TableCell>
                 <TableCell>
                   {items.length > 1 && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, i) => i !== n))}>Remove</Button>
@@ -114,10 +126,10 @@ export function QuotationForm(props: { customerId: string; leadId: string; custo
             );
           })}
           <TableRow>
-            <TableCell colSpan={allMf ? 4 : 5}>
+            <TableCell colSpan={allNoCover ? 4 : 5}>
               {items.length < 5 && <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, blank(categories[0] ?? OTHER)])}>Add product</Button>}
             </TableCell>
-            <TableCell className="font-semibold">{allMf ? "Total investment" : "Total payable"} {inr(total)}</TableCell>
+            <TableCell className="font-semibold">{allMf ? "Total investment" : "Total payable"} {total ? inr(total) : "—"}</TableCell>
             <TableCell />
           </TableRow>
         </TableBody>

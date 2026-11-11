@@ -66,10 +66,11 @@ afterAll(async () => {
 const save = (o: Record<string, string>) => saveJointAccount({ ok: false }, form({ proposalId, jointAccount: "on", secondHolderId: "", secondHolderName: "", secondHolderMobile: "", ...o }));
 
 describe("Joint account on a proposal (#12)", () => {
-  it("search finds customers by name, CIF or mobile, mobiles masked", async () => {
-    const byCif = await searchCustomers(other.cifNo);
-    expect(byCif.map((c) => c.id)).toContain(other.id);
-    expect(byCif.every((c) => c.mobile.includes("x"))).toBe(true);
+  it("search finds customers by name or mobile, mobiles masked; not by the internal CIF", async () => {
+    const byMobile = await searchCustomers(other.mobile);
+    expect(byMobile.map((c) => c.id)).toContain(other.id);
+    expect(byMobile.every((c) => c.mobile.includes("x"))).toBe(true);
+    expect((await searchCustomers(other.cifNo)).map((c) => c.id)).not.toContain(other.id);
     expect(await searchCustomers("a")).toEqual([]);
   });
 
@@ -83,7 +84,7 @@ describe("Joint account on a proposal (#12)", () => {
 
   it("a new person's mobile that belongs to a customer links that customer instead", async () => {
     const r = await save({ secondHolderName: "Someone", secondHolderMobile: other.mobile });
-    expect(r).toMatchObject({ ok: true, message: expect.stringContaining(other.cifNo) });
+    expect(r).toMatchObject({ ok: true, message: expect.stringContaining(other.name) });
     expect((await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } })).secondHolderId).toBe(other.id);
     expect((await save({ secondHolderName: "Someone", secondHolderMobile: first.mobile })).fieldErrors).toHaveProperty("secondHolderMobile");
   });

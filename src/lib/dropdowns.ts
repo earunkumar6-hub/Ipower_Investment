@@ -18,7 +18,7 @@ export const OTHER = "Other";
 /** Starting values for a new agency (the migrations add the same for existing ones). */
 export const DEFAULT_DROPDOWN_VALUES: Record<DropdownList, string[]> = {
   expensePurpose: ["Stationery", "Rent", "Utilities", "Travel", "Repairs", "Equipment", "Office", "Staff salary", "Marketing", "Pooja", "Customer incentives", "Bank charges"],
-  quotationCategory: ["Health", "Life", "Motor", "Personal accident", "Mutual fund"],
+  quotationCategory: ["Health", "Life", "Personal accident", "Mutual fund", "Post office"],
   attachmentQuotation: ["Health declaration", "Brochure"],
   attachmentProposal: ["Aadhaar", "PAN", "Photo", "Proposal form"],
   attachmentCustomer: ["Aadhaar", "PAN", "Policy document", "Bank passbook"],

@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isoToDmy } from "@/lib/dates";
 import { submitKeepingValues } from "@/lib/form";
 import { closePolicy } from "../actions";
 
@@ -25,7 +27,6 @@ export function ClosePolicyButton({ policyId, label, isMf, today, startDate, loc
   }, { ok: false });
   const title = isMf ? "Withdraw mutual fund" : "Premature closure";
   const locked = !!lockInUntil && lockInUntil > today; // ISO dates compare as text
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
   return (
     <>
@@ -39,8 +40,8 @@ export function ClosePolicyButton({ policyId, label, isMf, today, startDate, loc
             <input type="hidden" name="kind" value={isMf ? "withdraw" : "close"} />
             <div className="space-y-1.5">
               <Label htmlFor="closedOn">{isMf ? "Withdraw date" : "Closure date"}</Label>
-              <Input id="closedOn" name="closedOn" type="date" defaultValue={today} min={locked ? undefined : lockInUntil ?? startDate} max={today} disabled={locked} />
-              {lockInUntil && <p className={locked ? "text-sm text-destructive" : "text-xs text-muted-foreground"}>Lock-in runs until {fmt(lockInUntil)}{locked && "; it can't be closed before then"}.</p>}
+              <DmyDateInput name="closedOn" defaultValue={today} min={locked ? undefined : lockInUntil ?? startDate} max={today} disabled={locked} />
+              {lockInUntil && <p className={locked ? "text-sm text-destructive" : "text-xs text-muted-foreground"}>Lock-in runs until {isoToDmy(lockInUntil.slice(0, 10))}{locked && "; it can't be closed before then"}.</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="reason">Reason{isMf ? " (optional)" : ""}</Label>

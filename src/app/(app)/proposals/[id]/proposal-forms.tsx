@@ -6,9 +6,11 @@ import { DuplicateCustomerDialog } from "@/components/duplicate-customer-dialog"
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { isoToDmy } from "@/lib/dates";
 import { SIP_DAYS, sipDateLabel } from "@/lib/products";
 import { saveProposal } from "../actions";
 
@@ -73,8 +75,10 @@ function holderRows(form: FormData): SummaryRow[] {
  * (owner, 3 Nov 2026). Blank policy number: the details are saved and it stays in Proposals; with a number the
  * policy is issued as well.
  */
-export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, mf, insurance, children }: {
+export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, mf, insurance, amountLabel, children }: {
   proposalId: string; payModes: { value: string; label: string }[]; schemes: Option[]; showPpt: boolean;
+  /** Money box label: Premium / Investment amount / Amount (post office schemes other than PLI). */
+  amountLabel: string;
   /** Shown between the details and the policy number: the account holders panel. */
   children?: React.ReactNode;
   /** Mutual fund: a monthly (SIP) one needs the SIP date. */
@@ -85,7 +89,6 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
 }) {
   const life = !!insurance && !insurance.health;
   const star = (on: boolean) => on && <span className="text-destructive"> *</span>;
-  const amountLabel = mf ? "Investment amount" : "Premium";
   const startLabel = insurance ? "Date of commencement (DOC)" : "Start date";
   const [frequency, setFrequency] = useState(initial.frequency);
   const sip = mf && frequency === "Monthly";
@@ -103,7 +106,7 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
     ...(insurance ? [["Sum assured", form.get("sumInsured") ? inr(form.get("sumInsured")) : ""] as SummaryRow] : []),
     ["Term", form.get("term") ? `${form.get("term")} years` : ""],
     ["Premium paying term", form.get("premiumPayingTerm") ? `${form.get("premiumPayingTerm")} years` : ""],
-    [startLabel, String(form.get("startDate") ?? "")],
+    [startLabel, isoToDmy(String(form.get("startDate") ?? ""))],
     ...(sip ? [["SIP date", form.get("sipDay") ? sipDateLabel(Number(form.get("sipDay"))) : ""] as SummaryRow] : []),
     ...holderRows(form),
     ...(form.get("aadhaar") || form.get("pan") || form.get("consent") === "on"
@@ -139,7 +142,7 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
         {showPpt
           ? <div className="space-y-1.5"><Label htmlFor="premiumPayingTerm">Premium paying term (PPT, years){star(life)}</Label><Input id="premiumPayingTerm" name="premiumPayingTerm" inputMode="decimal" defaultValue={initial.ppt} /></div>
           : <input type="hidden" name="premiumPayingTerm" value="" />}
-        <div className="space-y-1.5"><Label htmlFor="startDate">{startLabel}{star(!!insurance)}</Label><Input id="startDate" name="startDate" type="date" defaultValue={initial.startDate} /></div>
+        <div className="space-y-1.5"><Label htmlFor="startDate">{startLabel}{star(!!insurance)}</Label><DmyDateInput name="startDate" defaultValue={initial.startDate} /></div>
         {sip ? (
           <div className="space-y-1.5">
             <Label htmlFor="sipDay">SIP date<span className="text-destructive"> *</span></Label>

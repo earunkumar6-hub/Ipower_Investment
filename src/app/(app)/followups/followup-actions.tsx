@@ -6,6 +6,7 @@ import { scheduleCall, type ActionResult } from "@/app/(app)/leads/actions";
 import { openCallReminder } from "@/components/call-reminder";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -56,7 +57,7 @@ export function ScheduleCallButton({ options }: { options: ScheduleOptions }) {
               </NativeSelect>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label htmlFor="sc-date">Date</Label><Input id="sc-date" name="callDate" type="date" defaultValue={tomorrowIst()} aria-invalid={!!err.callDate} /></div>
+              <div className="space-y-1.5"><Label htmlFor="sc-date">Date</Label><DmyDateInput id="sc-date" name="callDate" defaultValue={tomorrowIst()} aria-invalid={!!err.callDate} /></div>
               <div className="space-y-1.5"><Label htmlFor="sc-time">Time</Label><Input id="sc-time" name="callTime" type="time" defaultValue="11:00" /></div>
             </div>
             <div className="space-y-1.5"><Label htmlFor="sc-note">Note</Label><Textarea id="sc-note" name="note" rows={2} placeholder="e.g. Promised to pay by Friday" /></div>

@@ -38,7 +38,7 @@ export function callParty(c: CallWithParty) {
     return { kind: "renewal" as CallKind, name: c.policy.customer.name, mobile: c.policy.customer.mobile, forLabel: `Renewal ${c.policy.policyNumber}`, href: `/customers/${c.policy.customer.id}`, leadId: null };
   }
   if (c.proposal) return { kind: "proposal" as CallKind, name: c.proposal.customerName, mobile: c.proposal.mobile, forLabel: `Proposal ${c.proposal.proposalNo}`, href: `/proposals/${c.proposal.id}`, leadId: null };
-  if (c.customer) return { kind: "customer" as CallKind, name: c.customer.name, mobile: c.customer.mobile, forLabel: `Customer ${c.customer.cifNo}`, href: `/customers/${c.customer.id}`, leadId: null };
+  if (c.customer) return { kind: "customer" as CallKind, name: c.customer.name, mobile: c.customer.mobile, forLabel: "Customer", href: `/customers/${c.customer.id}`, leadId: null };
   return { kind: "lead" as CallKind, name: "—", mobile: "", forLabel: "—", href: "/followups", leadId: null };
 }
 

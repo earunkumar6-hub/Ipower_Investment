@@ -52,7 +52,7 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
                   <TableCell><Link href={`/proposals/${p.id}`} className="text-brand-700 hover:underline">{p.proposalNo}</Link></TableCell>
                   <TableCell>{holdersLabel(p)}</TableCell>
                   <TableCell>{p.insurer} – {p.productName}</TableCell>
-                  <TableCell className="text-right">{fmtINR(p.premium)}</TableCell>
+                  <TableCell className="text-right">{p.premium.gt(0) ? fmtINR(p.premium) : "—"}</TableCell>
                   <TableCell>{p.consentAt ? <StatusBadge tone="green">Taken</StatusBadge> : <StatusBadge tone="slate">Not ticked</StatusBadge>}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                 </TableRow>

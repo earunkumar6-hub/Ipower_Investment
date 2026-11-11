@@ -1,6 +1,6 @@
 import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, ProductType, RdStatus } from "@prisma/client";
 import type { Tone } from "@/components/status-badge";
-import { addDays } from "@/lib/dates";
+import { addDays, fmtDate } from "@/lib/dates";
 import { DEPOSIT_WHERE } from "@/lib/deposit-status";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
 import { MODE_LABEL } from "@/lib/payment-modes";
@@ -81,7 +81,7 @@ export function customerFilter(user: SessionUser, sp: Params) {
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
     ...ownerScope(user),
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { cifNo: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }] }),
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }] }),
     ...(filtered && { policies: { some: holdingWhere } }),
   };
   const filterLabel = [
@@ -132,11 +132,10 @@ export function renewalRange(tab: RenewalTab, sp: Params, today: Date): { from: 
   return null;
 }
 
-/** "1 Oct – 31 Oct 2026" */
+/** "01/10/2026 – 31/10/2026" */
 export const rangeLabel = (r: { from: Date; to: Date } | null) => {
   if (!r) return "any date";
-  const f = (d: Date, year: boolean) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", ...(year && { year: "numeric" }), timeZone: "UTC" });
-  return r.from.getTime() === r.to.getTime() ? f(r.from, true) : `${f(r.from, r.from.getUTCFullYear() !== r.to.getUTCFullYear())} – ${f(r.to, true)}`;
+  return r.from.getTime() === r.to.getTime() ? fmtDate(r.from) : `${fmtDate(r.from)} – ${fmtDate(r.to)}`;
 };
 export const RENEWAL_PRODUCTS = [["all", "All products"], ["insurance", "Insurance"], ["po", "Post office"], ["mf", "Mutual fund"]] as const;
 export const PAID_TO = [["all", "All"], ["pending", "Pending"], ["paid", "Paid"]] as const;

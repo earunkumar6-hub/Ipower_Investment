@@ -6,6 +6,7 @@ import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -137,7 +138,7 @@ export function AddSchemeForm({ productId, today }: { productId: string; today: 
       <div className="space-y-1.5"><Label htmlFor="scheme-name">Scheme / tenure</Label><Input id="scheme-name" name="name" placeholder="TD 2 years" className="w-40" /></div>
       <TenureInputs />
       <div className="space-y-1.5"><Label htmlFor="scheme-rate">Interest rate %</Label><Input id="scheme-rate" name="rate" inputMode="decimal" placeholder="7.0 – optional" className="w-28" /></div>
-      <div className="space-y-1.5"><Label htmlFor="scheme-from">Rate from</Label><Input id="scheme-from" name="effectiveFrom" type="date" defaultValue={today} className="w-36" /></div>
+      <div className="space-y-1.5"><Label htmlFor="scheme-from">Rate from</Label><DmyDateInput id="scheme-from" name="effectiveFrom" defaultValue={today} className="w-36" /></div>
       <Button type="submit" variant="outline" disabled={pending}>{pending ? "Adding…" : "+ Add scheme"}</Button>
       <div className="w-full"><FormError state={state} /></div>
     </form>
@@ -188,7 +189,7 @@ export function RateForm({ schemeId, today }: { schemeId: string; today: string 
     <form key={key} onSubmit={submitKeepingValues(action)} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="schemeId" value={schemeId} />
       <div className="space-y-1.5"><Label htmlFor={`r-${schemeId}`}>New rate %</Label><Input id={`r-${schemeId}`} name="rate" inputMode="decimal" placeholder="7.5" className="w-24" /></div>
-      <div className="space-y-1.5"><Label htmlFor={`f-${schemeId}`}>From</Label><Input id={`f-${schemeId}`} name="effectiveFrom" type="date" defaultValue={today} className="w-36" /></div>
+      <div className="space-y-1.5"><Label htmlFor={`f-${schemeId}`}>From</Label><DmyDateInput id={`f-${schemeId}`} name="effectiveFrom" defaultValue={today} className="w-36" /></div>
       <Button type="submit" size="sm" variant="outline" disabled={pending}>{pending ? "Saving…" : "Change rate"}</Button>
       <div className="w-full"><FormError state={state} /></div>
     </form>

@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { submitKeepingValues } from "@/lib/form";
 import { addBillGroupMember, addBillGroupMembers, createBillGroup, findPoliciesForGroup, type GroupPolicyHit, removeBillGroupMember } from "../group-actions";
 
-/** Admin / Super Admin: find a customer's policies by name, Customer ID, mobile or policy no., tick and add them. */
+/** Admin / Super Admin: find a customer's policies by name, mobile or policy no., tick and add them. */
 export function FindPoliciesToAdd({ billGroupId }: { billGroupId: string }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<GroupPolicyHit[] | null>(null);
@@ -52,7 +52,7 @@ export function FindPoliciesToAdd({ billGroupId }: { billGroupId: string }) {
       <form onSubmit={(e) => { e.preventDefault(); search(); }} className="flex items-end gap-2">
         <div className="space-y-1">
           <Label htmlFor="bg-find" className="text-xs">Find policies to add</Label>
-          <Input id="bg-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Customer name, Customer ID, mobile or policy no." className="h-8 w-96" />
+          <Input id="bg-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Customer name, mobile or policy no." className="h-8 w-96" />
         </div>
         <Button type="submit" size="sm" variant="outline" disabled={searching}>{searching ? "Searching…" : "Search"}</Button>
       </form>
@@ -69,7 +69,7 @@ export function FindPoliciesToAdd({ billGroupId }: { billGroupId: string }) {
                   <TableCell>
                     <input type="checkbox" aria-label={`Add ${h.policyNumber}`} disabled={!!h.problem} checked={picked.has(h.id)} onChange={(e) => toggle(h.id, e.target.checked)} />
                   </TableCell>
-                  <TableCell>{h.customer}<span className="block text-xs text-muted-foreground">{h.cifNo}</span></TableCell>
+                  <TableCell>{h.customer}</TableCell>
                   <TableCell>{h.policyNumber}</TableCell>
                   <TableCell className="whitespace-normal">{h.product}</TableCell>
                   <TableCell>{h.payMode}</TableCell>

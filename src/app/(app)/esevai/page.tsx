@@ -115,9 +115,7 @@ export default async function ESevaiPage() {
                 <TableCell><a href={`/api/esevai/${t.id}/pdf`} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">{t.txnNo}</a></TableCell>
                 <TableCell>{t.serviceName ?? t.serviceType.name}</TableCell>
                 <TableCell>
-                  {t.customer ? <Link href={`/customers/${t.customer.id}`} className="text-brand-700 hover:underline">{t.customer.name}</Link> : t.customerName ?? "—"}
-                  {t.customer && <span className="block text-xs text-muted-foreground">{t.customer.cifNo}</span>}
-                </TableCell>
+                  {t.customer ? <Link href={`/customers/${t.customer.id}`} className="text-brand-700 hover:underline">{t.customer.name}</Link> : t.customerName ?? "—"}                </TableCell>
                 <TableCell>{[t.providerRef, t.providerTxnNo].filter(Boolean).join(" · ") || "—"}</TableCell>
                 <TableCell className="text-right">{fmtINR(t.walletCost)}</TableCell>
                 <TableCell className="text-right">{fmtINR(t.customerAmount)}</TableCell>

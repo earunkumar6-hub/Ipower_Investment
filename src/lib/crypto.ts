@@ -1,22 +1,31 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 
-// Field encryption for sensitive values (bank details): AES-256-GCM with DATA_ENCRYPTION_KEY
+// Field encryption for sensitive values (bank details, Aadhaar / PAN): AES-256-GCM with DATA_ENCRYPTION_KEY
 // (32 random bytes, base64) from the environment. Stored as "v1:<iv>:<tag>:<ciphertext>" in base64 parts.
 
 export class EncryptionKeyMissing extends Error {
   constructor() {
-    super("Bank details can't be saved: DATA_ENCRYPTION_KEY is not set on the server (see deploy/INSTALL.md)");
+    // Callers swap "Bank details" for "Aadhaar / PAN" where that is what was being saved.
+    super("Bank details can't be saved: DATA_ENCRYPTION_KEY is not set (or is not a 32-byte base64 key) on the server. Set it in .env, then run `docker compose up -d` (see deploy/INSTALL.md)");
     this.name = "EncryptionKeyMissing";
   }
 }
 
-function key() {
+function validKey() {
   const raw = process.env.DATA_ENCRYPTION_KEY;
-  if (!raw || raw === "change-me") throw new EncryptionKeyMissing();
+  if (!raw || raw === "change-me") return null;
   const k = Buffer.from(raw, "base64");
-  if (k.length !== 32) throw new EncryptionKeyMissing();
+  return k.length === 32 ? k : null;
+}
+
+function key() {
+  const k = validKey();
+  if (!k) throw new EncryptionKeyMissing();
   return k;
 }
+
+/** False while DATA_ENCRYPTION_KEY is missing, still "change-me" or not 32 bytes: nothing sensitive can be saved. */
+export const encryptionKeyOk = () => validKey() !== null;
 
 export function encryptJson(value: unknown): string {
   const iv = randomBytes(12);

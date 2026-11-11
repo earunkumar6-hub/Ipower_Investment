@@ -7,6 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { emptyPay, type IntoAccount, inr, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -93,11 +94,11 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
         )}
         <div className="space-y-1.5">
           <Label htmlFor="receiptDate">Bill date</Label>
-          <Input id="receiptDate" type="date" value={receiptDate} max={today} required onChange={(e) => setReceiptDate(e.target.value)} aria-invalid={!!err.receiptDate} />
+          <DmyDateInput id="receiptDate" value={receiptDate} max={today} required onChange={setReceiptDate} aria-invalid={!!err.receiptDate} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="txnDate">Transaction date</Label>
-          <Input id="txnDate" type="date" value={txnDate} max={today} required onChange={(e) => setTxnDate(e.target.value)} aria-invalid={!!err.txnDate} />
+          <DmyDateInput id="txnDate" value={txnDate} max={today} required onChange={setTxnDate} aria-invalid={!!err.txnDate} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="amount">Amount received (₹)</Label>

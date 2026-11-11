@@ -8,10 +8,12 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { useConfirmBeforeSave, type SummaryRow } from "@/components/confirm-save";
 import { DuplicateCustomerDialog } from "@/components/duplicate-customer-dialog";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { BANK_FIELDS, fmtTenure, isHealthCover, isPostal, needsSipDay, payModeLabel, PRODUCT_TYPE_LABEL, SIP_DAYS, sipDateLabel, type BankField } from "@/lib/products";
+import { isoToDmy } from "@/lib/dates";
+import { BANK_FIELDS, BILLED_FROM_AMOUNT, fmtTenure, isHealthCover, isPostal, isPostalInvestmentType, needsSipDay, payModeLabel, PRODUCT_TYPE_LABEL, SIP_DAYS, sipDateLabel, type BankField } from "@/lib/products";
 import { addProductDirect } from "../../actions";
 
 export type CatalogueProduct = {
@@ -26,7 +28,7 @@ const addMonthsIso = (iso: string, m: number) => {
   const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + m, d.getUTCDate()));
   return t.toISOString().slice(0, 10);
 };
-const fmt = (iso: string) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "—");
+const fmt = (iso: string) => isoToDmy(iso) || "—";
 const rateOn = (rates: { rate: string; from: string }[], on: string) => [...rates].filter((r) => r.from <= on).sort((a, b) => b.from.localeCompare(a.from))[0]?.rate ?? null;
 
 function Field({ label, name, required, error, children }: { label: string; name: string; required?: boolean; error?: string; children?: React.ReactNode }) {
@@ -60,6 +62,7 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
   // Insurance with a policy number needs sum assured; life cover also term and premium paying term (3 Nov 2026).
   const insurance = product?.productType === "Insurance";
   const postal = !!product && isPostal(product); // holder CIF from the post office (owner, 4 Nov 2026)
+  const amountOptional = isPostalInvestmentType(product?.productType); // every post office scheme: amount may be blank (owner, 11 Nov 2026)
   const [dup, setDup] = useState<ActionResult["duplicate"]>();
   const life = insurance && !isHealthCover({ invoiceRule: product?.invoiceRule });
 
@@ -125,14 +128,14 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
       {product && (
         <>
           <div className="grid grid-cols-4 gap-3">
-            <Field label={mf ? "Investment amount" : "Amount / premium"} name="amount" required error={err.amount}><Input id="amount" name="amount" inputMode="decimal" placeholder={mf ? "5000" : "100000"} /></Field>
+            <Field label={mf ? "Investment amount" : amountOptional ? "Amount" : "Amount / premium"} name="amount" required={!amountOptional} error={err.amount}><Input id="amount" name="amount" inputMode="decimal" placeholder={mf ? "5000" : amountOptional ? (product && BILLED_FROM_AMOUNT[product.productType] ? "needed with the policy no." : "optional") : "100000"} /></Field>
             <Field label={mf ? "SIP / Lumpsum" : "Pay mode"} name="frequency" required error={err.frequency}>
               <NativeSelect id="frequency" name="frequency" value={payMode} onChange={(e) => setFrequency(e.target.value)} className="w-full">
                 {product.payModes.map((m) => <NativeSelectOption key={m} value={m}>{payModeLabel(m, mf)}</NativeSelectOption>)}
               </NativeSelect>
             </Field>
             <Field label="Date of commencement" name="startDate" required error={err.startDate}>
-              <Input id="startDate" name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <DmyDateInput name="startDate" value={startDate} onChange={setStartDate} />
             </Field>
             {sip ? (
               <Field label="SIP date" name="sipDay" required error={err.sipDay}>
@@ -173,7 +176,8 @@ export function AddProductForm({ customerId, customerName, products, today }: { 
                     <NativeSelectOption value=""></NativeSelectOption>
                     {f.options.map((o) => <NativeSelectOption key={o} value={o}>{o}</NativeSelectOption>)}
                   </NativeSelect>
-                ) : <Input id={`cf_${f.id}`} name={`cf_${f.id}`} type={f.type === "Date" ? "date" : "text"} inputMode={f.type === "Number" ? "decimal" : undefined} />}
+                ) : f.type === "Date" ? <DmyDateInput name={`cf_${f.id}`} />
+                  : <Input id={`cf_${f.id}`} name={`cf_${f.id}`} inputMode={f.type === "Number" ? "decimal" : undefined} />}
               </Field>
             ))}
           </div>

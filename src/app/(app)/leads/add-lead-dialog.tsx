@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import { useConfirmBeforeSave } from "@/components/confirm-save";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { isoToDmy } from "@/lib/dates";
 import { LEAD_STATUS_LABEL } from "@/lib/lead-labels";
 import { createLead, editLead, type ActionResult } from "./actions";
 import { EMPTY_LEAD, Field, LeadDetailFields, summarizeLead, type LeadDetails } from "./lead-fields";
@@ -16,7 +18,7 @@ import { EMPTY_LEAD, Field, LeadDetailFields, summarizeLead, type LeadDetails } 
 const fmtCall = (form: FormData) => {
   const d = String(form.get("callDate") ?? ""), t = String(form.get("callTime") ?? "");
   if (!d) return "";
-  const day = new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  const day = isoToDmy(d) || d;
   return t ? `${day}, ${new Date(`1970-01-01T${t}:00Z`).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" })}` : day;
 };
 
@@ -81,7 +83,11 @@ export function AddLeadDialog({ owners, products }: { owners: { id: string; name
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <input type="hidden" name="reason" value="" />
-                <Field label={status === "CallBack" ? "Call back on" : "First call (optional)"} name="callDate" type="date" error={err.callDate} required={status === "CallBack"} />
+                <div className="space-y-1.5">
+                  <Label htmlFor="callDate">{status === "CallBack" ? <>Call back on<span className="text-destructive"> *</span></> : "First call (optional)"}</Label>
+                  <DmyDateInput name="callDate" error={err.callDate} required={status === "CallBack"} />
+                  {err.callDate && <p className="text-xs text-destructive">{err.callDate}</p>}
+                </div>
                 <Field label="Time" name="callTime" type="time" />
               </div>
             )}

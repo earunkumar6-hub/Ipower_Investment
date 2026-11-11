@@ -7,7 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { createPolicyWithSchedule } from "@/lib/policies";
-import { isHealthCover, isPostal, missingInsuranceDetails, needsSipDay, rateOn } from "@/lib/products";
+import { BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, missingInsuranceDetails, needsSipDay, rateOn } from "@/lib/products";
 import { audit } from "@/lib/audit";
 import { EncryptionKeyMissing } from "@/lib/crypto";
 import { AADHAAR_RE, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
@@ -98,7 +98,8 @@ const detailsSchema = z.object({
   schemeId: z.string().default(""),
   sipDay: z.string().default(""),
   // Premium and sum assured can be corrected on the proposal (sent only by the proposal screen; absent = keep).
-  premium: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter the premium").refine((x) => Number(x) > 0, "Premium must be more than 0").optional(),
+  // Checked after the proposal is loaded: RD, TD, KVP, NSC, SCSS and MIS may leave it blank (owner, 10 Nov 2026).
+  premium: z.string().trim().optional(),
   sumInsured: z.union([z.literal(""), z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter the sum assured as an amount")]).optional(),
 });
 
@@ -113,6 +114,14 @@ export async function savePolicyDetails(_: ActionResult, form: FormData): Promis
     const r = await loadProposal(tx, user, v.proposalId);
     if ("error" in r) return { ok: false, error: r.error };
     if (r.p.status === "Issued") return { ok: false, error: "Policy already issued" };
+    // Premium: blank means none for every post office scheme (stored as 0), an amount above 0 for everything else (PLI included).
+    let premium: string | undefined;
+    if (v.premium !== undefined) {
+      const optional = isPostalInvestmentType(r.p.productType);
+      if (!/^\d+(\.\d{1,2})?$/.test(v.premium) && !(optional && v.premium === "")) return { ok: false, error: optional ? "Enter the amount" : "Enter the premium" };
+      if (!optional && Number(v.premium) <= 0) return { ok: false, error: "Premium must be more than 0" };
+      premium = v.premium || "0";
+    }
     const scheme = v.schemeId && r.p.productId ? await tx.scheme.findFirst({ where: { id: v.schemeId, productId: r.p.productId } }) : null;
     if (v.schemeId && !scheme) return { ok: false, error: "Pick a scheme of this product" };
     // Mutual fund SIP: the day of the month it is debited (1–28) is required; nothing else keeps one.
@@ -121,7 +130,7 @@ export async function savePolicyDetails(_: ActionResult, form: FormData): Promis
     if (sip && !(Number.isInteger(sipDay) && sipDay! >= 1 && sipDay! <= 28)) return { ok: false, error: "Pick the SIP date (1–28)" };
     await tx.proposal.update({
       where: { id: r.p.id },
-      data: { sipDay, ...(v.premium && { premium: v.premium }), ...(v.sumInsured !== undefined && { sumInsured: v.sumInsured || null }), frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
+      data: { sipDay, ...(premium !== undefined && { premium }), ...(v.sumInsured !== undefined && { sumInsured: v.sumInsured || null }), frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
     });
     return { ok: true };
   });
@@ -153,6 +162,9 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
       if (p.status === "Issued") return { ok: false, error: "Policy already issued" };
       if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
       if (needsSipDay(p.productType, p.frequency) && !p.sipDay) return { ok: false, error: "Save the SIP date first" };
+      // RD, SSA and PPF bills are made from the premium, so it can't be left blank once the policy number is entered.
+      const billedFrom = BILLED_FROM_AMOUNT[p.productType];
+      if (billedFrom && !p.premium.gt(0)) return { ok: false, error: `Fill in before the policy number: amount (${billedFrom})` };
       if (p.productType === "Insurance") {
         // Insurance: DOC, sum assured, plan, premium (+ term and premium paying term for life cover) before the number.
         const plan = p.productId ? await tx.product.findUnique({ where: { id: p.productId }, include: { schemes: { where: { active: true }, select: { id: true } } } }) : null;
@@ -384,7 +396,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
       const match = await customerByMobile(tx, user.tenantId, v.secondHolderMobile);
       if (match) {
         second = { id: match.id, name: match.name, cifNo: match.cifNo };
-        message = `This mobile belongs to customer ${match.name} (${match.cifNo}); linked them as the second holder`;
+        message = `This mobile belongs to customer ${match.name}; linked them as the second holder`;
       }
     }
     if (second && second.id === p.customerId) return { ok: false, error: "The second holder can't be the first holder" };
@@ -409,7 +421,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
     });
     await audit(tx, user, {
       entity: "Proposal", entityId: p.id, action: "Updated",
-      summary: `${p.proposalNo}: joint account – second holder ${second ? `${second.name} (${second.cifNo})` : `${v.secondHolderName} (new customer on issue)`}`
+      summary: `${p.proposalNo}: joint account – second holder ${second ? second.name : `${v.secondHolderName} (new customer on issue)`}`
         + (postal ? ` · company CIFs ${v.firstHolderCif || "—"} / ${v.secondHolderCif || "—"}` : "") + folioText,
     });
     return { ok: true, message };
@@ -418,7 +430,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
   return res;
 }
 
-/** Second-holder picker: customers matching a name, CIF or mobile (mobile shown masked). */
+/** Second-holder picker: customers matching a name or mobile (mobile shown masked). */
 export async function searchCustomers(q: string): Promise<{ id: string; name: string; cifNo: string; mobile: string }[]> {
   const user = await authorize("Proposal.Create");
   const text = q.trim();
@@ -426,7 +438,7 @@ export async function searchCustomers(q: string): Promise<{ id: string; name: st
   const rows = await db.customer.findMany({
     where: {
       tenantId: user.tenantId,
-      OR: [{ name: { contains: text, mode: "insensitive" } }, { cifNo: { contains: text, mode: "insensitive" } }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }],
+      OR: [{ name: { contains: text, mode: "insensitive" } }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }],
     },
     select: { id: true, name: true, cifNo: true, mobile: true },
     orderBy: { name: "asc" },

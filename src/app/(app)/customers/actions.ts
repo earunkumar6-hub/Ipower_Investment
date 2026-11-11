@@ -16,7 +16,7 @@ import { deleteStoredFile } from "@/lib/attachments";
 import { CUSTOMER_IN_USE, inUseReason } from "@/lib/customer-delete";
 import { deletePhoto, photoProblem, savePhoto } from "@/lib/photos";
 import { createPolicyWithSchedule } from "@/lib/policies";
-import { BANK_FIELDS, isHealthCover, isPostal, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
+import { BANK_FIELDS, BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
@@ -83,7 +83,7 @@ const addSchema = z.object({
   productId: z.string().min(1, "Pick the product"),
   schemeId: z.string().default(""),
   policyNumber: z.string().trim().toUpperCase().max(40).default(""),
-  amount: money.refine((v) => Number(v) > 0, "Amount must be more than 0"),
+  amount: z.union([z.literal(""), money]), // may be blank for RD, TD, KVP, NSC, SCSS and MIS; checked against the product below
   sumAssured: z.union([z.literal(""), money]).default(""),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the date of commencement").transform((v) => new Date(`${v}T00:00:00Z`)),
   frequency: z.enum(Frequency, "Pick the pay mode"),
@@ -121,6 +121,15 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
   if (product.schemes.length > 0 && !scheme) return fail("Pick the scheme", { schemeId: "Required" });
   if (!product.payModes.includes(v.frequency)) return fail(`${product.name} is paid ${product.payModes.map((m) => PAY_MODE_LABEL[m].toLowerCase()).join(" or ")}`, { frequency: "Not allowed" });
   if (v.startDate > addMonths(istToday(), 1)) return fail("Date of commencement can't be more than a month ahead", { startDate: "Too far ahead" });
+  // Amount / premium: needed for everything except the post office schemes (owner, 11 Nov 2026 – PLI is insurance and
+  // still needs it), where blank means none (stored as 0).
+  const amountOptional = isPostalInvestmentType(product.productType);
+  if (!v.amount && !amountOptional) return fail("Enter the amount", { amount: "Required" });
+  if (v.amount && Number(v.amount) <= 0 && !amountOptional) return fail("Amount must be more than 0", { amount: "Too small" });
+  const amount = v.amount || "0";
+  // RD, SSA and PPF bills are made from it, so it can't be blank once the policy number is entered.
+  const billedFrom = BILLED_FROM_AMOUNT[product.productType];
+  if (v.policyNumber && billedFrom && !(Number(amount) > 0)) return fail(`Enter the amount: the bills are made from it (${billedFrom})`, { amount: "Required" });
   // Mutual fund SIP: the SIP date (1–28) is required; bills fall on it.
   const sipDay = needsSipDay(product.productType, v.frequency) ? Number(v.sipDay) : null;
   if (sipDay !== null && !(Number.isInteger(sipDay) && sipDay >= 1 && sipDay <= 28)) return fail("Pick the SIP date (1–28)", { sipDay: "Required" });
@@ -135,7 +144,7 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
   if (v.policyNumber && product.productType === "Insurance") {
     const missing = missingInsuranceDetails({
       health: isHealthCover({ invoiceRule: product.invoiceRule }), hasPlans: product.schemes.length > 0, pptShown: shown("premiumPayingTerm"),
-      startDate: v.startDate, sumAssured: v.sumAssured, schemeId: scheme?.id, termMonths, premiumPayingTermMonths: v.premiumPayingTerm, premiumOk: Number(v.amount) > 0,
+      startDate: v.startDate, sumAssured: v.sumAssured, schemeId: scheme?.id, termMonths, premiumPayingTermMonths: v.premiumPayingTerm, premiumOk: Number(amount) > 0,
     });
     if (missing.length) {
       const field: Record<string, string> = { "sum assured": "sumAssured", term: "term", "premium paying term": "premiumPayingTerm", plan: "schemeId" };
@@ -198,7 +207,7 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
   try {
     if (v.policyNumber) {
       const policy = await db.$transaction((tx) => createPolicyWithSchedule(tx, {
-        tenantId: user.tenantId, customerId: customer.id, ownerId: customer.ownerId, policyNumber: v.policyNumber, premiumAmount: v.amount,
+        tenantId: user.tenantId, customerId: customer.id, ownerId: customer.ownerId, policyNumber: v.policyNumber, premiumAmount: amount,
         sumAssured: v.sumAssured || null, invoiceRule: product.invoiceRule, ...details,
       }));
       revalidatePath("/", "layout");
@@ -208,7 +217,7 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
     const proposal = await db.$transaction(async (tx) => tx.proposal.create({
       data: {
         tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), customerId: customer.id, customerName: customer.name,
-        mobile: customer.mobile, insurer: partner, premium: v.amount, sumInsured: v.sumAssured || null, status: "Draft", ownerId: customer.ownerId, ...proposalDetails,
+        mobile: customer.mobile, insurer: partner, premium: amount, sumInsured: v.sumAssured || null, status: "Draft", ownerId: customer.ownerId, ...proposalDetails,
       },
     }));
     revalidatePath("/", "layout");
@@ -267,7 +276,7 @@ export async function changeCustomerPhoto(_: ActionResult, form: FormData): Prom
   const name = await savePhoto(photo!, c.id, c.photoPath);
   await db.$transaction(async (tx) => {
     await tx.customer.update({ where: { id: c.id }, data: { photoPath: name } });
-    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Photo", summary: `${c.cifNo} ${c.name}: photo ${c.photoPath ? "changed" : "added"}` });
+    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Photo", summary: `${c.name}: photo${c.photoPath ? "changed" : "added"}` });
   });
   revalidatePath(`/customers/${c.id}`);
   return { ok: true };
@@ -303,7 +312,7 @@ export async function saveCustomerIdentity(_: ActionResult, form: FormData): Pro
       if (!pan && !aadhaar) {
         if (!consentNow) return { ok: false, error: "Enter the Aadhaar or PAN to save" };
         await tx.customer.update({ where: { id: c.id }, data: consent });
-        await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Consent", summary: `${c.name} (${c.cifNo}): customer consent taken` });
+        await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Consent", summary: `${c.name}: customer consent taken` });
         return { ok: true, message: "Consent recorded" };
       }
       const data = identityData(aadhaar, pan);
@@ -312,7 +321,7 @@ export async function saveCustomerIdentity(_: ActionResult, form: FormData): Pro
       await tx.customer.update({ where: { id: c.id }, data: { ...data, ...consent } });
       await audit(tx, user, {
         entity: "Customer", entityId: c.id, action: "Updated",
-        summary: `${c.name} (${c.cifNo}): ${[aadhaar && `Aadhaar XXXX-XXXX-${aadhaar.slice(-4)}`, pan && `PAN ${maskPan(pan)}`].filter(Boolean).join(" · ")}${consentNow ? " · consent taken" : ""}`,
+        summary: `${c.name}: ${[aadhaar && `Aadhaar XXXX-XXXX-${aadhaar.slice(-4)}`, pan && `PAN ${maskPan(pan)}`].filter(Boolean).join(" · ")}${consentNow ? " · consent taken" : ""}`,
       });
       return { ok: true };
     });
@@ -348,7 +357,7 @@ export async function deleteCustomer(customerId: string, confirmText: string): P
     await tx.call.deleteMany({ where: { customerId: c.id } });
     await tx.customerMobile.deleteMany({ where: { customerId: c.id } });
     await tx.customer.delete({ where: { id: c.id } });
-    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Deleted", summary: `${c.cifNo} ${c.name}: customer deleted (no records)` });
+    await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Deleted", summary: `${c.name}: customer deleted (no records)` });
     return { ok: true as const, files, photo: c.photoPath, name: c.name };
   });
   if (!res.ok) return res;

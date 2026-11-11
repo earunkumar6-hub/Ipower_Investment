@@ -20,8 +20,9 @@ export type QuoteItemRow = {
 };
 
 /** Quoted products with a "Selected" tick each; the ticked ones become proposals. */
-/** `mf`: how many rows are mutual funds – "all" swaps to SIP / Lumpsum / Investment amount wording and drops Cover. */
-export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "none" }: { quotationId: string; items: QuoteItemRow[]; total: string; canDecide: boolean; mf?: "all" | "some" | "none" }) {
+/** `mf`: how many rows are mutual funds – "all" swaps to SIP / Lumpsum / Investment amount wording. `showCover`: false when no row has cover to show (mutual funds, RD / TD / KVP / NSC / SCSS / MIS only). */
+/** `amountLabel`: header of the money column (Premium / Investment amount / Amount, or "Premium / amount" when mixed). */
+export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "none", showCover = true, amountLabel }: { quotationId: string; items: QuoteItemRow[]; total: string; canDecide: boolean; mf?: "all" | "some" | "none"; showCover?: boolean; amountLabel?: string }) {
   const open = items.filter((i) => !i.proposal);
   const [ticked, setTicked] = useState<string[]>(() => open.filter((i) => i.decision !== "NotAccepted").map((i) => i.id));
   const [pending, start] = useTransition();
@@ -33,8 +34,8 @@ export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "no
         <TableHeader>
           <TableRow>
             {canDecide && <TableHead className="w-20">Selected</TableHead>}
-            <TableHead>Product</TableHead><TableHead>Partner · plan</TableHead>{mf !== "all" && <TableHead className="text-right">Cover</TableHead>}<TableHead>{mf === "all" ? "SIP / Lumpsum" : "Pay mode"}</TableHead>
-            <TableHead className="text-right">{mf === "all" ? "Investment amount" : mf === "some" ? "Premium / amount" : "Premium"}</TableHead><TableHead>Proposal</TableHead>
+            <TableHead>Product</TableHead><TableHead>Partner · plan</TableHead>{showCover && <TableHead className="text-right">Cover</TableHead>}<TableHead>{mf === "all" ? "SIP / Lumpsum" : "Pay mode"}</TableHead>
+            <TableHead className="text-right">{amountLabel ?? (mf === "all" ? "Investment amount" : mf === "some" ? "Premium / amount" : "Premium")}</TableHead><TableHead>Proposal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -47,7 +48,7 @@ export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "no
               )}
               <TableCell>{i.category}</TableCell>
               <TableCell className="whitespace-normal">{i.plan}</TableCell>
-              {mf !== "all" && <TableCell className="text-right">{i.cover}</TableCell>}
+              {showCover && <TableCell className="text-right">{i.cover}</TableCell>}
               <TableCell>{i.payMode}</TableCell>
               <TableCell className="text-right font-medium">{i.premium}</TableCell>
               <TableCell>
@@ -59,7 +60,7 @@ export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "no
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={(canDecide ? 5 : 4) - (mf === "all" ? 1 : 0)} className="text-right">{mf === "all" ? "Total investment" : "Total payable"}</TableCell>
+            <TableCell colSpan={(canDecide ? 5 : 4) - (showCover ? 0 : 1)} className="text-right">{mf === "all" ? "Total investment" : "Total payable"}</TableCell>
             <TableCell className="text-right font-semibold">{total}</TableCell>
             <TableCell />
           </TableRow>

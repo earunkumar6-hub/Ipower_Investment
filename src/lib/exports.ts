@@ -459,10 +459,10 @@ export const REPORTS: Record<string, Report> = {
           {
             name: "Entries",
             totals: true,
-            columns: [{ header: "Date", type: "date" }, { header: "Time" }, { header: "No." }, { header: "Service" }, { header: "Customer", width: 22 }, { header: "CIF" }, { header: "Mobile" },
+            columns: [{ header: "Date", type: "date" }, { header: "Time" }, { header: "No." }, { header: "Service" }, { header: "Customer", width: 22 }, { header: "Mobile" },
               { header: "Service no." }, { header: "Transaction no." }, { header: "Paid / deducted", type: "money" }, { header: "Collected", type: "money" }, { header: "Service charge", type: "money" },
               { header: "Mode" }, { header: "Payment ref." }, { header: "Paid from" }, { header: "Notes", width: 24 }],
-            rows: txns.map((t) => [t.txnDate, serviceTime(t), t.txnNo, t.serviceName ?? t.serviceType.name, t.customer?.name ?? t.customerName, t.customer?.cifNo, t.customerMobile,
+            rows: txns.map((t) => [t.txnDate, serviceTime(t), t.txnNo, t.serviceName ?? t.serviceType.name, t.customer?.name ?? t.customerName, t.customerMobile,
               t.providerRef, t.providerTxnNo, t.walletCost, t.customerAmount, t.profit,
               t.paymentMode, t.reference, `${t.paidVia === "Wallet" ? "" : t.paidVia === "GPay" ? "GPay direct · " : "Net banking direct · "}${account(t.paidFromAccountId)}`, t.notes]),
           },

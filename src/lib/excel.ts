@@ -15,9 +15,9 @@ export type Sheet = { name: string; columns: Col[]; rows: Cell[][]; totals?: boo
 const FORMAT: Record<ColType, string | undefined> = {
   text: undefined,
   money: "#,##0.00",
-  date: "dd-mmm-yyyy",
+  date: "dd/mm/yyyy",
   dmy: "dd/mm/yyyy",
-  datetime: "dd-mmm-yyyy h:mm AM/PM",
+  datetime: "dd/mm/yyyy h:mm AM/PM",
 };
 const IST_OFFSET_MS = 5.5 * 3_600_000;
 

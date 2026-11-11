@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -46,7 +47,7 @@ export function CommissionForm({ sources, banks, month, today }: { sources: stri
           </NativeSelect>
         </div>
         <div className="space-y-1.5"><Label htmlFor="cm-ref">UTR / transaction no.</Label><Input id="cm-ref" name="reference" aria-invalid={!!err.reference} /></div>
-        <div className="space-y-1.5"><Label htmlFor="cm-date">Date received</Label><Input id="cm-date" name="receivedOn" type="date" defaultValue={today} max={today} aria-invalid={!!err.receivedOn} /></div>
+        <div className="space-y-1.5"><Label htmlFor="cm-date">Date received</Label><DmyDateInput id="cm-date" name="receivedOn" defaultValue={today} max={today} aria-invalid={!!err.receivedOn} /></div>
         <div className="space-y-1.5"><Label htmlFor="cm-note">Note</Label><Input id="cm-note" name="note" /></div>
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}

@@ -60,7 +60,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
                   <TableCell><Link href={`/quotations/${q.id}`} className="text-brand-700 hover:underline">{q.quoteNo}</Link></TableCell>
                   <TableCell>{q.customerName}</TableCell>
                   <TableCell className="whitespace-normal">{q.items.map((i) => `${i.insurer} ${i.productName}`).join(", ")}</TableCell>
-                  <TableCell className="text-right">{fmtINR(q.total)}</TableCell>
+                  <TableCell className="text-right">{q.total.gt(0) ? fmtINR(q.total) : "—"}</TableCell>
                   <TableCell>{fmtDate(q.validUpto)}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                 </TableRow>

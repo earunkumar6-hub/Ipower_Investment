@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { emptyPay, type IntoAccount, paise, payFormFields, PaymentFields, payReady, type PayValue } from "@/components/payment-fields";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isoDate, istToday } from "@/lib/dates";
@@ -57,7 +58,7 @@ export function DirectBillForm({ modes, banks, accounts, receivedBy }: { modes: 
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="billDate">Bill date</Label>
-          <Input id="billDate" type="date" value={f.billDate} max={today} required onChange={set("billDate")} aria-invalid={!!err.billDate} />
+          <DmyDateInput id="billDate" value={f.billDate} max={today} required onChange={(billDate) => setF({ ...f, billDate })} aria-invalid={!!err.billDate} />
         </div>
         <div className="space-y-1.5">
           <Label>Received by</Label>

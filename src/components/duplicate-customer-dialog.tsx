@@ -22,8 +22,7 @@ export function DuplicateCustomerDialog({ duplicate, onClose }: { duplicate: Dup
             <DialogDescription>The same {d.matchedOn.length > 1 ? "numbers" : "number"} can&apos;t be saved for a second person. Open the existing record, or go back and correct it.</DialogDescription>
             <dl className="divide-y rounded-lg border text-sm">
               {[
-                ["Customer ID", d.cifNo ?? (d.proposalId ? "Not a customer yet (on a proposal)" : "—")],
-                ["Name", d.name],
+                ["Name", `${d.name}${!d.customerId && d.proposalId ? " – not a customer yet (on a proposal)" : ""}`],
                 ["Mobile", d.mobile || "—"],
                 ["Matched on", d.matchedOn.join(" + ")],
               ].map(([k, v]) => (

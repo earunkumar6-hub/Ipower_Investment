@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { PO_SCHEMES, PRODUCT_SHORT, RD_STATUSES, RENEWAL_PRODUCTS, type receiptFilter } from "@/lib/lists";
@@ -15,7 +16,6 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
       <input type="hidden" name="tab" value={tab} />
       {f.deposit !== "all" && <input type="hidden" name="deposit" value={f.deposit} />}
       <Input id="rf-q" name="q" defaultValue={f.q} placeholder="Name or mobile" aria-label="Name or mobile" className={cls} />
-      <Input id="rf-cif" name="cif" defaultValue={f.cif} placeholder="Customer ID (CIF)" aria-label="Customer ID" className={cls} />
       <NativeSelect name="group" defaultValue={f.group ?? ""} aria-label="Bill group" className={cls}>
         <NativeSelectOption value="">Any bill group</NativeSelectOption>
         {groups.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}
@@ -45,8 +45,8 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
         <NativeSelectOption value="Saved">Saved</NativeSelectOption>
         <NativeSelectOption value="Cancelled">Cancelled</NativeSelectOption>
       </NativeSelect>
-      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">From</span><Input id="rf-from" type="date" name="from" defaultValue={f.from} className={cls} /></label>
-      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">To</span><Input id="rf-to" type="date" name="to" defaultValue={f.to} className={cls} /></label>
+      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">From</span><DmyDateInput id="rf-from" name="from" defaultValue={f.from} className={cls} /></label>
+      <label className="flex items-center gap-1"><span className="shrink-0 text-muted-foreground">To</span><DmyDateInput id="rf-to" name="to" defaultValue={f.to} className={cls} /></label>
       <div className="flex gap-2">
         <Button type="submit" size="sm" variant="outline">Filter</Button>
         {f.active && <Link href={`/receipts?tab=${tab}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Clear</Link>}

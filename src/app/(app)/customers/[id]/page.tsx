@@ -61,7 +61,6 @@ export default async function CustomerPage({ params, searchParams }: { params: P
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{c.name}</h2>
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{c.cifNo}</span>
             {c.consentAt && <StatusBadge tone="green">Consent taken {fmtDate(c.consentAt)}</StatusBadge>}
             {nextFollowUp && <StatusBadge tone={nextFollowUp.dueAt <= new Date() ? "red" : "orange"}>Follow-up due {fmtDateTime(nextFollowUp.dueAt)}</StatusBadge>}
             {canEdit && <EditCustomerButton startOpen={openEdit} customer={{ id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) }} />}
@@ -92,7 +91,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           plan: p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} · ${p.productName}${p.schemeName ? ` · ${p.schemeName}` : ""}` : p.schemeName ?? p.productName,
           cover: p.sumAssured ? fmtINR(p.sumAssured) : null,
           policyNumber: p.policyNumber,
-          amount: fmtINR(p.premiumAmount),
+          amount: p.premiumAmount.gt(0) ? fmtINR(p.premiumAmount) : "—",
           per: `${PER_LABEL[p.frequency]}${p.sipDay ? ` · SIP on ${ordinal(p.sipDay)}` : ""}`,
           rate: p.rateAtOpen ? `${p.rateAtOpen.toFixed(2)}%` : "—",
           commenced: fmtDate(p.startDate),
@@ -126,9 +125,9 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                   <TableRow key={p.id}>
                     <TableCell>{p.policyNumber}</TableCell>
                     <TableCell>{p.partner} · {p.productName}</TableCell>
-                    <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link> <span className="text-xs text-muted-foreground">{p.customer.cifNo}</span></TableCell>
+                    <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link></TableCell>
                     <TableCell>{isPostal(p) ? `${p.firstHolderCif ?? "—"} / ${p.secondHolderCif ?? "—"}` : p.folioNo ? `Folio ${p.folioNo}` : "—"}</TableCell>
-                    <TableCell className="text-right">{fmtINR(p.premiumAmount)} {PER_LABEL[p.frequency]}</TableCell>
+                    <TableCell className="text-right">{p.premiumAmount.gt(0) ? <>{fmtINR(p.premiumAmount)} {PER_LABEL[p.frequency]}</> : "—"}</TableCell>
                     <TableCell>{POLICY_STATUS[p.status]}</TableCell>
                   </TableRow>
                 ))}

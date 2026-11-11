@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { canActOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
-import { isMfCategory, payModeLabel } from "@/lib/products";
+import { amountHeader, amountKindOfQuoteRow, isMfCategory, payModeLabel, rowHasNoCover } from "@/lib/products";
 import { quotationStatus } from "@/lib/quotation";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -59,11 +59,13 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
           <QuoteItemsTable
             quotationId={q.id}
             canDecide={canDecide}
-            total={fmtINR(q.total)}
+            total={q.total.gt(0) ? fmtINR(q.total) : "—"}
             mf={q.items.every((i) => isMfCategory(i.category)) ? "all" : q.items.some((i) => isMfCategory(i.category)) ? "some" : "none"}
+            showCover={q.items.some((i) => !rowHasNoCover(i))}
+            amountLabel={amountHeader(q.items.map(amountKindOfQuoteRow))}
             items={q.items.map((i) => ({
               id: i.id, category: i.category, plan: `${i.insurer} – ${i.productName}`, cover: i.sumInsured ? fmtINR(i.sumInsured) : "—", payMode: payModeLabel(i.payMode, isMfCategory(i.category)),
-              premium: fmtINR(i.premium), decision: i.decision,
+              premium: i.premium.gt(0) ? fmtINR(i.premium) : "—", decision: i.decision,
               proposal: i.proposal && { id: i.proposal.id, no: i.proposal.proposalNo },
             }))}
           />

@@ -23,8 +23,8 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
       : null;
 
   if (party && canActOn(user, party.ownerId)) {
-    // Plan suggestions: insurance and mutual fund products from Settings → Products and schemes.
-    const plans = await db.product.findMany({ where: { tenantId: user.tenantId, active: true, productType: { in: ["Insurance", "MutualFund"] } }, select: { partner: true, name: true, payModes: true, productType: true }, orderBy: [{ partner: "asc" }, { name: "asc" }] });
+    // Plan suggestions: every active product from Settings → Products and schemes (insurance, mutual funds and the post office schemes).
+    const plans = await db.product.findMany({ where: { tenantId: user.tenantId, active: true }, select: { partner: true, name: true, payModes: true, productType: true }, orderBy: [{ partner: "asc" }, { name: "asc" }] });
     return (
       <>
         <PageHeader title="New quotation" user={user} />

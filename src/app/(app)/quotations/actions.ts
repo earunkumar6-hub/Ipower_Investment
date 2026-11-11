@@ -11,7 +11,7 @@ import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
-import { isMfCategory, MF_PAY_MODES } from "@/lib/products";
+import { isMfCategory, isPostOfficeCategory, isPostOfficeInsurance, MF_PAY_MODES } from "@/lib/products";
 import { priceQuotation } from "@/lib/quotation";
 import { authorize, type SessionUser } from "@/lib/session";
 
@@ -23,7 +23,7 @@ const itemSchema = z.object({
   insurer: z.string().trim().min(2, "Enter the insurer"),
   productName: z.string().trim().min(2, "Enter the plan"),
   sumInsured: z.union([z.literal(""), money]),
-  premium: money.refine((v) => Number(v) > 0, "Premium must be more than 0"),
+  premium: z.union([z.literal(""), money]), // may be blank for the post office schemes; checked per product below
   payMode: z.enum(Frequency).default("Yearly"),
 });
 
@@ -66,18 +66,31 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
     return { ok: false, error: "This customer belongs to another user" };
   }
 
-  const priced = priceQuotation(v.items.map((i) => i.premium));
+  const priced = priceQuotation(v.items.map((i) => i.premium || "0"));
   let quotation;
   try {
     quotation = await db.$transaction(async (tx) => {
       // Product type from Settings → Dropdown values; "Other" adds the typed one to the list.
       // Throw (not return) on a bad product so values typed for earlier products are rolled back too.
       const categories: string[] = [];
+      const noCover: boolean[] = []; // mutual fund, or a post office investment: no sum insured is saved
       for (const [n, i] of v.items.entries()) {
         const r = await resolveDropdown(tx, user, "quotationCategory", i.category, i.categoryOther);
         if ("error" in r) throw new QuoteRefused(`Product ${n + 1}: ${r.error}`);
         if (isMfCategory(r.value) && !MF_PAY_MODES.includes(i.payMode)) throw new QuoteRefused(`Product ${n + 1}: pick SIP or Lumpsum`);
+        // "Post office": only PLI is insurance; every other plan has no sum insured and the premium may be left blank
+        // (owner, 11 Nov 2026).
+        let investment = false;
+        if (isPostOfficeCategory(r.value)) {
+          const plan = await tx.product.findFirst({ where: { tenantId: user.tenantId, partner: i.insurer, name: i.productName }, select: { productType: true } });
+          investment = !isPostOfficeInsurance(plan?.productType, i.productName);
+        }
+        if (!investment) {
+          if (!i.premium) throw new QuoteRefused(`Product ${n + 1}: Enter an amount`);
+          if (Number(i.premium) <= 0) throw new QuoteRefused(`Product ${n + 1}: Premium must be more than 0`);
+        }
         categories.push(r.value);
+        noCover.push(isMfCategory(r.value) || investment);
       }
       const q = await tx.quotation.create({
         data: {
@@ -96,7 +109,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
               category: categories[n],
               insurer: i.insurer,
               productName: i.productName,
-              sumInsured: isMfCategory(categories[n]) ? null : i.sumInsured || null, // no cover on a mutual fund
+              sumInsured: noCover[n] ? null : i.sumInsured || null, // no cover on a mutual fund or a post office investment
               payMode: i.payMode,
               ...priced.items[n],
             })),

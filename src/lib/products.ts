@@ -58,6 +58,33 @@ export function missingInsuranceDetails(p: {
 /** Quotation product "Mutual fund" (any case, also typed under Other): SIP / Lumpsum wording, no cover. */
 export const isMfCategory = (category: string) => category.trim().toLowerCase() === "mutual fund";
 export const MF_PAY_MODES: Frequency[] = ["Monthly", "OneTime"];
+/**
+ * Quotation product "Post office" follows the plan chosen: PLI (Postal Life Insurance) is the only insurance – it keeps
+ * the sum insured and needs a premium. Every other plan (RD, TD, KVP, NSC, SCSS, MIS, SSA, PPF, a plan not in the
+ * catalogue, or none yet) has no sum insured and the premium may be left blank (owner, 11 Nov 2026).
+ */
+export const isPostOfficeCategory = (category: string) => category.trim().toLowerCase() === "post office";
+/** A post office row is insurance only for PLI: a catalogue plan of type Insurance, or a typed "Postal Life Insurance" / "PLI". */
+export const isPostOfficeInsurance = (planType: ProductType | null | undefined, productName: string) =>
+  planType ? planType === "Insurance" : /postal\s+life|\bpli\b/i.test(productName);
+/** Every post office scheme as a catalogue product type (Po*): amount may be blank, no cover (proposals and "Add product directly"). */
+export const isPostalInvestmentType = (t: ProductType | null | undefined) => !!t && t.startsWith("Po");
+/**
+ * What the money box / column is called (owner, 11 Nov 2026): "Amount" for every post office scheme except PLI,
+ * "Investment amount" for mutual funds, "Premium" for insurance (PLI included).
+ */
+export type AmountKind = "premium" | "investment" | "amount";
+export const AMOUNT_WORD: Record<AmountKind, string> = { premium: "Premium", investment: "Investment amount", amount: "Amount" };
+export const amountKindOfType = (t: ProductType | null | undefined): AmountKind => (t === "MutualFund" ? "investment" : isPostalInvestmentType(t) ? "amount" : "premium");
+/** A saved quotation row: a "Post office" row without cover is a scheme (PLI keeps its cover). */
+export const amountKindOfQuoteRow = (i: { category: string; sumInsured: unknown }): AmountKind =>
+  isMfCategory(i.category) ? "investment" : isPostOfficeCategory(i.category) && i.sumInsured == null ? "amount" : "premium";
+/** Column header over rows of several kinds: the one word when they agree, else "Premium / amount". */
+export const amountHeader = (kinds: AmountKind[]) => { const k = [...new Set(kinds)]; return k.length === 1 ? AMOUNT_WORD[k[0]] : "Premium / amount"; };
+/** RD (monthly), SSA and PPF (yearly) bills are made from the amount, so it is needed once the policy number is entered. */
+export const BILLED_FROM_AMOUNT: Partial<Record<ProductType, string>> = { PoRd: "the monthly RD instalment", PoSsa: "the yearly SSA deposit", PoPpf: "the yearly PPF deposit" };
+/** A quoted row with no cover to show: a mutual fund, or a post office investment (no cover was saved for it). */
+export const rowHasNoCover = (i: { category: string; sumInsured: unknown }) => isMfCategory(i.category) || (isPostOfficeCategory(i.category) && i.sumInsured == null);
 /** SIP date choices (1–28: every month has them). */
 export const SIP_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
 /** 1 → "1st", 22 → "22nd". */

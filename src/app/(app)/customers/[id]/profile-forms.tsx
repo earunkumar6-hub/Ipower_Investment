@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { scheduleCall } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { submitKeepingValues } from "@/lib/form";
@@ -57,7 +58,7 @@ export function AddFollowUpForm({ customerId, today, onDone }: { customerId: str
     <form key={key} onSubmit={submitKeepingValues(action)} className="mt-3 grid grid-cols-[auto_auto_1fr_auto] items-end gap-2 rounded-lg border border-dashed p-2">
       <input type="hidden" name="kind" value="customer" />
       <input type="hidden" name="refId" value={customerId} />
-      <div className="space-y-1"><Label htmlFor="fu-date" className="text-xs">Date</Label><Input id="fu-date" name="callDate" type="date" min={today} defaultValue={today} className="h-8" /></div>
+      <div className="space-y-1"><Label htmlFor="fu-date" className="text-xs">Date</Label><DmyDateInput id="fu-date" name="callDate" min={today} defaultValue={today} className="h-8" /></div>
       <div className="space-y-1"><Label htmlFor="fu-time" className="text-xs">Time</Label><Input id="fu-time" name="callTime" type="time" className="h-8" /></div>
       <div className="space-y-1"><Label htmlFor="fu-note" className="text-xs">Notes</Label><Input id="fu-note" name="note" placeholder="What to discuss" className="h-8" /></div>
       <Button type="submit" size="sm" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Adding…" : "Add follow-up"}</Button>

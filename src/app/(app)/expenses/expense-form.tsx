@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -62,7 +63,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
           <Input id="billNo" name="billNo" placeholder="B-1045" className="not-placeholder-shown:uppercase" aria-invalid={!!err.billNo} />
         </Field>
         <Field label="Date" error={err.expenseDate}>
-          <Input id="expenseDate" name="expenseDate" type="date" defaultValue={today} max={today} />
+          <DmyDateInput name="expenseDate" defaultValue={today} max={today} />
         </Field>
         <Field label="Paid by">
           <NativeSelect id="paidBy" name="paidBy" value={paidBy} onChange={(e) => setPaidBy(e.target.value as typeof paidBy)} className="w-full">

@@ -32,7 +32,7 @@ function NextCall({ iso }: { iso: string | null }) {
   if (at.getTime() <= Date.now()) return <span className="font-medium text-orange-700">Call open – overdue</span>;
   const time = at.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });
   if (day(at) === day(new Date())) return <>Today {time}</>;
-  return <>{at.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: IST })} {time}</>;
+  return <>{day(at).split("-").reverse().join("/")} {time}</>;
 }
 
 const col = createColumnHelper<LeadRow>();

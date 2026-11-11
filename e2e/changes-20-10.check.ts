@@ -208,7 +208,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
 
   test("#22 Receipts filter – name, customer ID, group, product, policy, mode, account, status, dates", async () => {
     await owner.goto("/receipts");
-    for (const l of ["Name or mobile", "Customer ID", "Bill group", "Product", "Policy / account no.", "Payment mode", "Account", "Status"])
+    for (const l of ["Name or mobile", "Bill group", "Product", "Policy / account no.", "Payment mode", "Account", "Status"])
       await expect(owner.getByLabel(l, { exact: true })).toBeVisible();
     await expect(owner.locator("#rf-from")).toBeVisible();
     await expect(owner.locator("#rf-to")).toBeVisible();
@@ -499,7 +499,7 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
 
   test("#13 Unique customer ID and #28 duplicate pop-up – same PAN on a second customer is refused", async () => {
     await openCustomer(owner, "Balaji K");
-    await expect(owner.getByText(/CIF-\d{6}/).first()).toBeVisible();
+    await expect(owner.getByText(/CIF-\d{6}/)).toHaveCount(0); // the CRM's own customer ID is no longer shown (10 Nov 2026)
     await owner.getByRole("button", { name: "Add Aadhaar / PAN" }).click();
     const dlg = owner.getByRole("dialog");
     await dlg.getByLabel("Customer consent taken").check();

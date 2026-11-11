@@ -74,7 +74,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     maturity: maturityOf(p, p.product?.invoiceRule),
     amountLabel: PER_LABEL[p.frequency],
     details: [
-      p.secondHolder && ["Joint account", `second holder ${p.secondHolder.name} (${p.secondHolder.cifNo})`],
+      p.secondHolder && ["Joint account", `second holder ${p.secondHolder.name}`],
       isPostal(p) && (p.secondHolder
         ? (p.firstHolderCif || p.secondHolderCif) && ["Holder CIF (post office)", `first ${p.firstHolderCif ?? "—"} · second ${p.secondHolderCif ?? "—"}`]
         : p.firstHolderCif && ["Holder CIF (post office)", p.firstHolderCif]),

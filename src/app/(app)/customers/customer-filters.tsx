@@ -30,7 +30,7 @@ export function CustomerFilters({ q, product, company, scheme, status, products,
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); go({ q: String(new FormData(e.currentTarget).get("q") ?? ""), product, company, scheme }); }}>
         <div className="space-y-1">
           <Label htmlFor="q" className="text-xs">Search</Label>
-          <Input id="q" name="q" defaultValue={q} placeholder="Name, mobile, CIF, policy / account or folio no." className="h-7 w-64" />
+          <Input id="q" name="q" defaultValue={q} placeholder="Name, mobile, policy / account or folio no." className="h-7 w-64" />
         </div>
         <Button type="submit" size="sm" variant="outline" className="self-end">Search</Button>
       </form>

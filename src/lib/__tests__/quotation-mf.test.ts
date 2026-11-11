@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
-import { isMfCategory, payModeLabel } from "@/lib/products";
+import { isMfCategory, payModeLabel, rowHasNoCover } from "@/lib/products";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
 const session = vi.hoisted(() => ({ user: null as null | U }));
@@ -58,6 +58,13 @@ describe("Mutual fund in quotations", () => {
     expect([payModeLabel("Monthly", true), payModeLabel("OneTime", true), payModeLabel("Monthly", false)]).toEqual(["SIP (monthly)", "Lumpsum", "Monthly"]);
   });
 
+  it("no cover to show for mutual funds and post office investments; insurance and a PLI with cover keep it", () => {
+    expect(rowHasNoCover({ category: "Mutual fund", sumInsured: null })).toBe(true);
+    expect(rowHasNoCover({ category: " post OFFICE ", sumInsured: null })).toBe(true);
+    expect(rowHasNoCover({ category: "Post office", sumInsured: "250000" })).toBe(false); // PLI with a cover
+    for (const c of ["Life", "Health", "Personal accident"]) expect(rowHasNoCover({ category: c, sumInsured: null }), c).toBe(false);
+  });
+
   it("a mutual fund must be SIP or Lumpsum", async () => {
     const { result } = await quote([{ ...sip, payMode: "Yearly" }]);
     expect(result?.error).toBe("Product 1: pick SIP or Lumpsum");
@@ -74,5 +81,21 @@ describe("Mutual fund in quotations", () => {
     expect(proposals.map((p) => [p.productName, p.productType, p.product?.productType ?? null])).toEqual([
       ["Flexi Cap SIP", "MutualFund", "MutualFund"], ["Not in catalogue", "MutualFund", null],
     ]);
+  });
+
+  // Last on purpose: the test above reads "the" quotation made during this run.
+  it("'Post office': a sum insured is kept only for PLI; every other plan (incl. one not in the catalogue) drops it", async () => {
+    const post = (productName: string) => ({ category: "Post office", categoryOther: "", insurer: "Post Office", productName, sumInsured: "250000", premium: "1000", payMode: "Yearly" });
+    // At most 5 products per quotation.
+    const { url } = await quote([post("Post Office RD"), post("Post Office TD"), post("KVP"), post("NSC"), post("SCSS")]);
+    expect(url).toMatch(/^\/quotations\//);
+    const { url: second } = await quote([post("Post Office MIS"), post("Postal Life Insurance"), post("Some new scheme")]);
+    expect(second).toMatch(/^\/quotations\//);
+    const items = await prisma.quotationItem.findMany({ where: { quotation: { createdAt: { gte: started } }, category: "Post office" } });
+    expect(items).toHaveLength(8);
+    const noCover = ["Post Office RD", "Post Office TD", "KVP", "NSC", "SCSS", "Post Office MIS", "Some new scheme"];
+    expect(items.filter((i) => noCover.includes(i.productName))).toHaveLength(7);
+    expect(items.filter((i) => noCover.includes(i.productName)).every((i) => i.sumInsured === null)).toBe(true);
+    expect(items.find((i) => i.productName === "Postal Life Insurance")?.sumInsured?.toString()).toBe("250000");
   });
 });

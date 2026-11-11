@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { CashDenominationGrid } from "@/components/cash-denomination-grid";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -62,7 +63,7 @@ export function MarkPaidProvider({ receipts, accounts, today, children }: {
             <div className="font-semibold">{selected.length} {selected.length === 1 ? "receipt" : "receipts"} · {inr(total)}</div>
             <div className="text-xs text-muted-foreground">{parts.map(([name, p]) => `${name} ${inr(p)}`).join(" · ")}</div>
           </div>
-          <div className="space-y-1"><Label htmlFor="mp-paidOn" className="text-xs">Paid on</Label><Input id="mp-paidOn" name="paidOn" type="date" defaultValue={today} max={today} className="h-8" /></div>
+          <div className="space-y-1"><Label htmlFor="mp-paidOn" className="text-xs">Paid on</Label><DmyDateInput id="mp-paidOn" name="paidOn" defaultValue={today} max={today} className="h-8" /></div>
           <div className="space-y-1">
             <Label htmlFor="mp-account" className="text-xs">Paid from</Label>
             <NativeSelect id="mp-account" name="accountId" size="sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>

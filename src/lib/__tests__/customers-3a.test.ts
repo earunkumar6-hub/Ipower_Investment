@@ -104,7 +104,7 @@ describe("Follow-ups on the customer", () => {
     expect(call.ownerId).toBe(users.arun.id);
 
     const open = await openCalls(users.arun);
-    expect(open.find((o) => o.id === call.id)).toMatchObject({ kind: "customer", href: `/customers/${customerId}`, forLabel: expect.stringMatching(/^Customer CIF-\d+/) });
+    expect(open.find((o) => o.id === call.id)).toMatchObject({ kind: "customer", href: `/customers/${customerId}`, forLabel: "Customer" });
 
     const view = await loadCustomer360(users.arun, customerId);
     expect(view!.followUps.find((f) => f.id === call.id)).toMatchObject({ type: "Customer", status: "Open", owner: users.arun.name });

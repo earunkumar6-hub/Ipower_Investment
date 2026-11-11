@@ -79,7 +79,7 @@ export function CustomerActions({ customer, can, inUse, today }: {
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="text-lg font-semibold">Delete {customer.name}?</DialogTitle>
           <p className="text-sm">
-            {customer.cifNo} has no products, proposals, quotations, receipts or bills. Their follow-ups, mobile numbers, photo and
+            {customer.name} has no products, proposals, quotations, receipts or bills. Their follow-ups, mobile numbers, photo and
             attached files are deleted too. This can&apos;t be undone.
           </p>
           <div className="space-y-1.5">

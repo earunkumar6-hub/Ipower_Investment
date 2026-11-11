@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { inr, paise } from "@/components/payment-fields";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -85,8 +86,8 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
       <Label>Bills to pay</Label>
       {scope && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-2 text-sm">
-          <div className="space-y-1"><Label htmlFor="bills-from" className="text-xs">From</Label><Input id="bills-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8" /></div>
-          <div className="space-y-1"><Label htmlFor="bills-to" className="text-xs">To</Label><Input id="bills-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8" /></div>
+          <div className="space-y-1"><Label htmlFor="bills-from" className="text-xs">From</Label><DmyDateInput id="bills-from" value={from} onChange={setFrom} className="h-8" /></div>
+          <div className="space-y-1"><Label htmlFor="bills-to" className="text-xs">To</Label><DmyDateInput id="bills-to" value={to} onChange={setTo} className="h-8" /></div>
           <Button type="button" size="sm" variant="outline" onClick={showInstalments}>Show instalments</Button>
           {range && (
             <>

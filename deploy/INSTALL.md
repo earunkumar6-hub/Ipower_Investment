@@ -51,8 +51,11 @@ IPower_package\
    $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
    ```
    Paste the output as `BETTER_AUTH_SECRET="..."`. Run the command again and paste the new output as
-   `DATA_ENCRYPTION_KEY="..."` (it encrypts customers' bank details). Keep a copy of `.env` somewhere safe:
-   without this key, saved bank details can't be read.
+   `DATA_ENCRYPTION_KEY="..."`. **Both are required**: this key encrypts customers' Aadhaar, PAN and bank
+   details, and while it is missing or still `change-me`, saving any of them fails with a "data encryption"
+   error. Keep a copy of `.env` somewhere safe: without this key, saved Aadhaar, PAN and bank details can't be read.
+   Never change the key after real data has been saved. After editing `.env` later, apply it with
+   `docker compose up -d` (a plain restart or reboot does not reread `.env`).
 5. Start:
    ```powershell
    docker compose up -d
@@ -77,7 +80,7 @@ IPower_package\
 | Stop | `docker compose down` (data is kept) |
 | Start | `docker compose up -d` |
 | Reset demo to a fresh day | `docker compose exec app pnpm db:seed` |
-| See logs | `docker compose logs -f app` |
+| See logs | `docker compose logs -f app` (a `!!! DATA_ENCRYPTION_KEY ...` line means the key in `.env` is missing or invalid; only images built from the 10 Nov 2026 source or later print it) |
 
 ## Updating to a new version
 1. Developer sends a new `ipower-crm.tar` and `docker-compose.yml` (it names the image version, e.g. `ipower-crm:1.1`). Replace the old `docker-compose.yml`; keep your `.env`.

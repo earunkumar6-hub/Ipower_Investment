@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { saveCallOutcome, type ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -176,7 +177,7 @@ function OutcomeForm({ call, onSaved }: { call: OpenCall; onSaved: () => void })
           <input type="hidden" name="reason" value="" />
           <div className="space-y-1.5">
             <Label htmlFor="callDate">{needsTime ? "Reschedule call to" : "Next call (optional)"}</Label>
-            <Input key={`d-${needsTime}`} id="callDate" name="callDate" type="date" defaultValue={needsTime ? tomorrowIst() : ""} aria-invalid={!!err.callDate} />
+            <DmyDateInput key={`d-${needsTime}`} name="callDate" defaultValue={needsTime ? tomorrowIst() : ""} aria-invalid={!!err.callDate} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="callTime">Time</Label>

@@ -89,5 +89,5 @@ export async function duplicateCompanyCif(tx: Tx, tenantId: string, partner: str
   return null;
 }
 
-/** "Aadhaar and PAN already belong to Meena R (CIF-000002)". */
-export const duplicateMessage = (d: Duplicate) => `${d.matchedOn.join(" and ")} already ${d.matchedOn.length > 1 ? "belong" : "belongs"} to ${d.name}${d.cifNo ? ` (${d.cifNo})` : d.proposalId ? " (on another proposal)" : ""}`;
+/** "Aadhaar and PAN already belong to Meena R". */
+export const duplicateMessage = (d: Duplicate) => `${d.matchedOn.join(" and ")} already ${d.matchedOn.length > 1 ? "belong" : "belongs"} to ${d.name}${!d.customerId && d.proposalId ? " (on another proposal)" : ""}`;

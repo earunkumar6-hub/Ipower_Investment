@@ -6,6 +6,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { depositOneRdReceipt } from "@/app/(app)/daybook/actions";
 import { payToCompany } from "@/app/(app)/renewals/actions";
 import { Button } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -34,7 +35,7 @@ export function DepositStatusForm({ receiptId, amount, company, isRd, accounts, 
         <Input id="reference" name="reference" placeholder={isRd ? "7781 2290" : "UTR or company receipt no."} />
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1.5"><Label htmlFor="paidOn">Paid on</Label><Input id="paidOn" name="paidOn" type="date" defaultValue={today} max={today} /></div>
+        <div className="space-y-1.5"><Label htmlFor="paidOn">Paid on</Label><DmyDateInput name="paidOn" defaultValue={today} max={today} /></div>
         <div className="space-y-1.5">
           <Label htmlFor="accountId">Paid from</Label>
           <NativeSelect id="accountId" name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full">

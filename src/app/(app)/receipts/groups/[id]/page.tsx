@@ -41,14 +41,12 @@ export default async function BillGroupPage({ params }: { params: Promise<{ id: 
           {canManage && <div className="mb-3"><FindPoliciesToAdd billGroupId={g.id} /></div>}
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Customer</TableHead><TableHead>CIF</TableHead><TableHead>Policy / account</TableHead><TableHead>Product</TableHead><TableHead>Pay mode</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead>{canManage && <TableHead />}</TableRow>
+              <TableRow><TableHead>Customer</TableHead><TableHead>Policy / account</TableHead><TableHead>Product</TableHead><TableHead>Pay mode</TableHead><TableHead className="text-right">Premium</TableHead><TableHead>Status</TableHead>{canManage && <TableHead />}</TableRow>
             </TableHeader>
             <TableBody>
               {g.members.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell><Link href={`/customers/${m.policy.customer.id}`} className="text-brand-700 hover:underline">{m.policy.customer.name}</Link></TableCell>
-                  <TableCell className="text-muted-foreground">{m.policy.customer.cifNo}</TableCell>
-                  <TableCell>{m.policy.policyNumber}</TableCell>
+                  <TableCell><Link href={`/customers/${m.policy.customer.id}`} className="text-brand-700 hover:underline">{m.policy.customer.name}</Link></TableCell>                  <TableCell>{m.policy.policyNumber}</TableCell>
                   <TableCell>{m.policy.partner} {m.policy.productName}</TableCell>
                   <TableCell>{PAY_MODE_LABEL[m.policy.frequency]}</TableCell>
                   <TableCell className="text-right">{fmtINR(m.policy.premiumAmount)}</TableCell>
@@ -56,7 +54,7 @@ export default async function BillGroupPage({ params }: { params: Promise<{ id: 
                   {canManage && <TableCell className="text-right"><RemoveMemberButton memberId={m.id} policyNumber={m.policy.policyNumber} /></TableCell>}
                 </TableRow>
               ))}
-              {g.members.length === 0 && <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No policies yet{canManage ? " – find them above, or add one by its number." : "."}</TableCell></TableRow>}
+              {g.members.length === 0 && <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No policies yet{canManage ? " – find them above, or add one by its number." : "."}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <p className="mt-2 text-xs text-muted-foreground">Closed or matured policies stay listed but get no more bills.</p>

@@ -113,7 +113,7 @@ describe("Bill groups (#21)", () => {
     expect(await prisma.auditLog.count({ where: { entityId: g.id! } })).toBe(3);
   });
 
-  it("find policies to add: by name, Customer ID or part of the number; ticked ones are added together with the same rules", async () => {
+  it("find policies to add: by name or part of the number; ticked ones are added together with the same rules", async () => {
     as("arun");
     await expect(findPoliciesForGroup(groups[1], "3115")).rejects.toThrow(/Not allowed/);
     await expect(addBillGroupMembers(groups[1], ["x"])).rejects.toThrow(/Not allowed/);
@@ -124,8 +124,8 @@ describe("Bill groups (#21)", () => {
     if ("error" in found) throw new Error(found.error);
     const rd = found.hits.find((h) => h.policyNumber === "RD 3115-305")!;
     expect(rd).toMatchObject({ problem: null, payMode: "Monthly" });
-    const byCif = await findPoliciesForGroup(groups[1], (await prisma.customer.findFirstOrThrow({ where: { policies: { some: { id: rd.id } } } })).cifNo);
-    expect("hits" in byCif && byCif.hits.some((h) => h.id === rd.id)).toBe(true);
+    const byName = await findPoliciesForGroup(groups[1], (await prisma.customer.findFirstOrThrow({ where: { policies: { some: { id: rd.id } } } })).name);
+    expect("hits" in byName && byName.hits.some((h) => h.id === rd.id)).toBe(true);
     const taken = await findPoliciesForGroup(groups[1], "3105-235");
     expect("hits" in taken && taken.hits[0].problem).toBe("Already in bill group Vitest family");
 

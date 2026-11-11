@@ -6,7 +6,7 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fmtDate, isoDate, istToday } from "@/lib/dates";
+import { fmtDate, isoDate, istDate, istToday } from "@/lib/dates";
 import { PAID_TO, RANGE_PICKS, rangeLabel, RENEWAL_PRODUCTS, RENEWAL_TABS as TABS } from "@/lib/lists";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
@@ -20,7 +20,7 @@ import { MaturityRowActions, RenewalRowActions } from "./row-actions";
 
 type Search = { tab?: string; product?: string; company?: string; scheme?: string; paidto?: string; within?: string; range?: string; from?: string; to?: string };
 
-const dayShort = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+const dayShort = (d: Date) => fmtDate(istDate(d));
 
 export default async function RenewalsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await requirePermission("Renewal.View");

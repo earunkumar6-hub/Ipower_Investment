@@ -98,7 +98,7 @@ export async function addBillGroupMember(_: ActionResult, form: FormData): Promi
 export type GroupPolicyHit = { id: string; customer: string; cifNo: string; policyNumber: string; product: string; payMode: string; problem: string | null };
 
 /**
- * "Find policies to add": active policies of customers matching a name, Customer ID or mobile, or whose policy /
+ * "Find policies to add": active policies of customers matching a name or mobile, or whose policy /
  * account no. contains the text. Policies that can't join show why instead of a tick box.
  */
 export async function findPoliciesForGroup(billGroupId: string, q: string): Promise<{ hits: GroupPolicyHit[]; more: boolean } | { error: string }> {
@@ -111,7 +111,7 @@ export async function findPoliciesForGroup(billGroupId: string, q: string): Prom
       tenantId: user.tenantId, status: "Active",
       OR: [
         { policyNumber: contains },
-        { customer: { OR: [{ name: contains }, { cifNo: contains }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }] } },
+        { customer: { OR: [{ name: contains }, { mobile: { contains: text } }, { mobiles: { some: { number: { contains: text } } } }] } },
       ],
     },
     include: MEMBER_INCLUDE,

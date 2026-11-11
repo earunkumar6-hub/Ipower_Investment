@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
@@ -68,8 +68,8 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
             </NativeSelect>
           </div>
           <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); go({ from: String(fd.get("from") ?? ""), to: String(fd.get("to") ?? "") }); }}>
-            <div className="space-y-1"><Label htmlFor="from" className="text-xs">From date</Label><Input id="from" name="from" type="date" defaultValue={range?.from ?? ""} className="h-7 w-36" /></div>
-            <div className="space-y-1"><Label htmlFor="to" className="text-xs">To date</Label><Input id="to" name="to" type="date" defaultValue={range?.to ?? ""} className="h-7 w-36" /></div>
+            <div className="space-y-1"><Label htmlFor="from" className="text-xs">From date</Label><DmyDateInput name="from" defaultValue={range?.from ?? ""} className="h-7 w-36" /></div>
+            <div className="space-y-1"><Label htmlFor="to" className="text-xs">To date</Label><DmyDateInput name="to" defaultValue={range?.to ?? ""} className="h-7 w-36" /></div>
             <Button type="submit" size="sm" variant="outline">Show renewals</Button>
           </form>
         </>

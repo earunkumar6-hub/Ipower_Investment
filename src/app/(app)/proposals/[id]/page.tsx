@@ -10,7 +10,7 @@ import { addMonths, fmtDate, fmtDateTime, isoDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
-import { fmtTenure, isHealthCover, isPostal, MF_PAY_MODES, PAY_MODES, payModeLabel, sipDateLabel } from "@/lib/products";
+import { AMOUNT_WORD, amountKindOfType, fmtTenure, isHealthCover, isPostal, MF_PAY_MODES, PAY_MODES, payModeLabel, sipDateLabel } from "@/lib/products";
 import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { proposalStatusLabel } from "../labels";
@@ -44,6 +44,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const insurance = p.productType === "Insurance" ? { health: isHealthCover({ invoiceRule: p.product?.invoiceRule, category: p.quotationItem?.category }) } : null;
   const payModes = (p.product?.payModes.length ? p.product.payModes : mf ? MF_PAY_MODES : PAY_MODES).map((m) => ({ value: m, label: payModeLabel(m, mf) }));
   const showPpt = !p.product || p.product.fields.includes("premiumPayingTerm");
+  const amountLabel = AMOUNT_WORD[amountKindOfType(p.productType)];
   // First holder: the proposal's customer, else the customer the policy will be linked to by mobile on issue.
   const firstCustomer = p.customer ?? (await db.customer.findFirst({
     where: { tenantId: user.tenantId, OR: [{ mobile: p.mobile }, { mobiles: { some: { number: p.mobile } } }] }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, cifNo: true },
@@ -56,7 +57,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
       cifs={{ first: p.firstHolderCif, second: p.secondHolderCif }} kind={holderKind} folio={p.folioNo} />
   );
   const consentBy = p.consentById ? (await db.user.findUnique({ where: { id: p.consentById }, select: { name: true } }))?.name : null;
-  const secondLabel = p.secondHolder ? `${p.secondHolder.name} (${p.secondHolder.cifNo})` : p.secondHolderName ? `${p.secondHolderName} (new customer on issue)` : "—";
+  const secondLabel = p.secondHolder ? p.secondHolder.name : p.secondHolderName ? `${p.secondHolderName} (new customer on issue)` : "—";
 
   return (
     <>
@@ -80,7 +81,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           <dl className="grid grid-cols-3 gap-3 text-sm">
             <div><dt className="text-xs text-muted-foreground">Partner</dt><dd>{p.insurer}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Plan</dt><dd>{p.productName}{p.scheme && ` · ${p.scheme.name}`}{p.sumInsured && ` · ${fmtINR(p.sumInsured)}`}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Premium</dt><dd>{fmtINR(p.premium)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{amountLabel}</dt><dd>{p.premium.gt(0) ? fmtINR(p.premium) : "—"}</dd></div>
           </dl>
 
           {issued ? (
@@ -98,7 +99,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           ) : (
             // One form, Save proposal last: details → account holders → policy number (owner, 3 Nov 2026).
             <ProposalForm proposalId={p.id} payModes={payModes} schemes={p.product?.schemes.map((s) => ({ id: s.id, name: s.name, tenureMonths: s.tenureMonths })) ?? []} showPpt={showPpt}
-              initial={{ frequency: p.frequency ?? "", term: yearsText(p.termMonths), ppt: yearsText(p.premiumPayingTermMonths), startDate: p.startDate ? isoDate(p.startDate) : "", schemeId: p.schemeId ?? "", sipDay: p.sipDay ? String(p.sipDay) : "", premium: p.premium.toString(), sumInsured: p.sumInsured?.toString() ?? "" }} mf={mf} insurance={insurance}>
+              initial={{ frequency: p.frequency ?? "", term: yearsText(p.termMonths), ppt: yearsText(p.premiumPayingTermMonths), startDate: p.startDate ? isoDate(p.startDate) : "", schemeId: p.schemeId ?? "", sipDay: p.sipDay ? String(p.sipDay) : "", premium: p.premium.gt(0) ? p.premium.toString() : "", sumInsured: p.sumInsured?.toString() ?? "" }} mf={mf} insurance={insurance} amountLabel={amountLabel}>
               {holders}
             </ProposalForm>
           )}
@@ -130,7 +131,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
                   <TableCell>Joint account</TableCell>
                   <TableCell><StatusBadge tone={p.secondHolderId || p.secondHolderName ? "green" : "orange"}>{p.secondHolderId || p.secondHolderName ? "Two holders" : "Second holder missing"}</StatusBadge></TableCell>
                   <TableCell>
-                    {p.customerName}{firstCustomer && ` (${firstCustomer.cifNo})`} + {secondLabel}
+                    {p.customerName} + {secondLabel}
                     {postal && <span className="block text-xs text-muted-foreground">Post office CIF: {p.firstHolderCif ?? "—"} / {p.secondHolderCif ?? "—"}</span>}
                   </TableCell>
                 </TableRow>

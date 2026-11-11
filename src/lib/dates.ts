@@ -22,9 +22,8 @@ export function financialYear(date: Date): string {
   return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
 }
 
-/** "12 Oct 2026" for business dates (already IST). */
-export const fmtDate = (date: Date) =>
-  date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+/** "12/10/2026" (dd/mm/yyyy everywhere) for business dates (already IST). */
+export const fmtDate = (date: Date) => isoToDmy(isoDate(date));
 
 /** "12/03/1985" (dd/mm/yyyy) for a DATE value, e.g. date of birth. */
 export const fmtDmy = (date: Date) => isoToDmy(date.toISOString().slice(0, 10));
@@ -55,9 +54,8 @@ export function fmtHHMM(hhmm: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 }
 
-/** "12 Oct, 3:42 pm" in IST. */
-export const fmtDateTime = (date: Date) =>
-  date.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });
+/** "12/10/2026, 3:42 pm" in IST. */
+export const fmtDateTime = (date: Date) => `${fmtDate(istDate(date))}, ${fmtTime(date)}`;
 
 /** Parse a <input type="datetime-local"> value as IST wall-clock time. */
 export function parseIstDateTime(value: string): Date | null {

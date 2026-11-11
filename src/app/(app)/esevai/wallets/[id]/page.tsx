@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { balanceAt } from "@/lib/daybook";
 import { ENTRY_LABEL } from "@/lib/daybook-view";
@@ -39,8 +39,8 @@ export default async function WalletStatementPage({ params, searchParams }: { pa
       <PageHeader title={`Wallet statement · ${wallet.name}`} user={user} actions={<Link href="/esevai" className={buttonVariants({ variant: "ghost" })}>Back to E-Sevai</Link>} />
       <div className="max-w-5xl rounded-xl border bg-white p-4">
         <form className="mb-3 flex items-end gap-2 text-sm">
-          <label className="space-y-1"><span className="block text-xs text-muted-foreground">From</span><Input id="ws-from" type="date" name="from" defaultValue={isoDate(from)} className="h-8" /></label>
-          <label className="space-y-1"><span className="block text-xs text-muted-foreground">To</span><Input id="ws-to" type="date" name="to" defaultValue={isoDate(to)} max={isoDate(today)} className="h-8" /></label>
+          <label className="space-y-1"><span className="block text-xs text-muted-foreground">From</span><DmyDateInput id="ws-from" name="from" defaultValue={isoDate(from)} className="h-8" /></label>
+          <label className="space-y-1"><span className="block text-xs text-muted-foreground">To</span><DmyDateInput id="ws-to" name="to" defaultValue={isoDate(to)} max={isoDate(today)} className="h-8" /></label>
           <button type="submit" className={buttonVariants({ size: "sm", variant: "outline" })}>Show</button>
         </form>
         <div className="mb-3 grid grid-cols-4 gap-3 text-sm">

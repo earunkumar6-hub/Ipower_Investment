@@ -6,10 +6,12 @@ import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { fmtDateTime } from "@/lib/dates";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, LEAD_STATUS_TONE, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { updateLead, type ActionResult } from "./actions";
@@ -29,9 +31,7 @@ type PanelLead = {
   calls: { id: string; dueAt: string; note: string | null; outcome: CallOutcome | null; outcomeNote: string | null }[];
 };
 
-const IST = "Asia/Kolkata";
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST });
+const fmt = (iso: string) => fmtDateTime(new Date(iso));
 const istParts = (iso: string) => {
   const local = new Date(new Date(iso).getTime() + 5.5 * 3_600_000).toISOString();
   return { date: local.slice(0, 10), time: local.slice(11, 16) };
@@ -97,7 +97,7 @@ export function LeadPanel({ lead, products }: { lead: PanelLead; products: strin
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <Label htmlFor="callDate">{status === "CallBack" ? "Call back on" : "Next follow-up"}</Label>
-              <Input id="callDate" name="callDate" type="date" defaultValue={next.date} aria-invalid={!!err.callDate} />
+              <DmyDateInput name="callDate" defaultValue={next.date} aria-invalid={!!err.callDate} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="callTime">Time</Label>
