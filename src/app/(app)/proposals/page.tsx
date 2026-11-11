@@ -8,11 +8,25 @@ import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
 import { holdersLabel, proposalNext, proposalStatusLabel } from "./labels";
+import { ProposalSearch } from "./proposal-search";
 
-export default async function ProposalsPage() {
+export default async function ProposalsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requirePermission("Proposal.View");
+  const q = (await searchParams).q?.trim() || undefined;
   const proposals = await db.proposal.findMany({
-    where: { tenantId: user.tenantId, ...ownerScope(user) },
+    where: {
+      tenantId: user.tenantId,
+      ...ownerScope(user),
+      ...(q && {
+        AND: [{
+          OR: [
+            { mobile: { contains: q } },
+            { customerName: { contains: q, mode: "insensitive" as const } },
+            { proposalNo: { contains: q, mode: "insensitive" as const } },
+          ],
+        }],
+      }),
+    },
     include: { secondHolder: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -22,6 +36,7 @@ export default async function ProposalsPage() {
     <>
       <PageHeader title="Proposals" user={user} actions={<ExportButton report="proposals" user={user} />} />
       <div className="rounded-xl border bg-white p-4">
+        <ProposalSearch q={q} />
         <Table>
           <TableHeader>
             <TableRow>
@@ -45,7 +60,7 @@ export default async function ProposalsPage() {
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No proposals yet. Create them from a quotation, or add a product directly on a customer.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">{q ? `No proposals match "${q}".` : "No proposals yet. Create them from a quotation, or add a product directly on a customer."}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
