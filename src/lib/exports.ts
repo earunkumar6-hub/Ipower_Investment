@@ -3,7 +3,7 @@ import { holdersLabel, proposalNext, proposalStatusLabel } from "@/app/(app)/pro
 import { accountLabel } from "@/lib/accounts";
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
-import { fmtDate, isoDate, istToday } from "@/lib/dates";
+import { fmtDate, istToday } from "@/lib/dates";
 import { db, prisma } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
@@ -34,7 +34,9 @@ type Built = { file: string; title: string; sheets: Sheet[] };
 /** `build` returns null when the record asked for is missing or not the user's (404). */
 type Report = { permission: Permission; build: (user: SessionUser, sp: Params) => Promise<Built | null> };
 
-const stamp = () => isoDate(istToday());
+/** dd-mm-yyyy for file names (a file name can't hold "/"). */
+const fileDate = (d: Date) => fmtDate(d).replaceAll("/", "-");
+const stamp = () => fileDate(istToday());
 const label = <K extends string>(list: readonly (readonly [K, string])[], key: K) => list.find(([k]) => k === key)?.[1] ?? key;
 const nameIn = (users: { id: string; name: string }[]) => (id: string | null) => users.find((u) => u.id === id)?.name ?? "";
 
@@ -347,7 +349,7 @@ export const REPORTS: Record<string, Report> = {
       ]);
       const product = (p: { productType: string; partner: string; productName: string }) => (p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`);
       return {
-        file: `renewals-month-${isoDate(today).slice(0, 7)}.xlsx`,
+        file: `renewals-month-${fileDate(today).slice(3)}.xlsx`,
         title: `Renewals – ${rangeLabel(lastMonth.range)} renewed or not; due this month`,
         sheets: [
           {
@@ -453,8 +455,8 @@ export const REPORTS: Record<string, Report> = {
       ]);
       const account = nameIn(accounts);
       return {
-        file: `esevai-${isoDate(today)}.xlsx`,
-        title: `E-Sevai – ${isoDate(today)}`,
+        file: `esevai-${fileDate(today)}.xlsx`,
+        title: `E-Sevai – ${fmtDate(today)}`,
         sheets: [
           {
             name: "Entries",
@@ -526,8 +528,8 @@ export const REPORTS: Record<string, Report> = {
       });
       const tally = d.tally;
       return {
-        file: `daybook-${isoDate(date)}.xlsx`,
-        title: `Day Book – ${isoDate(date)} – ${d.closed ? "CLOSED" : "OPEN"}`,
+        file: `daybook-${fileDate(date)}.xlsx`,
+        title: `Day Book – ${fmtDate(date)} – ${d.closed ? "CLOSED" : "OPEN"}`,
         sheets: [
           {
             name: "Transactions",
@@ -588,7 +590,7 @@ export const REPORTS: Record<string, Report> = {
         [pnl.profit.isNegative() ? "Loss" : "Profit", pnl.profit, prev.profit],
       ];
       return {
-        file: `pnl-${key}.xlsx`,
+        file: `pnl-${key.slice(5)}-${key.slice(0, 4)}.xlsx`,
         title: `Profit & Loss – ${pnl.range.label}`,
         sheets: [{
           name: "Profit & Loss",

@@ -2,7 +2,7 @@
 // automatic Matured, Not renewed, reminder counts, by-customer view and the monthly renewal Excel.
 import { Prisma } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { addDays, addMonths, isoDate, istToday } from "@/lib/dates";
+import { addDays, addMonths, fmtDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/session";
 
@@ -158,6 +158,6 @@ describe("Summary, by customer, monthly Excel", () => {
   it("the renewal Excel has last month (renewed or not) and this month's dues", async () => {
     const built = await REPORTS["renewal-month"].build(arun as SessionUser, {});
     expect(built!.sheets.map((s) => s.name)).toEqual(["Last month", "This month due"]);
-    expect(built!.file).toContain(isoDate(today).slice(0, 7));
+    expect(built!.file).toBe(`renewals-month-${fmtDate(today).slice(3).replace("/", "-")}.xlsx`);
   });
 });
