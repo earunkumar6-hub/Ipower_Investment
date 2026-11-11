@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { submitKeepingValues } from "@/lib/form";
 import { ACCOUNT_FIELDS, BANK_FIELDS, CUSTOM_FIELD_TYPE_LABEL, INVOICE_RULE_LABEL, PAY_MODE_LABEL, PAY_MODES, PRODUCT_TYPE_LABEL } from "@/lib/products";
-import { addCustomField, addRate, removeCustomField, saveProduct, saveScheme } from "./actions";
+import { addCustomField, addRate, deleteProduct, deleteScheme, removeCustomField, saveProduct, saveScheme } from "./actions";
 
 /** Shared submit handling: toast on success, keep the typed values on an error. */
 function useSettingsAction(action: (prev: ActionResult, form: FormData) => Promise<ActionResult>, success: string, onSuccess?: (r: ActionResult) => void) {
@@ -244,4 +244,33 @@ export function RemoveFieldButton({ fieldId, label }: { fieldId: string; label: 
       <Button type="button" size="xs" variant="ghost" onClick={() => setConfirm(false)}>No</Button>
     </span>
   );
+}
+
+/** Delete with a Yes/No check first. The server refuses when accounts or proposals still use it. */
+function ConfirmDelete({ what, run, onDeleted, size = "sm" }: { what: string; run: () => Promise<ActionResult>; onDeleted?: () => void; size?: "sm" | "default" }) {
+  const [pending, start] = useTransition();
+  const [confirm, setConfirm] = useState(false);
+  if (!confirm) return <Button type="button" size={size} variant="ghost" className="text-destructive" onClick={() => setConfirm(true)}>Delete</Button>;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs">
+      Delete {what}?
+      <Button type="button" size="xs" variant="destructive" disabled={pending} onClick={() => start(async () => {
+        const r = await run();
+        setConfirm(false);
+        if (!r.ok) { toast.error(r.error); return; }
+        toast.success(`${what} deleted`);
+        onDeleted?.();
+      })}>{pending ? "Deleting…" : "Yes"}</Button>
+      <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={() => setConfirm(false)}>No</Button>
+    </span>
+  );
+}
+
+export function DeleteSchemeButton({ schemeId, name }: { schemeId: string; name: string }) {
+  return <ConfirmDelete what={name} run={() => deleteScheme(schemeId)} />;
+}
+
+export function DeleteProductButton({ productId, name }: { productId: string; name: string }) {
+  const router = useRouter();
+  return <ConfirmDelete what={name} size="default" run={() => deleteProduct(productId)} onDeleted={() => router.push("/settings")} />;
 }

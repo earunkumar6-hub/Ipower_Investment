@@ -243,3 +243,59 @@ export async function removeCustomField(fieldId: string): Promise<ActionResult> 
   });
   return done(`/settings/products/${f.productId}`);
 }
+
+/** "2 accounts and 1 proposal" — what still points at a product or scheme. */
+const usage = (c: { policies: number; proposals: number }) =>
+  [c.policies && `${c.policies} account${c.policies === 1 ? "" : "s"}`, c.proposals && `${c.proposals} proposal${c.proposals === 1 ? "" : "s"}`].filter(Boolean).join(" and ");
+
+/** Delete a scheme and its rate history. Refused while any account or proposal uses it — mark it inactive instead. */
+export async function deleteScheme(schemeId: string): Promise<ActionResult> {
+  const user = await authorize("Settings.Edit");
+  const s = await db.scheme.findFirst({
+    where: { id: schemeId, product: { tenantId: user.tenantId } },
+    include: { product: true, rates: true, _count: { select: { policies: true, proposals: true } } },
+  });
+  if (!s) return fail("This scheme no longer exists");
+  const used = usage(s._count);
+  if (used) return fail(`${s.name} is used by ${used}, so it can't be deleted. Edit it and untick Active instead.`);
+  await db.$transaction(async (tx) => {
+    await tx.schemeRate.deleteMany({ where: { schemeId: s.id } });
+    await tx.scheme.delete({ where: { id: s.id } });
+    await audit(tx, user, {
+      entity: "Scheme", entityId: s.id, action: "Deleted", summary: `Scheme ${s.name} removed from ${s.product.name}`,
+      before: { tenure: fmtTenure(s.tenureMonths), rates: rateSummary(s.rates) },
+    });
+  });
+  return done(`/settings/products/${s.productId}`);
+}
+
+/** Delete a product with its schemes, rates and custom fields. Refused while any account or proposal uses it or one of its schemes. */
+export async function deleteProduct(productId: string): Promise<ActionResult> {
+  const user = await authorize("Settings.Edit");
+  const p = await db.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId },
+    include: { schemes: { select: { id: true, name: true } }, _count: { select: { policies: true, proposals: true } } },
+  });
+  if (!p) return fail("This product no longer exists");
+  const schemeIds = p.schemes.map((s) => s.id);
+  const [policies, proposals] = await Promise.all([
+    db.policy.count({ where: { OR: [{ productId: p.id }, { schemeId: { in: schemeIds } }] } }),
+    db.proposal.count({ where: { OR: [{ productId: p.id }, { schemeId: { in: schemeIds } }] } }),
+  ]);
+  const used = usage({ policies, proposals });
+  if (used) return fail(`${p.name} is used by ${used}, so it can't be deleted. Untick Active and save instead.`);
+  await db.$transaction(async (tx) => {
+    await tx.schemeRate.deleteMany({ where: { schemeId: { in: schemeIds } } });
+    await tx.scheme.deleteMany({ where: { productId: p.id } });
+    await tx.productCustomField.deleteMany({ where: { productId: p.id } });
+    await tx.product.delete({ where: { id: p.id } });
+    await audit(tx, user, {
+      entity: "Product", entityId: p.id, action: "Deleted", summary: `Product ${p.partner} · ${p.name} deleted`,
+      before: { ...productSnapshot(p), schemes: p.schemes.map((s) => s.name).join(", ") || "none" },
+    });
+  });
+  return done("/settings");
+}
+
+const rateSummary = (rates: { rate: Prisma.Decimal; effectiveFrom: Date }[]) =>
+  rates.length ? rates.map((r) => `${r.rate.toFixed(2)}% from ${fmtDate(r.effectiveFrom)}`).join(", ") : "none";

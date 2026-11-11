@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { nameLookup } from "@/lib/deposit-status";
 import { CUSTOM_FIELD_TYPE_LABEL, fmtTenure, rateHistory, rateOn } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
-import { AddCustomFieldForm, AddSchemeForm, ProductForm, RateForm, RemoveFieldButton, SchemeEditToggle } from "../../product-forms";
+import { AddCustomFieldForm, AddSchemeForm, DeleteProductButton, DeleteSchemeButton, ProductForm, RateForm, RemoveFieldButton, SchemeEditToggle } from "../../product-forms";
 import { SettingsTabs } from "../../settings-tabs";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +32,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <div className="mb-2 text-sm"><Link href="/settings" className="text-brand-700 hover:underline">← All products</Link></div>
 
       <div className="mb-4 rounded-xl border bg-white p-4">
-        <h2 className="mb-1 font-semibold">{product.partner} · {product.name}</h2>
+        <div className="mb-1 flex items-start justify-between gap-2">
+          <h2 className="font-semibold">{product.partner} · {product.name}</h2>
+          <DeleteProductButton productId={product.id} name={product.name} />
+        </div>
         <p className="mb-3 text-xs text-muted-foreground">{product._count.policies} account(s) linked. Changes apply from now on; every change is in the change log.</p>
         <ProductForm product={{
           id: product.id, name: product.name, productType: product.productType, partner: product.partner, invoiceRule: product.invoiceRule,
@@ -64,7 +67,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                     ))}
                   </TableCell>
                   <TableCell><RateForm schemeId={s.id} today={isoDate(today)} /></TableCell>
-                  <TableCell className="text-right"><SchemeEditToggle productId={product.id} scheme={{ id: s.id, name: s.name, tenureMonths: s.tenureMonths, active: s.active }} /></TableCell>
+                  <TableCell className="text-right"><div className="flex flex-wrap items-start justify-end gap-1"><SchemeEditToggle productId={product.id} scheme={{ id: s.id, name: s.name, tenureMonths: s.tenureMonths, active: s.active }} /><DeleteSchemeButton schemeId={s.id} name={s.name} /></div></TableCell>
                 </TableRow>
               );
             })}
