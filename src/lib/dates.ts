@@ -64,10 +64,6 @@ export function parseIstDateTime(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Inverse of parseIstDateTime, for default input values. */
-export const toIstInput = (date: Date) =>
-  new Date(date.getTime() + 5.5 * 3_600_000).toISOString().slice(0, 16);
-
 /** Same day-of-month `n` months later, clamped to month end (31 Jan + 1 → 28/29 Feb). */
 export function addMonths(date: Date, n: number): Date {
   const y = date.getUTCFullYear(), m = date.getUTCMonth() + n;

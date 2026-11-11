@@ -96,7 +96,6 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
   const f = renewalFilter(user, sp, today);
   const include = { customer: { select: { id: true, name: true } } };
   const policyIn = { tenantId: user.tenantId, AND: [f.policyWhere] } satisfies Prisma.PolicyWhereInput;
-  const none = { rows: [] as RenewalRow[], customers: [] as CustomerRenewalRow[] };
 
   // By customer: each customer with an active matching policy – due this month, paid this financial year, overdue.
   if (f.tab === "customers") {

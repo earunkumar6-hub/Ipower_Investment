@@ -13,7 +13,6 @@ import type { SessionUser } from "@/lib/session";
 // Everything the Day Book screen shows for one date, computed from the entries so that
 // cards, tabs and the tally always agree with each other.
 
-
 export const ENTRY_LABEL: Record<EntryType, string> = {
   Collection: "Collection",
   ServiceCollection: "E-Sevai collection",
@@ -192,5 +191,3 @@ export async function loadDayBook(user: SessionUser, date: Date) {
     })),
   };
 }
-
-export type DayBookData = Awaited<ReturnType<typeof loadDayBook>>;

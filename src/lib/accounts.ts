@@ -12,10 +12,6 @@ export async function cashAndBank(tx: Pick<Tx, "account">, tenantId: string) {
   return { cash, bank };
 }
 
-/** Cash goes to the cash drawer; UPI, bank transfers, cards and cheques land in the bank. */
-export const receivingAccountId = (mode: PaymentMode, a: { cash: { id: string }; bank: { id: string } }) =>
-  mode === "Cash" ? a.cash.id : a.bank.id;
-
 export const ACCOUNT_KIND_LABEL: Record<BankAccountKind, string> = { Savings: "Savings", Current: "Current" };
 export const WALLET_KIND_LABEL: Record<WalletKind, string> = { CSC: "CSC wallet", ESevai: "E-Sevai wallet", Other: "Other wallet" };
 
