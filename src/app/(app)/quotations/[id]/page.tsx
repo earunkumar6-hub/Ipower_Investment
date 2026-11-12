@@ -15,7 +15,7 @@ import { amountHeader, amountKindOfQuoteRow, isMfCategory, payModeLabel, rowHasN
 import { quotationStatus } from "@/lib/quotation";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { QuoteItemsTable, ReasonButton } from "./quotation-actions";
+import { MarkSentButton, QuoteItemsTable, ReasonButton } from "./quotation-actions";
 
 export default async function QuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Quote.View");
@@ -72,10 +72,12 @@ export default async function QuotationPage({ params }: { params: Promise<{ id: 
           <div className="flex flex-wrap gap-2">
             <a href={`/api/quotations/${q.id}/pdf`} className={buttonVariants({ variant: "outline" })}>Export PDF</a>
             <a href={`/api/quotations/${q.id}/pdf?format=png`} className={buttonVariants({ variant: "outline" })}>Export image</a>
+            {!deleted && q.status === "Draft" && !q.sentAt && <MarkSentButton quotationId={q.id} />}
             {!deleted && !anyProposal && q.status !== "NotAccepted" && <ReasonButton quotationId={q.id} kind="notAccepted" />}
             {!deleted && !anyProposal && <ReasonButton quotationId={q.id} kind="delete" />}
           </div>
-          {!anyProposal && !deleted && <p className="text-xs text-muted-foreground">A quotation can be deleted only while no proposal has been made from it.</p>}
+          {q.sentAt && <p className="text-xs text-muted-foreground">Sent {fmtDateTime(q.sentAt)}{q.sentById && ` by ${users.find((u) => u.id === q.sentById)?.name ?? "—"}`}.</p>}
+          {!anyProposal && !deleted && <p className="text-xs text-muted-foreground">A quotation can be deleted only while no proposal has been made from it. Use &quot;Mark as sent&quot; once it has gone to the customer.</p>}
 
           <div>
             <h3 className="mb-1 text-sm font-medium">Attachments</h3>

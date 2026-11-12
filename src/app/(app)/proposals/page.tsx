@@ -10,13 +10,19 @@ import { requirePermission } from "@/lib/session";
 import { holdersLabel, proposalStatusLabel } from "./labels";
 import { ListSearch } from "@/components/list-search";
 
-export default async function ProposalsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function ProposalsPage({ searchParams }: { searchParams: Promise<{ q?: string; issued?: string }> }) {
   const user = await requirePermission("Proposal.View");
-  const q = (await searchParams).q?.trim() || undefined;
+  const sp = await searchParams;
+  const q = sp.q?.trim() || undefined;
+  // Once the policy number is entered the proposal leaves this list and lives under Partners / Customers (#23);
+  // "Show issued" brings them back for looking up.
+  const showIssued = sp.issued === "1";
+  const issuedCount = showIssued ? 0 : await db.proposal.count({ where: { tenantId: user.tenantId, ...ownerScope(user), status: "Issued" } });
   const proposals = await db.proposal.findMany({
     where: {
       tenantId: user.tenantId,
       ...ownerScope(user),
+      ...(!showIssued && { status: { not: "Issued" as const } }),
       ...(q && {
         AND: [{
           OR: [
@@ -34,9 +40,15 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PageHeader title="Proposals" user={user} actions={<ExportButton report="proposals" user={user} />} />
+      <PageHeader title="Proposals" user={user} actions={<ExportButton report="proposals" user={user} params={showIssued ? { issued: "1" } : {}} />} />
       <div className="rounded-xl border bg-white p-4">
-        <ListSearch q={q} />
+        <div className="flex items-start justify-between gap-2">
+          <ListSearch q={q} />
+          <Link href={showIssued ? `/proposals${q ? `?q=${encodeURIComponent(q)}` : ""}` : `/proposals?${new URLSearchParams({ issued: "1", ...(q && { q }) })}`}
+            className="shrink-0 pt-2 text-xs text-brand-700 hover:underline">
+            {showIssued ? "Hide issued proposals" : `Show issued proposals (${issuedCount})`}
+          </Link>
+        </div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -59,7 +71,7 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
               );
             })}
             {proposals.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No proposals match "${q}".` : "No proposals yet. Create them from a quotation, or add a product directly on a customer."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No proposals match "${q}".` : showIssued ? "No proposals yet." : "No proposals waiting for a policy number. Issued ones are under Partners / Customers."}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

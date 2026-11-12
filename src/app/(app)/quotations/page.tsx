@@ -9,32 +9,40 @@ import { fmtDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { ownerScope } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
-import { quotationStatus } from "@/lib/quotation";
+import { QUOTE_TAB_WHERE, QUOTE_TABS, quotationStatus, quoteTab } from "@/lib/quotation";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
-export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ q?: string; tab?: string }> }) {
   const user = await requirePermission("Quote.View");
-  const q = (await searchParams).q?.trim() || undefined;
-  const quotations = await db.quotation.findMany({
-    where: {
-      tenantId: user.tenantId,
-      ...ownerScope(user),
-      deletedAt: null,
-      ...(q && {
-        AND: [{
-          OR: [
-            { mobile: { contains: q } },
-            { customerName: { contains: q, mode: "insensitive" as const } },
-            { quoteNo: { contains: q, mode: "insensitive" as const } },
-          ],
-        }],
-      }),
-    },
-    include: { items: { include: { proposal: { select: { status: true } } } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const sp = await searchParams;
+  const q = sp.q?.trim() || undefined;
+  const tab = quoteTab(sp.tab);
+  // The search applies to every tab; each tab shows its count for it (#35).
+  const base = {
+    tenantId: user.tenantId,
+    ...ownerScope(user),
+    deletedAt: null,
+    ...(q && {
+      AND: [{
+        OR: [
+          { mobile: { contains: q } },
+          { customerName: { contains: q, mode: "insensitive" as const } },
+          { quoteNo: { contains: q, mode: "insensitive" as const } },
+        ],
+      }],
+    }),
+  };
+  const [quotations, counts] = await Promise.all([
+    db.quotation.findMany({
+      where: { ...base, ...QUOTE_TAB_WHERE[tab] },
+      include: { items: { include: { proposal: { select: { status: true } } } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    Promise.all(QUOTE_TABS.map(([k]) => db.quotation.count({ where: { ...base, ...QUOTE_TAB_WHERE[k] } }))),
+  ]);
+  const link = (t: string) => `/quotations?${new URLSearchParams({ tab: t, ...(q && { q }) })}`;
 
   return (
     <>
@@ -43,7 +51,14 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         <Link href="/quotations/new" className={cn(buttonVariants(), "bg-brand-600 hover:bg-brand-700")}>New quotation</Link>
       </>} />
       <div className="rounded-xl border bg-white p-4">
-        <h2 className="mb-2 font-semibold">Recent quotations</h2>
+        <div className="mb-3 flex gap-1 border-b">
+          {QUOTE_TABS.map(([k, label], i) => (
+            <Link key={k} href={link(k)}
+              className={cn("-mb-px border-b-2 px-3 pb-2 text-sm", tab === k ? "border-brand-600 font-medium text-brand-700" : "border-transparent text-muted-foreground hover:text-foreground")}>
+              {label} <span className="text-xs text-muted-foreground">({counts[i]})</span>
+            </Link>
+          ))}
+        </div>
         <ListSearch q={q} />
         <Table>
           <TableHeader>
@@ -67,7 +82,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
               );
             })}
             {quotations.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No quotations match "${q}".` : "No quotations yet."}</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q ? `No quotations here match "${q}".` : tab === "drafts" ? "No drafts. Use \"Mark as sent\" on a quotation once it has gone to the customer." : "Nothing here."}</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

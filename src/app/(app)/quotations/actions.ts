@@ -201,6 +201,23 @@ export async function markNotAccepted(quotationId: string, reason: string): Prom
   return { ok: true };
 }
 
+/** "Mark as sent" (#35): the quotation was given to the customer – it moves from Drafts to Sent. Logged. */
+export async function markQuotationSent(quotationId: string): Promise<ActionResult> {
+  const user = await authorize("Quote.Create");
+  const r = await ownQuotation(user, quotationId);
+  if ("error" in r) return { ok: false, error: r.error };
+  if (r.q.status !== "Draft") return { ok: false, error: "The customer has already decided on this quotation" };
+  if (r.q.sentAt) return { ok: false, error: "Already marked as sent" };
+  await db.$transaction(async (tx) => {
+    const done = await tx.quotation.updateMany({ where: { id: r.q.id, sentAt: null, status: "Draft" }, data: { sentAt: new Date(), sentById: user.id } });
+    if (done.count !== 1) throw new Error("The quotation changed while saving; reload and try again");
+    await audit(tx, user, { entity: "Quotation", entityId: r.q.id, action: "Sent", summary: `Quotation ${r.q.quoteNo} for ${r.q.customerName} marked as sent` });
+  });
+  revalidatePath("/quotations");
+  revalidatePath(`/quotations/${r.q.id}`);
+  return { ok: true };
+}
+
 /** Delete a quotation while no proposal exists; staff their own, Admin any. Kept (hidden) for the change log. */
 export async function deleteQuotation(quotationId: string, reason: string): Promise<ActionResult> {
   const user = await authorize("Quote.Create");

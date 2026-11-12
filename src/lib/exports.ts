@@ -158,9 +158,9 @@ export const REPORTS: Record<string, Report> = {
           name: "Quotations",
           totals: true,
           columns: [{ header: "No." }, { header: "Created", type: "datetime", width: 20 }, { header: "Customer", width: 24 }, { header: "Products", width: 30 },
-            { header: "Premium", type: "money" }, { header: "Valid till", type: "date" }, { header: "Status" }],
+            { header: "Premium", type: "money" }, { header: "Valid till", type: "date" }, { header: "Status" }, { header: "Sent on", type: "datetime", width: 20 }],
           rows: quotations.map((q) => [q.quoteNo, q.createdAt, q.customerName, q.items.map((i) => `${i.insurer} ${i.productName}`).join(", "), q.total, q.validUpto,
-            quotationStatus(q)[0]]),
+            quotationStatus(q)[0], q.sentAt]),
         }],
       };
     },
@@ -168,9 +168,10 @@ export const REPORTS: Record<string, Report> = {
 
   proposals: {
     permission: "Proposal.View",
-    async build(user) {
+    // Like the screen (#23): issued proposals only with ?issued=1.
+    async build(user, sp) {
       const proposals = await db.proposal.findMany({
-        where: { tenantId: user.tenantId, ...ownerScope(user) },
+        where: { tenantId: user.tenantId, ...ownerScope(user), ...(sp.issued !== "1" && { status: { not: "Issued" as const } }) },
         include: { secondHolder: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
       });
@@ -199,6 +200,7 @@ export const REPORTS: Record<string, Report> = {
       const customers = await db.customer.findMany({
         where,
         include: {
+          mobiles: { orderBy: { sort: "asc" } },
           policies: {
             select: { productType: true, renewals: { where: { status: { in: ["Due", "Overdue"] } }, orderBy: { dueDate: "asc" }, take: 1, select: { dueDate: true, status: true, premiumAmount: true } } },
           },
@@ -208,12 +210,16 @@ export const REPORTS: Record<string, Report> = {
       const matching = filtered
         ? await db.policy.findMany({ where: { tenantId: user.tenantId, customerId: { in: customers.map((c) => c.id) }, ...holdingWhere }, select: { customerId: true, policyNumber: true, productType: true, partner: true, productName: true } })
         : [];
+      const staff = nameLookup(await userNames(user.tenantId));
       return {
         file: `customers-${stamp()}.xlsx`,
         title: `Partners / Customers${[filterLabel, q && `"${q}"`].filter(Boolean).map((x) => ` – ${x}`).join("")}`,
         sheets: [{
           name: "Customers",
-          columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Holdings", width: 24 },
+          // Every customer detail entered (owner change list, #34); mobiles, PAN and Aadhaar stay masked like every export.
+          columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Other mobiles", width: 22 }, { header: "WhatsApp", width: 18 },
+            { header: "Email", width: 24 }, { header: "Address", width: 36 }, { header: "PAN" }, { header: "Aadhaar" }, { header: "Consent taken", type: "datetime" as const, width: 20 },
+            { header: "Staff", width: 16 }, { header: "Added on", type: "date" as const }, { header: "Holdings", width: 24 },
             ...(filtered ? [{ header: "Matching holdings", width: 40 }] : []), { header: "Next due", type: "date" as const },
             { header: "Amount", type: "money" as const }, { header: "Overdue" }],
           rows: customers.map((c) => {
@@ -221,7 +227,10 @@ export const REPORTS: Record<string, Report> = {
             const next = c.policies.flatMap((p) => p.renewals).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
             const mine = matching.filter((p) => p.customerId === c.id)
               .map((p) => `${p.policyNumber} · ${p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}`).join(", ");
-            return [c.name, maskMobile(c.mobile), counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
+            const others = c.mobiles.filter((m) => m.number !== c.mobile).map((m) => maskMobile(m.number)).join(", ");
+            const whatsApp = c.mobiles.filter((m) => m.isWhatsApp).map((m) => maskMobile(m.number)).join(", ");
+            return [c.name, maskMobile(c.mobile), others, whatsApp, c.email, c.address, c.panMasked, c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : null, c.consentAt,
+              staff(c.ownerId), c.createdAt, counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
           }),
         }],
       };

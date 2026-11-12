@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { createProposalsFromSelected, deleteQuotation, markNotAccepted } from "../actions";
+import { createProposalsFromSelected, deleteQuotation, markNotAccepted, markQuotationSent } from "../actions";
 
 export type QuoteItemRow = {
   id: string; category: string; plan: string; cover: string; payMode: string; premium: string;
@@ -79,6 +79,17 @@ export function QuoteItemsTable({ quotationId, items, total, canDecide, mf = "no
 }
 
 /** "Mark not accepted" and "Delete quotation", each asking for a reason. */
+/** "Mark as sent" (#35): Drafts → Sent. */
+export function MarkSentButton({ quotationId }: { quotationId: string }) {
+  const [pending, start] = useTransition();
+  return (
+    <Button type="button" variant="outline" disabled={pending} onClick={() => start(async () => {
+      const r = await markQuotationSent(quotationId);
+      if (r.ok) toast.success("Marked as sent"); else toast.error(r.error ?? "Could not save");
+    })}>{pending ? "Saving…" : "Mark as sent"}</Button>
+  );
+}
+
 export function ReasonButton({ quotationId, kind }: { quotationId: string; kind: "notAccepted" | "delete" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

@@ -19,11 +19,26 @@ export function priceQuotation(premiums: Prisma.Decimal.Value[]) {
 
 type Tone = "green" | "orange" | "slate" | "blue" | "red" | "purple" | "indigo";
 
-/** Draft / Expired / Accepted / Converted (a policy issued) / Not accepted / Deleted, with its badge colour. */
-export function quotationStatus(q: { status: "Draft" | "Accepted" | "NotAccepted"; validUpto: Date; deletedAt: Date | null; items: { proposal: { status: string } | null }[] }, today = istToday()): [string, Tone] {
+/** Draft / Sent / Expired / Accepted / Converted (a policy issued) / Not accepted / Deleted, with its badge colour. */
+export function quotationStatus(q: { status: "Draft" | "Accepted" | "NotAccepted"; validUpto: Date; deletedAt: Date | null; sentAt?: Date | null; items: { proposal: { status: string } | null }[] }, today = istToday()): [string, Tone] {
   if (q.deletedAt) return ["Deleted", "slate"];
   if (q.items.some((i) => i.proposal?.status === "Issued")) return ["Converted", "green"];
   if (q.status === "Accepted") return ["Accepted", "blue"];
   if (q.status === "NotAccepted") return ["Not accepted", "orange"];
-  return q.validUpto < today ? ["Expired", "red"] : ["Draft", "slate"];
+  if (q.validUpto < today) return ["Expired", "red"];
+  return q.sentAt ? ["Sent", "indigo"] : ["Draft", "slate"];
 }
+
+/**
+ * Quotation tabs (owner change list, #35): Drafts (not sent yet), Sent ("Mark as sent", no decision yet), Converted
+ * (proposals made from it), and Not accepted so those stay findable. Expired quotes stay in Drafts / Sent.
+ */
+export const QUOTE_TABS = [["drafts", "Drafts"], ["sent", "Sent"], ["converted", "Converted"], ["notaccepted", "Not accepted"]] as const;
+export type QuoteTab = (typeof QUOTE_TABS)[number][0];
+export const QUOTE_TAB_WHERE: Record<QuoteTab, Prisma.QuotationWhereInput> = {
+  drafts: { status: "Draft", sentAt: null },
+  sent: { status: "Draft", sentAt: { not: null } },
+  converted: { status: "Accepted" },
+  notaccepted: { status: "NotAccepted" },
+};
+export const quoteTab = (v?: string): QuoteTab => QUOTE_TABS.find(([k]) => k === v)?.[0] ?? "drafts";
