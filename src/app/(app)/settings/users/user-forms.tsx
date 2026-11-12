@@ -36,19 +36,20 @@ export function NewUserForm() {
         <NativeSelect id="nu-role" name="role" defaultValue="User" className="w-full">
           <NativeSelectOption value="User">User</NativeSelectOption>
           <NativeSelectOption value="Admin">Admin</NativeSelectOption>
+          <NativeSelectOption value="SuperAdmin">Super Admin</NativeSelectOption>
         </NativeSelect>
       </div>
       <div className="space-y-1.5"><Label htmlFor="nu-pw">Password (at least 8 characters)</Label><Input id="nu-pw" name="password" type="password" autoComplete="new-password" aria-invalid={!!err.password} /></div>
       <div className="space-y-1.5"><Label htmlFor="nu-pw2">Password again</Label><Input id="nu-pw2" name="confirm" type="password" autoComplete="new-password" aria-invalid={!!err.confirm} /></div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Add login"}</Button>
-      <p className="text-xs text-muted-foreground">Give the person their username and password; they can sign in at once.</p>
+      <p className="text-xs text-muted-foreground">Give the person their username and password; they can sign in at once. A Super Admin can do everything, including changing other logins.</p>
     </form>
   );
 }
 
 /** Role and login on / off for one staff member. */
-export function UserRowForm({ userId, role, active }: { userId: string; role: "Admin" | "User"; active: boolean }) {
+export function UserRowForm({ userId, role, active }: { userId: string; role: "Admin" | "User" | "SuperAdmin"; active: boolean }) {
   const [state, action, pending] = useSave(updateUser);
   return (
     <form onSubmit={submitKeepingValues(action)} className="flex items-center gap-2">
@@ -56,6 +57,7 @@ export function UserRowForm({ userId, role, active }: { userId: string; role: "A
       <NativeSelect name="role" defaultValue={role} aria-label="Role" className="h-7">
         <NativeSelectOption value="User">User</NativeSelectOption>
         <NativeSelectOption value="Admin">Admin</NativeSelectOption>
+        <NativeSelectOption value="SuperAdmin">Super Admin</NativeSelectOption>
       </NativeSelect>
       <NativeSelect name="active" defaultValue={active ? "on" : "off"} aria-label="Login" className="h-7">
         <NativeSelectOption value="on">Login on</NativeSelectOption>

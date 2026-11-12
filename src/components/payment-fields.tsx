@@ -4,23 +4,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cashJson, cashTotal, DenominationInputs, inr, paise } from "@/components/cash-denomination-grid";
-import { MODE_LABEL, NET_TYPES, REFERENCE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
+import { NET_TYPES, REFERENCE_LABEL, type PayModeOption, type ReceiptMode } from "@/lib/payment-modes";
 import { cn } from "@/lib/utils";
 
-export type PayValue = { mode: ReceiptMode; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string; intoAccountId: string };
+/** `mode` is the built-in mode; `modeName` the agency's own mode picked ("" for a built-in one). */
+export type PayValue = { mode: ReceiptMode; modeName: string; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string; intoAccountId: string };
 /** A bank account for the "Received into" picker. */
 export type IntoAccount = { id: string; label: string };
 /** `accounts[0]` (the default bank) is picked to start with. */
-export const emptyPay = (modes: ReceiptMode[], accounts: IntoAccount[] = []): PayValue =>
-  ({ mode: modes[0] ?? "Cash", reference: "", bankName: "", netType: "", notes: {}, coins: "", intoAccountId: accounts[0]?.id ?? "" });
+export const emptyPay = (modes: PayModeOption[], accounts: IntoAccount[] = []): PayValue =>
+  ({ mode: modes[0]?.mode ?? "Cash", modeName: modes[0]?.name ?? "", reference: "", bankName: "", netType: "", notes: {}, coins: "", intoAccountId: accounts[0]?.id ?? "" });
 
 export { cashTotal, inr, paise };
 
-/** Form fields sent to the server: mode, reference, bankName + netType (net banking), the denomination as JSON (cash only), received into (not cash). */
+/** Form fields sent to the server: mode (+ modeName for the agency's own mode), reference, bankName + netType (net banking), the denomination as JSON (cash only), received into (not cash). */
 export function payFormFields(v: PayValue): Record<string, string> {
   const cash = v.mode === "Cash";
   return {
-    mode: v.mode, reference: cash ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "",
+    mode: v.mode, modeName: v.modeName, reference: cash ? "" : v.reference, bankName: v.mode === "NetBanking" ? v.bankName : "", netType: v.mode === "NetBanking" ? v.netType : "",
     denominations: cash ? cashJson(v) : "", intoAccountId: cash ? "" : v.intoAccountId,
   };
 }
@@ -29,8 +30,8 @@ export function payFormFields(v: PayValue): Record<string, string> {
  * Mode buttons, then what the mode needs: cash denomination, or UTR / transaction ID / cheque no., the customer's bank
  * and the company bank account it was received into (`accounts`: active bank accounts, default first).
  */
-export function PaymentFields({ modes, banks, accounts, amount, value, onChange, errors = {} }: {
-  modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; amount: number; value: PayValue; onChange: (v: PayValue) => void; errors?: Record<string, string>;
+export function PaymentFields({ modes, accounts, amount, value, onChange, errors = {} }: {
+  modes: PayModeOption[]; accounts: IntoAccount[]; amount: number; value: PayValue; onChange: (v: PayValue) => void; errors?: Record<string, string>;
 }) {
   const set = (patch: Partial<PayValue>) => onChange({ ...value, ...patch });
   return (
@@ -39,9 +40,9 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
         <Label>Payment mode</Label>
         <div className="flex flex-wrap gap-2">
           {modes.map((m) => (
-            <button key={m} type="button" onClick={() => set({ mode: m })}
-              className={cn("h-8 min-w-24 flex-1 rounded-lg border px-2 text-sm", value.mode === m ? "border-brand-600 bg-saffron-50 font-medium text-brand-700" : "hover:bg-slate-50")}>
-              {MODE_LABEL[m]}
+            <button key={m.name ?? m.mode} type="button" onClick={() => set({ mode: m.mode, modeName: m.name ?? "" })}
+              className={cn("h-8 min-w-24 flex-1 rounded-lg border px-2 text-sm", value.mode === m.mode && value.modeName === (m.name ?? "") ? "border-brand-600 bg-saffron-50 font-medium text-brand-700" : "hover:bg-slate-50")}>
+              {m.label}
             </button>
           ))}
         </div>
@@ -62,10 +63,7 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
           {value.mode === "NetBanking" && (
             <div className="space-y-1.5">
               <Label htmlFor="bankName">Customer&apos;s bank</Label>
-              <NativeSelect id="bankName" value={value.bankName} className="w-full" aria-invalid={!!errors.bankName} onChange={(e) => set({ bankName: e.target.value })}>
-                <NativeSelectOption value=""></NativeSelectOption>
-                {banks.map((b) => <NativeSelectOption key={b} value={b}>{b}</NativeSelectOption>)}
-              </NativeSelect>
+              <Input id="bankName" value={value.bankName} maxLength={60} aria-invalid={!!errors.bankName} onChange={(e) => set({ bankName: e.target.value })} />
             </div>
           )}
           <div className="space-y-1.5">
@@ -89,5 +87,5 @@ export function PaymentFields({ modes, banks, accounts, amount, value, onChange,
 /** True when the form can be sent: cash adds up, or the reference, received-into account (and customer's bank) are filled in. */
 export function payReady(v: PayValue, amount: number) {
   if (v.mode === "Cash") return amount > 0 && cashTotal(v) === amount;
-  return !!v.reference.trim() && !!v.intoAccountId && (v.mode !== "NetBanking" || (!!v.bankName && !!v.netType));
+  return !!v.reference.trim() && !!v.intoAccountId && (v.mode !== "NetBanking" || (!!v.bankName.trim() && !!v.netType));
 }

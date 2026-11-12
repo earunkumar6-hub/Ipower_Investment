@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isoDate, istToday } from "@/lib/dates";
-import { MODE_LABEL, type ReceiptMode } from "@/lib/payment-modes";
+import { modeLabel, type PayModeOption } from "@/lib/payment-modes";
 import type { PolicyOption } from "@/lib/receipt-options";
 import { cn } from "@/lib/utils";
 import { createReceipt } from "../actions";
@@ -21,9 +21,9 @@ import { BillsPicker, ticked as tickedBills, unpaidCounts } from "../bills-picke
 
 type Slip = { id: string; slipNo: string; account: string; month: string; amount: string; poReceiptNo: string };
 
-export function ReceiptForm({ customer, policies, openSlips, modes, banks, accounts, receivedBy }: {
+export function ReceiptForm({ customer, policies, openSlips, modes, accounts, receivedBy }: {
   customer: { id: string; name: string; mobile: string }; policies: PolicyOption[]; openSlips: Slip[];
-  modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string;
+  modes: PayModeOption[]; accounts: IntoAccount[]; receivedBy: string;
 }) {
   const router = useRouter();
   // Every overdue and due bill starts ticked; with owner-paid slips open the payment is usually for them, so start blank.
@@ -108,7 +108,7 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
           <Label>Received by</Label>
           <div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm">{receivedBy}</div>
         </div>
-        <PaymentFields modes={modes} banks={banks} accounts={accounts} amount={paise(amount)} value={pay} onChange={setPay} errors={err} />
+        <PaymentFields modes={modes} accounts={accounts} amount={paise(amount)} value={pay} onChange={setPay} errors={err} />
         <div className="col-span-2 space-y-1.5">
           <Label htmlFor="notes">Notes</Label>
           <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -125,7 +125,7 @@ export function ReceiptForm({ customer, policies, openSlips, modes, banks, accou
       <Dialog open={popup} onOpenChange={setPopup}>
         <DialogContent className="sm:max-w-xl">
           <span className="w-fit rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">Owner-paid bills found</span>
-          <DialogTitle className="text-lg font-semibold">{customer.name} paid {inr(paise(amount))} ({MODE_LABEL[pay.mode]})</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">{customer.name} paid {inr(paise(amount))} ({modeLabel(pay)})</DialogTitle>
           <DialogDescription>The owner already paid these bills (at the post office or to the insurer). Adjust this payment against them?</DialogDescription>
           <Table>
             <TableHeader>

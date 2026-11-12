@@ -11,7 +11,7 @@ export default async function NewDirectBillPage() {
   return (
     <>
       <PageHeader title="New direct bill" user={user} />
-      <DirectBillForm modes={opts.modes} banks={opts.banks} accounts={accounts} receivedBy={user.name} />
+      <DirectBillForm modes={opts.modes} accounts={accounts} receivedBy={user.name} />
     </>
   );
 }

@@ -10,10 +10,10 @@ import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isoDate, istToday } from "@/lib/dates";
-import type { ReceiptMode } from "@/lib/payment-modes";
+import type { PayModeOption } from "@/lib/payment-modes";
 import { createDirectBill } from "../actions";
 
-export function DirectBillForm({ modes, banks, accounts, receivedBy }: { modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string }) {
+export function DirectBillForm({ modes, accounts, receivedBy }: { modes: PayModeOption[]; accounts: IntoAccount[]; receivedBy: string }) {
   const router = useRouter();
   const today = isoDate(istToday());
   const [f, setF] = useState({ payerName: "", payerMobile: "", purpose: "", amount: "", billDate: today });
@@ -64,7 +64,7 @@ export function DirectBillForm({ modes, banks, accounts, receivedBy }: { modes: 
           <Label>Received by</Label>
           <div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm">{receivedBy}</div>
         </div>
-        <PaymentFields modes={modes} banks={banks} accounts={accounts} amount={paise(f.amount)} value={pay} onChange={setPay} errors={err} />
+        <PaymentFields modes={modes} accounts={accounts} amount={paise(f.amount)} value={pay} onChange={setPay} errors={err} />
       </div>
       <p className="text-xs text-muted-foreground">
         For anyone, customer or not. If the mobile belongs to a customer, the bill is linked to that customer. The Day Book records it on the bill date.

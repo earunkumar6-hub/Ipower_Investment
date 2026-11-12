@@ -27,7 +27,7 @@ export default async function NewCombinedReceiptPage({ searchParams }: { searchP
     <>
       <PageHeader title="New combined receipt" user={user} />
       <GroupReceiptForm kind="Combined" policies={options} preset={preset} payer={{ name: "", mobile: "" }}
-        modes={opts.modes} banks={opts.banks} accounts={accounts} receivedBy={user.name} />
+        modes={opts.modes} accounts={accounts} receivedBy={user.name} />
     </>
   );
 }

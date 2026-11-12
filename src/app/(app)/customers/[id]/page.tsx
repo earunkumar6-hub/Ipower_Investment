@@ -17,7 +17,7 @@ import { HOLDING_KIND as KIND, loadCustomer360, PER_LABEL } from "@/lib/customer
 import { fmtDate, fmtDateTime, isoDate, istDate, istToday } from "@/lib/dates";
 import { maskMobile } from "@/lib/lead-labels";
 import { daysBetween, overdueText } from "@/lib/overdue";
-import { MODE_LABEL } from "@/lib/payment-modes";
+import { modeLabel } from "@/lib/payment-modes";
 import { fmtINR } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
 import { fmtTenure, isPostal, ordinal } from "@/lib/products";
@@ -222,7 +222,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                     <TableCell><Link href={`/receipts/${r.id}`} className="text-brand-700 hover:underline">{r.receiptNo}</Link></TableCell>
                     <TableCell>{fmtDate(r.receiptDate)}</TableCell>
                     <TableCell>{r.policy?.policyNumber ?? r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
-                    <TableCell className="text-right">{fmtINR(r.amount)} · {MODE_LABEL[r.mode]}</TableCell>
+                    <TableCell className="text-right">{fmtINR(r.amount)} · {modeLabel(r)}</TableCell>
                     <TableCell><StatusBadge tone={r.status === "Cancelled" ? "slate" : "green"}>{r.status}</StatusBadge></TableCell>
                   </TableRow>
                 ))}

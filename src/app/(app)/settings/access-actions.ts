@@ -75,15 +75,18 @@ export async function resetRoleAccess(): Promise<ActionResult> {
 // ── Users ──
 
 const password = z.string().min(8, "Password needs at least 8 characters").max(72);
+// Logins can be User, Admin or Super Admin (owner change list, #30). A Super Admin can change or delete any login
+// except their own, so at least one Super Admin always remains.
+const LOGIN_ROLES = ["User", "Admin", "SuperAdmin"] as const;
 const newUserSchema = z.object({
   name: z.string().trim().min(2, "Enter the name").max(60),
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._]{3,30}$/, "Username: 3–30 letters, digits, dot or underscore"),
-  role: z.enum(EDITABLE_ROLES),
+  role: z.enum(LOGIN_ROLES),
   password,
   confirm: z.string(),
 }).refine((v) => v.password === v.confirm, { message: "The two passwords don't match", path: ["confirm"] });
 
-/** A new staff login (User or Admin). */
+/** A new login (User, Admin or Super Admin). */
 export async function createUser(_: ActionResult, form: FormData): Promise<ActionResult> {
   const me = await authorize("Access.Manage");
   const parsed = newUserSchema.safeParse(Object.fromEntries(form));
@@ -104,9 +107,9 @@ export async function createUser(_: ActionResult, form: FormData): Promise<Actio
   return { ok: true, message: `${v.name} can now sign in as ${v.username}` };
 }
 
-const updateSchema = z.object({ userId: z.string().min(1), role: z.enum(EDITABLE_ROLES), active: z.enum(["on", "off"]) });
+const updateSchema = z.object({ userId: z.string().min(1), role: z.enum(LOGIN_ROLES), active: z.enum(["on", "off"]) });
 
-/** Change a staff member's role, or switch their login off (signs them out) / on. The owner's login can't be changed here. */
+/** Change a login's role, or switch it off (signs the person out) / on. Your own login can't be changed here. */
 export async function updateUser(_: ActionResult, form: FormData): Promise<ActionResult> {
   const me = await authorize("Access.Manage");
   const parsed = updateSchema.safeParse(Object.fromEntries(form));
@@ -115,7 +118,7 @@ export async function updateUser(_: ActionResult, form: FormData): Promise<Actio
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const u = await tx.user.findFirst({ where: { id: userId, tenantId: me.tenantId, deletedAt: null } });
     if (!u) return { ok: false, error: "User not found" };
-    if (u.id === me.id || u.role === "SuperAdmin") return { ok: false, error: "The owner's own login can't be changed here" };
+    if (u.id === me.id) return { ok: false, error: "Your own login can't be changed here" };
     const on = active === "on";
     if (u.role === role && u.active === on) return { ok: true, message: "No changes" };
     await tx.user.update({ where: { id: u.id }, data: { role, active: on } });
@@ -159,7 +162,7 @@ const deleteSchema = z.object({ userId: z.string().min(1), handOverTo: z.string(
 /**
  * Delete a staff login: their customers, leads, policies, proposals, quotations and open calls move to `handOverTo`;
  * the login can no longer be used (password and sessions removed, username freed) and they leave the Users list.
- * Their name stays on old receipts, Day Book entries and the change log. The owner's login can't be deleted.
+ * Their name stays on old receipts, Day Book entries and the change log. Your own login can't be deleted.
  */
 export async function deleteUser(_: ActionResult, form: FormData): Promise<ActionResult> {
   const me = await authorize("Access.Manage");
@@ -170,7 +173,7 @@ export async function deleteUser(_: ActionResult, form: FormData): Promise<Actio
   const result = await db.$transaction(async (tx): Promise<ActionResult> => {
     const u = await tx.user.findFirst({ where: { id: userId, tenantId: me.tenantId, deletedAt: null } });
     if (!u) return { ok: false, error: "User not found" };
-    if (u.id === me.id || u.role === "SuperAdmin") return { ok: false, error: "The owner's login can't be deleted" };
+    if (u.id === me.id) return { ok: false, error: "Your own login can't be deleted" };
     const work = await ownedWork(tx, u.id);
     let to: { id: string; name: string } | null = null;
     if (work.total) {

@@ -10,6 +10,9 @@ export class RateNotConfiguredError extends Error {
   }
 }
 
+/** EB is priced by bill-amount slabs (bill + charge); every other service has one fixed rate (paid / collected). */
+export const isSlabService = (code: string) => code === "EB";
+
 export type RateRow = Pick<ServiceRate, "minAmount" | "maxAmount" | "serviceCharge" | "walletCost" | "fixedCustomerAmount" | "effectiveFrom">;
 
 /** Rates in force on `date`: for each slab (or the fixed rate) the latest effectiveFrom on or before it. */

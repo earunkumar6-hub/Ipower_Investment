@@ -667,6 +667,7 @@ model Receipt {
   reference        String? // UTR / cheque no. / net banking transaction ID / card approval no.
   bankName         String? // net banking: the customer's bank (reference only)
   netType          String? // net banking: NEFT / IMPS / RTGS
+  modeName         String? // the agency's own pay mode name (Settings → Payment modes); null for a built-in mode
   denominations    Json? // cash: { "500": 4, "200": 2, …, "coins": "12.50" }; on the Payment when several dues are paid together
   notes            String?
   isPassThrough    Boolean         @default(true)
@@ -718,6 +719,7 @@ model Payment {
   reference     String?
   bankName      String?
   netType       String? // net banking: NEFT / IMPS / RTGS
+  modeName      String? // the agency's own pay mode name (Settings → Payment modes); null for a built-in mode
   denominations Json?
   notes         String?
   status        ReceiptStatus @default(Saved)
@@ -1198,7 +1200,8 @@ model PaymentOption {
   id       String        @id @default(cuid())
   tenantId String
   kind     PayOptionKind
-  name     String // a PaymentMode value for kind Mode; a bank name for kind Bank
+  name     String // kind Mode: a PaymentMode value (built-in) or the agency's own name (see `base`); kind Bank: no longer used (#29)
+  base     PaymentMode? // set on a mode the agency added: the built-in mode it behaves like (#28)
   active   Boolean       @default(true)
   sort     Int           @default(0)
 
@@ -1227,6 +1230,7 @@ model DirectBill {
   reference     String?
   bankName      String?
   netType       String? // net banking: NEFT / IMPS / RTGS
+  modeName      String? // the agency's own pay mode name (Settings → Payment modes); null for a built-in mode
   denominations Json?
   status        ReceiptStatus @default(Saved)
   cancelReason  String?

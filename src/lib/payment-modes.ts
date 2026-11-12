@@ -17,7 +17,16 @@ export const NOTES = [500, 200, 100, 50, 20, 10] as const;
 /** Note counts by face value plus coins in rupees: { "500": 4, "200": 2, coins: "12.50" }. */
 export type Denominations = Partial<Record<`${(typeof NOTES)[number]}`, number>> & { coins?: string };
 
-/** "Net banking · HDFC · 55120931", "UPI · UTR 4291…", "Cash". */
-export function modeText(r: { mode: PaymentMode; reference?: string | null; bankName?: string | null; netType?: string | null }) {
-  return [MODE_LABEL[r.mode], r.netType, r.bankName, r.reference].filter(Boolean).join(" · ");
+/**
+ * A pay mode staff can pick (Settings → Payment modes): a built-in one (`name` null), or one the agency added –
+ * its own `name`, behaving like the built-in `mode` (owner change list, #28).
+ */
+export type PayModeOption = { mode: ReceiptMode; name: string | null; label: string };
+
+/** The mode as shown to staff and printed: the agency's own name when the record has one. */
+export const modeLabel = (r: { mode: PaymentMode; modeName?: string | null }) => r.modeName || MODE_LABEL[r.mode];
+
+/** "Net banking · HDFC · 55120931", "UPI · UTR 4291…", "GPay · 4291…", "Cash". */
+export function modeText(r: { mode: PaymentMode; modeName?: string | null; reference?: string | null; bankName?: string | null; netType?: string | null }) {
+  return [modeLabel(r), r.netType, r.bankName, r.reference].filter(Boolean).join(" · ");
 }

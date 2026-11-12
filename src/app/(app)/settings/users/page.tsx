@@ -9,7 +9,7 @@ import { SettingsTabs } from "../settings-tabs";
 import { ownedWork } from "@/lib/users";
 import { DeleteUserButton, NewUserForm, PasswordForm, UserRowForm } from "./user-forms";
 
-/** Settings → Users (Super Admin only): staff logins, their role, login on / off, new passwords. */
+/** Settings → Users (Super Admin only): logins (User, Admin, Super Admin), their role, login on / off, new passwords. */
 export default async function UsersPage() {
   const me = await requirePermission("Access.Manage");
   const users = await db.user.findMany({ where: { tenantId: me.tenantId, deletedAt: null }, orderBy: [{ active: "desc" }, { role: "asc" }, { name: "asc" }] });
@@ -31,15 +31,15 @@ export default async function UsersPage() {
                   <TableCell>{u.name}{!u.active && <StatusBadge tone="slate">Login off</StatusBadge>}</TableCell>
                   <TableCell className="font-mono text-xs">{u.username}</TableCell>
                   <TableCell>
-                    {u.role === "SuperAdmin" || u.id === me.id
-                      ? <span>{ROLE_LABEL[u.role]} <span className="text-xs text-muted-foreground">(owner – can&apos;t be changed here)</span></span>
+                    {u.id === me.id
+                      ? <span>{ROLE_LABEL[u.role]} <span className="text-xs text-muted-foreground">(your own login – can&apos;t be changed here)</span></span>
                       : <UserRowForm userId={u.id} role={u.role} active={u.active} />}
                   </TableCell>
                   <TableCell className="text-sm">{u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <PasswordForm userId={u.id} />
-                      {u.role !== "SuperAdmin" && u.id !== me.id && <DeleteUserButton userId={u.id} name={u.name} work={work.get(u.id)!} others={handOver(u.id)} />}
+                      {u.id !== me.id && <DeleteUserButton userId={u.id} name={u.name} work={work.get(u.id)!} others={handOver(u.id)} />}
                     </div>
                   </TableCell>
                 </TableRow>

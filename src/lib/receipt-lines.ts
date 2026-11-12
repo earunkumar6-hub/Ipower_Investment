@@ -51,7 +51,7 @@ export class Refused extends Error {
 /** What every receipt line of one payment shares. */
 export type LineCommon = {
   tenantId: string; fy: string; receiptDate: Date; txnDate: Date; mode: PaymentMode; accountId: string;
-  reference: string | null; bankName: string | null; netType: string | null; createdById: string; notes: string | null;
+  modeName: string | null; reference: string | null; bankName: string | null; netType: string | null; createdById: string; notes: string | null;
 };
 
 /**

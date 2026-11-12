@@ -10,6 +10,7 @@ import { istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { DROPDOWN_LISTS, findDropdownValue, lockDropdown } from "@/lib/dropdowns";
 import { D, fmtINR } from "@/lib/money";
+import { MODE_LABEL, RECEIPT_MODES } from "@/lib/payment-modes";
 import { authorize } from "@/lib/session";
 
 // Settings → Bank accounts and wallets, Payment modes, Expense purposes, Day Book (Admin and Super Admin).
@@ -125,7 +126,7 @@ export async function setDefaultBank(id: string): Promise<ActionResult> {
   });
 }
 
-// ── Payment modes and the customer bank list (net banking) ──
+// ── Payment modes (the customer bank list was removed: owner change list, #29) ──
 
 export async function setPayOptionActive(id: string, active: boolean): Promise<ActionResult> {
   const user = await authorize("Settings.Edit");
@@ -137,25 +138,76 @@ export async function setPayOptionActive(id: string, active: boolean): Promise<A
       if (on <= 1) return fail("At least one payment mode must stay on");
     }
     await tx.paymentOption.update({ where: { id }, data: { active } });
-    await audit(tx, user, { entity: "PaymentOption", entityId: id, action: active ? "Activated" : "Deactivated", summary: `${o.kind === "Mode" ? "Payment mode" : "Customer bank"} ${o.name} ${active ? "switched on" : "switched off"}` });
+    await audit(tx, user, { entity: "PaymentOption", entityId: id, action: active ? "Activated" : "Deactivated", summary: `Payment mode ${payModeName(o)} ${active ? "switched on" : "switched off"}` });
     return done();
   });
 }
 
-const bankNameSchema = z.object({ name: z.string().trim().min(2, "Enter the bank name").max(40) });
+/** "Net banking" for a built-in mode, the agency's own name otherwise. */
+const payModeName = (o: { name: string; base: string | null }) => (o.base ? o.name : MODE_LABEL[o.name as keyof typeof MODE_LABEL] ?? o.name);
 
-export async function addCustomerBank(_: ActionResult, form: FormData): Promise<ActionResult> {
+// Pay modes the agency adds (owner change list, #28): its own name, behaving like one of the built-in modes –
+// the money rules (cash notes, UTR, cheque no., received-into account) are the built-in mode's.
+const payModeSchema = z.object({
+  id: z.string().default(""),
+  name: z.string().trim().min(2, "Enter the name of the pay mode").max(30),
+  base: z.enum(RECEIPT_MODES, "Pick what it works like"),
+});
+
+/** Is the name free? Not a built-in mode (by its name or label) and not another mode of this agency. */
+async function payModeNameTaken(tx: Pick<typeof db, "paymentOption">, tenantId: string, name: string, exceptId: string) {
+  const lower = name.toLowerCase();
+  if (RECEIPT_MODES.some((m) => m.toLowerCase() === lower || MODE_LABEL[m].toLowerCase() === lower)) return true;
+  return !!(await tx.paymentOption.findFirst({ where: { tenantId, kind: "Mode", name: { equals: name, mode: "insensitive" }, NOT: { id: exceptId || undefined } } }));
+}
+
+/** Receipts, payments and direct bills taken with this mode (they keep its name as text). */
+async function payModeUses(tx: Pick<typeof db, "receipt" | "payment" | "directBill">, tenantId: string, name: string) {
+  const where = { tenantId, modeName: name };
+  const [receipts, payments, bills] = await Promise.all([tx.receipt.count({ where }), tx.payment.count({ where }), tx.directBill.count({ where })]);
+  return receipts + payments + bills;
+}
+
+/** Add a pay mode, or change one the agency added (its name; what it works like only while unused). */
+export async function savePayMode(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("Settings.Edit");
-  const parsed = bankNameSchema.safeParse(Object.fromEntries(form));
+  const parsed = payModeSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return firstIssue(parsed.error);
-  const { name } = parsed.data;
+  const { id, name, base } = parsed.data;
   return db.$transaction(async (tx) => {
-    const same = await tx.paymentOption.findFirst({ where: { tenantId: user.tenantId, kind: "Bank", name: { equals: name, mode: "insensitive" } } });
-    if (same?.active) return fail(`${same.name} is already in the list`, "name");
-    const o = same
-      ? await tx.paymentOption.update({ where: { id: same.id }, data: { active: true } })
-      : await tx.paymentOption.create({ data: { tenantId: user.tenantId, kind: "Bank", name, sort: 100 } });
-    await audit(tx, user, { entity: "PaymentOption", entityId: o.id, action: "Created", summary: `Customer bank ${o.name} added` });
+    if (await payModeNameTaken(tx, user.tenantId, name, id)) return fail(`${name} is already a pay mode`, "name");
+    if (!id) {
+      const last = await tx.paymentOption.aggregate({ where: { tenantId: user.tenantId, kind: "Mode" }, _max: { sort: true } });
+      const o = await tx.paymentOption.create({ data: { tenantId: user.tenantId, kind: "Mode", name, base, sort: (last._max.sort ?? 0) + 1 } });
+      await audit(tx, user, { entity: "PaymentOption", entityId: o.id, action: "Created", summary: `Payment mode ${name} added (works like ${MODE_LABEL[base]})` });
+      return done();
+    }
+    const o = await tx.paymentOption.findFirst({ where: { id, tenantId: user.tenantId, kind: "Mode" } });
+    if (!o) return fail("Not found");
+    if (!o.base) return fail("A built-in pay mode can't be changed – switch it off instead");
+    if (o.name === name && o.base === base) return done();
+    if (o.base !== base && (await payModeUses(tx, user.tenantId, o.name)) > 0) return fail(`${o.name} is on saved receipts, so what it works like can't change`, "base");
+    await tx.paymentOption.update({ where: { id }, data: { name, base } });
+    await audit(tx, user, {
+      entity: "PaymentOption", entityId: id, action: "Updated", summary: `Payment mode ${o.name} changed`,
+      before: { name: o.name, worksLike: MODE_LABEL[o.base] }, after: { name, worksLike: MODE_LABEL[base] },
+    });
+    return done();
+  });
+}
+
+/** Delete a pay mode the agency added, while no receipt or bill uses it; otherwise it can only be switched off. */
+export async function deletePayMode(id: string): Promise<ActionResult> {
+  const user = await authorize("Settings.Edit");
+  return db.$transaction(async (tx) => {
+    const o = await tx.paymentOption.findFirst({ where: { id, tenantId: user.tenantId, kind: "Mode" } });
+    if (!o) return fail("Not found");
+    if (!o.base) return fail("A built-in pay mode can't be deleted – switch it off instead");
+    const uses = await payModeUses(tx, user.tenantId, o.name);
+    if (uses > 0) return fail(`${o.name} is on ${uses} saved receipt(s) or bill(s), so it can't be deleted – switch it off instead`);
+    if (o.active && (await tx.paymentOption.count({ where: { tenantId: user.tenantId, kind: "Mode", active: true } })) <= 1) return fail("At least one payment mode must stay on");
+    await tx.paymentOption.delete({ where: { id } });
+    await audit(tx, user, { entity: "PaymentOption", entityId: id, action: "Deleted", summary: `Payment mode ${o.name} deleted` });
     return done();
   });
 }

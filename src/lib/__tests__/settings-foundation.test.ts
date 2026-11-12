@@ -5,6 +5,7 @@ import { cashAndBank, moneyAccounts } from "@/lib/accounts";
 import { decryptJson } from "@/lib/crypto";
 import { db, prisma } from "@/lib/db";
 import { dropdownValues } from "@/lib/dropdowns";
+import { payOptions } from "@/lib/payment-options";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
 const session = vi.hoisted(() => ({ user: null as null | U }));
@@ -156,10 +157,23 @@ describe("Payment modes and customer banks", () => {
     }
   });
 
-  it("customer banks are added once, case-insensitively", async () => {
+  it("pay modes can be added, changed and deleted while unused (#28)", async () => {
     as("admin");
-    expect(await m.addCustomerBank({ ok: false }, form({ name: "Vitest Bank" }))).toEqual({ ok: true });
-    expect((await m.addCustomerBank({ ok: false }, form({ name: "vitest bank" }))).error).toMatch(/already/);
+    expect((await m.savePayMode({ ok: false }, form({ name: "Net banking", base: "UPI" }))).error).toMatch(/already a pay mode/);
+    expect((await m.savePayMode({ ok: false }, form({ name: "Vitest Pay", base: "" }))).fieldErrors).toHaveProperty("base");
+    expect(await m.savePayMode({ ok: false }, form({ name: "Vitest Pay", base: "UPI" }))).toEqual({ ok: true });
+    expect((await m.savePayMode({ ok: false }, form({ name: "vitest pay", base: "Cheque" }))).error).toMatch(/already a pay mode/);
+    const o = await prisma.paymentOption.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, name: "Vitest Pay" } });
+    expect(o).toMatchObject({ kind: "Mode", base: "UPI", active: true });
+    const { modes } = await payOptions(db, users.admin.tenantId);
+    expect(modes).toContainEqual({ mode: "UPI", name: "Vitest Pay", label: "Vitest Pay" });
+
+    expect(await m.savePayMode({ ok: false }, form({ id: o.id, name: "Vitest Pay 2", base: "Cheque" }))).toEqual({ ok: true });
+    expect(await prisma.paymentOption.findUniqueOrThrow({ where: { id: o.id } })).toMatchObject({ name: "Vitest Pay 2", base: "Cheque" });
+    const builtIn = await prisma.paymentOption.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, kind: "Mode", name: "Cash" } });
+    expect((await m.deletePayMode(builtIn.id)).error).toMatch(/built-in/);
+    expect(await m.deletePayMode(o.id)).toEqual({ ok: true });
+    expect(await prisma.paymentOption.count({ where: { id: o.id } })).toBe(0);
   });
 });
 

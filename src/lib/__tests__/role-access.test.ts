@@ -120,14 +120,23 @@ describe("Users", () => {
     expect(await verifyPassword({ hash: u.authAccounts[0].password!, password: "secret123" })).toBe(true);
   });
 
-  it("role change and login off (signs out); the owner's login can't be changed", async () => {
+  it("role change and login off (signs out); your own login can't be changed", async () => {
     as("owner");
     const u = await prisma.user.findFirstOrThrow({ where: { username: "vt_staff1" } });
     await prisma.session.create({ data: { id: `ses_vt_${started.getTime()}`, token: `tok_vt_${started.getTime()}`, userId: u.id, expiresAt: new Date(Date.now() + 3_600_000) } });
     expect((await updateUser({ ok: false }, form({ userId: u.id, role: "Admin", active: "off" }))).ok).toBe(true);
     expect(await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).toMatchObject({ role: "Admin", active: false });
     expect(await prisma.session.count({ where: { userId: u.id } })).toBe(0);
-    expect((await updateUser({ ok: false }, form({ userId: users.owner.id, role: "User", active: "off" }))).error).toMatch(/owner/);
+    expect((await updateUser({ ok: false }, form({ userId: users.owner.id, role: "User", active: "off" }))).error).toMatch(/own login/);
+  });
+
+  it("a Super Admin can add another Super Admin and change it back (#30)", async () => {
+    as("owner");
+    expect((await createUser({ ok: false }, form({ name: "Vitest Partner", username: "vt_partner", role: "SuperAdmin", password: "partner123", confirm: "partner123" }))).ok).toBe(true);
+    const u = await prisma.user.findFirstOrThrow({ where: { username: "vt_partner" } });
+    expect(u.role).toBe("SuperAdmin");
+    expect((await updateUser({ ok: false }, form({ userId: u.id, role: "Admin", active: "on" }))).ok).toBe(true);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).role).toBe("Admin");
   });
 
   it("sets a new password", async () => {
@@ -140,9 +149,9 @@ describe("Users", () => {
 });
 
 describe("Delete a login", () => {
-  it("the owner can't be deleted; work must be handed over; the login is gone, the name stays", async () => {
+  it("your own login can't be deleted; work must be handed over; the login is gone, the name stays", async () => {
     as("owner");
-    expect((await deleteUser({ ok: false }, form({ userId: users.owner.id, handOverTo: "", confirm: "DELETE" }))).error).toMatch(/owner/);
+    expect((await deleteUser({ ok: false }, form({ userId: users.owner.id, handOverTo: "", confirm: "DELETE" }))).error).toMatch(/own login/);
     expect((await createUser({ ok: false }, form({ name: "Vitest Leaver", username: "vt_leaver", role: "User", password: "leaver123", confirm: "leaver123" }))).ok).toBe(true);
     const u = await prisma.user.findFirstOrThrow({ where: { username: "vt_leaver" } });
     const c = await prisma.customer.create({ data: { tenantId: users.owner.tenantId, name: "Vitest handover customer", mobile: "6000033344", ownerId: u.id } });

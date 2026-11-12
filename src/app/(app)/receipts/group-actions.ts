@@ -12,7 +12,7 @@ import { lockPolicyDues, payableDues } from "@/lib/dues";
 import { canActOn } from "@/lib/leads";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
-import { checkPayment, MODE_LABEL, payFields } from "@/lib/payment-options";
+import { checkPayment, modeLabel, payFields } from "@/lib/payment-options";
 import { billEnd } from "@/lib/policies";
 import { PAY_MODE_LABEL } from "@/lib/products";
 import { closedDayError, dateOrToday, duesField, type LineCommon, moneyField, pastOrTodayField, payDueLine, pickDues, Refused } from "@/lib/receipt-lines";
@@ -209,14 +209,14 @@ async function createGroupReceiptUnguarded(_: ActionResult, form: FormData): Pro
       if (!total.equals(amount)) return { ok: false, error: `Amount must be ${fmtINR(total)} for the bills ticked`, fieldErrors: { amount: "Mismatch" } };
 
       const common: LineCommon = {
-        tenantId: user.tenantId, fy: financialYear(billDate), receiptDate: billDate, txnDate: dateOrToday(v.txnDate), mode: v.mode,
+        tenantId: user.tenantId, fy: financialYear(billDate), receiptDate: billDate, txnDate: dateOrToday(v.txnDate), mode: v.mode, modeName: pay.ok.modeName,
         accountId: pay.ok.accountId, reference: pay.ok.reference, bankName: pay.ok.bankName, netType: pay.ok.netType, createdById: user.id, notes: v.notes || null,
       };
       const payment = await tx.payment.create({
         data: {
           tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), kind: v.kind, billGroupId: members ? v.billGroupId : null,
           receiptDate: billDate, txnDate: common.txnDate, customerId: null, payerName: v.payerName, payerMobile: v.payerMobile, poReceiptNo: v.poReceiptNo || null,
-          amount, mode: v.mode, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
+          amount, mode: v.mode, modeName: common.modeName, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
           notes: common.notes, createdById: user.id,
         },
       });
@@ -225,7 +225,7 @@ async function createGroupReceiptUnguarded(_: ActionResult, form: FormData): Pro
       await tx.messageLog.create({
         data: {
           tenantId: user.tenantId, channel: "WhatsApp", to: v.payerMobile, template: "receipt", relatedType: "Payment", relatedId: payment.id, createdById: user.id,
-          body: `Thank you ${v.payerName}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${lines.length} bill(s) of ${customers} customer(s). Receipt ${payment.paymentNo}.`,
+          body: `Thank you ${v.payerName}. Received ${fmtINR(amount)} (${modeLabel(common)}) for ${lines.length} bill(s) of ${customers} customer(s). Receipt ${payment.paymentNo}.`,
         },
       });
       return { ok: true, id: payment.id, href: `/payments/${payment.id}` };

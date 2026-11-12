@@ -9,7 +9,7 @@ import { nameLookup } from "@/lib/deposit-status";
 import { maskMobile } from "@/lib/lead-labels";
 import { userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
-import { MODE_LABEL } from "@/lib/payment-modes";
+import { modeLabel } from "@/lib/payment-modes";
 import { seesAll } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ export default async function DirectBillsPage() {
                   {b.customer && <span className="block text-xs text-muted-foreground">Customer: {b.customer.name}</span>}
                 </TableCell>
                 <TableCell>{b.purpose}</TableCell>
-                <TableCell>{MODE_LABEL[b.mode]}{b.bankName && <span className="block text-xs text-muted-foreground">{b.bankName}</span>}</TableCell>
+                <TableCell>{modeLabel(b)}{b.bankName && <span className="block text-xs text-muted-foreground">{b.bankName}</span>}</TableCell>
                 <TableCell className="text-right">{fmtINR(b.amount)}</TableCell>
                 <TableCell>{nameOf(b.createdById)}</TableCell>
                 <TableCell>

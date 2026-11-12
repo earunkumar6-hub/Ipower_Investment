@@ -40,7 +40,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
         )}
         <GroupReceiptForm kind="BillGroup" billGroupId={group.id} policies={policyOptions(mine, istToday())}
           payer={{ name: group.contactName ?? "", mobile: group.contactMobile ?? "" }}
-          modes={opts.modes} banks={opts.banks} accounts={accounts} receivedBy={user.name} />
+          modes={opts.modes} accounts={accounts} receivedBy={user.name} />
       </>
     );
   }
@@ -62,7 +62,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
       <>
         <PageHeader title="New receipt" user={user} />
         <ReceiptForm
-          modes={opts.modes} banks={opts.banks} accounts={accounts} receivedBy={user.name}
+          modes={opts.modes} accounts={accounts} receivedBy={user.name}
           customer={{ id: customer.id, name: customer.name, mobile: customer.mobile }}
           policies={policies}
           openSlips={customer.ownerPaidSlips.map((s) => ({

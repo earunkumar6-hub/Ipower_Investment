@@ -10,7 +10,7 @@ import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isoDate, istToday } from "@/lib/dates";
-import type { ReceiptMode } from "@/lib/payment-modes";
+import type { PayModeOption } from "@/lib/payment-modes";
 import type { PolicyOption } from "@/lib/receipt-options";
 import { BillsPicker, ticked, unpaidCounts } from "./bills-picker";
 import { createGroupReceipt } from "./group-actions";
@@ -19,9 +19,9 @@ import { createGroupReceipt } from "./group-actions";
  * One receipt for many bills: a combined receipt (bills ticked across customers) or a bill group's receipt.
  * Made out to the person who paid ("Paid by"); every bill keeps its own line under its own customer.
  */
-export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, banks, accounts, receivedBy, preset }: {
+export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, accounts, receivedBy, preset }: {
   kind: "Combined" | "BillGroup"; billGroupId?: string; policies: PolicyOption[]; payer: { name: string; mobile: string };
-  modes: ReceiptMode[]; banks: string[]; accounts: IntoAccount[]; receivedBy: string;
+  modes: PayModeOption[]; accounts: IntoAccount[]; receivedBy: string;
   /** Bills already ticked (e.g. from Renewals). */
   preset?: Record<string, number>;
 }) {
@@ -87,7 +87,7 @@ export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, ba
           <Label>Received by</Label>
           <div className="flex h-8 items-center rounded-lg border bg-slate-50 px-2.5 text-sm">{receivedBy}</div>
         </div>
-        <PaymentFields modes={modes} banks={banks} accounts={accounts} amount={t.total} value={pay} onChange={setPay} errors={err} />
+        <PaymentFields modes={modes} accounts={accounts} amount={t.total} value={pay} onChange={setPay} errors={err} />
         <div className="space-y-1.5">
           <Label htmlFor="poReceiptNo">PO receipt no. (optional)</Label>
           <Input id="poReceiptNo" value={poReceiptNo} onChange={(e) => setPoReceiptNo(e.target.value)} />

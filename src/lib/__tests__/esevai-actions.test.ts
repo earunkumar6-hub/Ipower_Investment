@@ -19,6 +19,8 @@ vi.mock("@/lib/session", async () => {
 });
 
 const { createServiceEntry, rechargeWallet, findCustomerByMobile } = await import("@/app/(app)/esevai/actions");
+const { saveServiceRate, deleteServiceRate } = await import("@/app/(app)/settings/esevai-rates/actions");
+const { ratesInForce } = await import("@/lib/esevai");
 
 const started = new Date();
 const users: Record<string, U> = {};
@@ -59,7 +61,45 @@ afterAll(async () => {
   await prisma.serviceTransaction.deleteMany({ where: { id: { in: txns.map((t) => t.id) } } });
   await prisma.messageLog.deleteMany({ where: { createdAt: { gte: started }, template: "low_wallet_balance", body: { contains: "needed ₹25,000" } } });
   await prisma.auditLog.deleteMany({ where: { createdAt: { gte: started }, action: "Recharge", summary: { contains: "VT6-R" } } });
+  await prisma.serviceRate.deleteMany({ where: { effectiveFrom: { gte: new Date("2099-01-01T00:00:00Z") } } });
+  await prisma.auditLog.deleteMany({ where: { createdAt: { gte: started }, entity: "ServiceRate" } });
   await prisma.$disconnect();
+});
+
+describe("Settings → ESEVAI & CSC rates (#46)", () => {
+  it("a new rate takes over from its start date; a rate not yet started can be removed", async () => {
+    const t = users.admin.tenantId;
+    const eb = await prisma.serviceType.findFirstOrThrow({ where: { tenantId: t, code: "EB" } });
+    const pan = await prisma.serviceType.findFirstOrThrow({ where: { tenantId: t, code: "PAN" } });
+    const on = (d: string) => new Date(`${d}T00:00:00Z`);
+
+    session.user = users.arun;
+    await expect(saveServiceRate({ ok: false }, form({ serviceTypeId: eb.id, effectiveFrom: "2099-01-01" }))).rejects.toThrow(/Not allowed/);
+    session.user = users.admin;
+    try {
+      // EB slab: a new bill range, then the same range with a new charge from a later date.
+      expect((await saveServiceRate({ ok: false }, form({ serviceTypeId: eb.id, effectiveFrom: "2099-01-01", minAmount: "1000", maxAmount: "", serviceCharge: "15" }))).fieldErrors).toHaveProperty("maxAmount");
+      expect((await saveServiceRate({ ok: false }, form({ serviceTypeId: eb.id, effectiveFrom: "2099-01-01", minAmount: "500", maxAmount: "1500", serviceCharge: "15" }))).error).toMatch(/Overlaps/);
+      expect(await saveServiceRate({ ok: false }, form({ serviceTypeId: eb.id, effectiveFrom: "2099-01-01", minAmount: "1000", maxAmount: "1999.99", serviceCharge: "15" }))).toEqual({ ok: true });
+      expect(await saveServiceRate({ ok: false }, form({ serviceTypeId: eb.id, effectiveFrom: "2099-06-01", minAmount: "1000", maxAmount: "1999.99", serviceCharge: "18" }))).toEqual({ ok: true });
+      const slab = async (d: string) => (await ratesInForce(prisma as never, eb.id, on(d))).find((r) => r.minAmount?.equals(1000))?.serviceCharge?.toFixed(2);
+      expect([await slab("2098-12-31"), await slab("2099-03-01"), await slab("2099-06-01")]).toEqual([undefined, "15.00", "18.00"]);
+
+      // Fixed service: collected can't be below paid; the newest started rate is the one in force.
+      expect((await saveServiceRate({ ok: false }, form({ serviceTypeId: pan.id, effectiveFrom: "2099-01-01", walletCost: "120", fixedCustomerAmount: "100" }))).fieldErrors).toHaveProperty("fixedCustomerAmount");
+      expect(await saveServiceRate({ ok: false }, form({ serviceTypeId: pan.id, effectiveFrom: "2099-01-01", walletCost: "120", fixedCustomerAmount: "200" }))).toEqual({ ok: true });
+      const fixed = (await ratesInForce(prisma as never, pan.id, on("2099-02-01"))).find((r) => r.fixedCustomerAmount !== null)!;
+      expect([fixed.walletCost?.toFixed(2), fixed.fixedCustomerAmount?.toFixed(2)]).toEqual(["120.00", "200.00"]);
+
+      // Not started yet → can be removed; a rate already in force can't.
+      const future = await prisma.serviceRate.findFirstOrThrow({ where: { serviceTypeId: pan.id, effectiveFrom: on("2099-01-01") } });
+      expect(await deleteServiceRate(future.id)).toEqual({ ok: true });
+      const live = await prisma.serviceRate.findFirstOrThrow({ where: { serviceTypeId: pan.id, effectiveFrom: { lte: istToday() } } });
+      expect((await deleteServiceRate(live.id)).error).toMatch(/already started/);
+    } finally {
+      session.user = users.arun;
+    }
+  });
 });
 
 describe("E-Sevai entries (#7)", () => {

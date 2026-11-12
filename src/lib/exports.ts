@@ -18,7 +18,7 @@ import {
   pnlMonth, PRODUCT_SHORT, receiptFilter, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
-import { MODE_LABEL } from "@/lib/payment-modes";
+import { modeLabel } from "@/lib/payment-modes";
 import { seesAll, type Permission } from "@/lib/permissions";
 import { commissionSummary, fyOfMonth, monthName } from "@/lib/commission-received";
 import { monthKey, monthRange, ownerStatement, previousMonthKey, profitAndLoss } from "@/lib/pnl";
@@ -278,7 +278,7 @@ export const REPORTS: Record<string, Report> = {
           {
             name: "Receipts",
             columns: [{ header: "Receipt" }, { header: "Date", type: "date" }, { header: "For", width: 24 }, { header: "Mode" }, { header: "Amount", type: "money" }, { header: "Status" }],
-            rows: c.receipts.map((r) => [r.receiptNo, r.receiptDate, (r.policy?.policyNumber ?? r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : ""), MODE_LABEL[r.mode], r.amount, r.status]),
+            rows: c.receipts.map((r) => [r.receiptNo, r.receiptDate, (r.policy?.policyNumber ?? r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : ""), modeLabel(r), r.amount, r.status]),
           },
         ],
       };
@@ -409,7 +409,7 @@ export const REPORTS: Record<string, Report> = {
           { header: "Customers", width: 40 }, { header: "Bills" }, { header: "Mode" }, { header: "Reference" }, { header: "Account" }, { header: "Amount", type: "money" },
           { header: "PO receipt no." }, { header: "Collected by" }, { header: "Status" }, { header: "Cancel reason", width: 24 }],
         rows: rows.map((p) => [p.paymentNo, p.receiptDate, ...(family ? [p.billGroup?.name ?? null] : []), p.payerName, p.payerMobile,
-          [...new Set(p.receipts.map((r) => r.customer.name))].join(", "), p.receipts.length, MODE_LABEL[p.mode], [p.bankName, p.reference].filter(Boolean).join(" · "),
+          [...new Set(p.receipts.map((r) => r.customer.name))].join(", "), p.receipts.length, modeLabel(p), [p.bankName, p.reference].filter(Boolean).join(" · "),
           account(p.receipts[0]?.accountId ?? null), p.amount, p.poReceiptNo, nameOf(p.createdById), p.status, p.cancelReason]),
       });
       const account = nameIn(accounts);
@@ -425,7 +425,7 @@ export const REPORTS: Record<string, Report> = {
             { header: "Collected by" }, { header: "Status" }, { header: "RD status" }, { header: "Deposit status", width: 48 }, { header: "Cancel reason", width: 24 }],
           rows: receipts.map((r) => {
             const forText = (r.policy ? (r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`) : r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : "");
-            return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, MODE_LABEL[r.mode], [r.bankName, r.reference].filter(Boolean).join(" · "), account(r.accountId), r.amount,
+            return [r.receiptNo, r.payment?.paymentNo, r.receiptDate, r.txnDate, r.createdAt, r.customer.name, forText, modeLabel(r), [r.bankName, r.reference].filter(Boolean).join(" · "), account(r.accountId), r.amount,
               nameOf(r.createdById), r.status, r.status !== "Cancelled" ? r.rdStatus : null,
               r.policy && r.status !== "Cancelled" ? companyStatus(r, r.policy.partner, nameOf).text : null, r.cancelReason];
           }),

@@ -3,28 +3,28 @@ import { z } from "zod";
 import { receivingAccount } from "@/lib/accounts";
 import type { Tx } from "@/lib/db";
 import { D, fmtINR } from "@/lib/money";
-import { MODE_LABEL, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type ReceiptMode } from "@/lib/payment-modes";
+import { MODE_LABEL, modeLabel, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type PayModeOption, type ReceiptMode } from "@/lib/payment-modes";
 
-// Payment modes offered on receipts / direct bills, net banking banks (Settings → Payment modes) and cash denomination.
+// Payment modes offered on receipts / direct bills (Settings → Payment modes) and cash denomination.
 // Plain labels / constants (safe for client components) live in payment-modes.ts.
 
-export { MODE_LABEL, modeText, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type ReceiptMode };
+export { MODE_LABEL, modeLabel, modeText, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type PayModeOption, type ReceiptMode };
 
-export const DEFAULT_BANKS = ["SBI", "HDFC", "IOB", "Indian Bank", "Canara Bank", "ICICI", "Axis"];
+/** Rows for a new tenant: the built-in modes. The customer bank list is gone (owner change list, #29). */
+export const defaultPayOptions = (tenantId: string): Prisma.PaymentOptionCreateManyInput[] =>
+  RECEIPT_MODES.map((name, i) => ({ tenantId, kind: "Mode" as const, name, sort: i + 1 }));
 
-/** Rows for a new tenant (the migration adds the same for existing tenants). */
-export const defaultPayOptions = (tenantId: string): Prisma.PaymentOptionCreateManyInput[] => [
-  ...RECEIPT_MODES.map((name, i) => ({ tenantId, kind: "Mode" as const, name, sort: i + 1 })),
-  ...DEFAULT_BANKS.map((name, i) => ({ tenantId, kind: "Bank" as const, name, sort: i + 1 })),
-];
+export const isReceiptMode = (v: string | null | undefined): v is ReceiptMode => (RECEIPT_MODES as readonly string[]).includes(v ?? "");
 
-/** Switched-on modes (display order) and bank names. */
-export async function payOptions(tx: Pick<Tx, "paymentOption">, tenantId: string) {
-  const rows = await tx.paymentOption.findMany({ where: { tenantId, active: true }, orderBy: [{ sort: "asc" }, { name: "asc" }] });
-  const on = new Set(rows.filter((r) => r.kind === "Mode").map((r) => r.name));
+/** Switched-on modes in display order: the built-in ones, then the ones the agency added (#28). */
+export async function payOptions(tx: Pick<Tx, "paymentOption">, tenantId: string): Promise<{ modes: PayModeOption[] }> {
+  const rows = await tx.paymentOption.findMany({ where: { tenantId, kind: "Mode", active: true }, orderBy: [{ sort: "asc" }, { name: "asc" }] });
+  const on = new Set(rows.filter((r) => !r.base).map((r) => r.name));
   return {
-    modes: RECEIPT_MODES.filter((m) => on.has(m)) as ReceiptMode[],
-    banks: rows.filter((r) => r.kind === "Bank").map((r) => r.name),
+    modes: [
+      ...RECEIPT_MODES.filter((m) => on.has(m)).map((m) => ({ mode: m, name: null, label: MODE_LABEL[m] })),
+      ...rows.flatMap((r) => (isReceiptMode(r.base) ? [{ mode: r.base, name: r.name, label: r.name }] : [])),
+    ],
   };
 }
 
@@ -57,14 +57,15 @@ const parseJson = (v: string): unknown => {
 
 /** Form fields shared by receipts and direct bills: mode, reference, bank name, cash denomination (JSON), received into. */
 export const payFields = {
-  mode: z.enum(RECEIPT_MODES, "Pick the payment mode"),
+  mode: z.enum(RECEIPT_MODES, "Pick the payment mode"), // the built-in mode (what the mode picked behaves like)
+  modeName: z.string().trim().max(40).default(""), // the agency's own mode picked, if any (#28)
   intoAccountId: z.string().trim().default(""), // "Received into" bank account; not used for cash
   reference: z.string().trim().max(60).default(""),
   bankName: z.string().trim().max(60).default(""),
   netType: z.string().trim().default(""),
   denominations: z.string().default(""),
 };
-type PayInput = { mode: ReceiptMode; reference: string; bankName: string; netType: string; denominations: string; intoAccountId: string };
+type PayInput = { mode: ReceiptMode; modeName?: string; reference: string; bankName: string; netType: string; denominations: string; intoAccountId: string };
 
 /**
  * Cash notes/coins (JSON from the CashDenominationGrid) must add up to `amount`.
@@ -89,22 +90,23 @@ export const denominationsField = z.string().default("");
 export async function checkPayment(tx: Pick<Tx, "paymentOption" | "account">, tenantId: string, v: PayInput, amount: Prisma.Decimal) {
   const opts = await payOptions(tx, tenantId);
   const fail = (field: string, error: string) => ({ error, field }) as const;
-  if (!opts.modes.includes(v.mode)) return fail("mode", `${MODE_LABEL[v.mode]} is switched off in Settings`);
+  const picked = opts.modes.find((m) => m.mode === v.mode && (m.name ?? "") === (v.modeName ?? ""));
+  if (!picked) return fail("mode", `${v.modeName || MODE_LABEL[v.mode]} is switched off in Settings`);
+  const modeName = picked.name;
   if (v.mode === "Cash") {
     const cash = checkDenominations(v.denominations, amount);
     if ("error" in cash) return fail("denominations", cash.error);
     const into = await receivingAccount(tx, tenantId, v.mode, "");
     if ("error" in into) return fail("intoAccountId", into.error);
-    return { ok: { reference: null, bankName: null, netType: null, denominations: cash.ok, accountId: into.ok.id } } as const;
+    return { ok: { modeName, reference: null, bankName: null, netType: null, denominations: cash.ok, accountId: into.ok.id } } as const;
   }
   if (!v.reference) return fail("reference", `Enter the ${REFERENCE_LABEL[v.mode].toLowerCase()}`);
   if (v.mode === "NetBanking") {
     if (!(NET_TYPES as readonly string[]).includes(v.netType)) return fail("netType", "Pick NEFT, IMPS or RTGS");
-    if (!v.bankName) return fail("bankName", "Pick the customer's bank");
-    if (!opts.banks.includes(v.bankName)) return fail("bankName", `${v.bankName} is not in the bank list (Settings → Payment modes)`);
+    if (!v.bankName) return fail("bankName", "Enter the customer's bank"); // typed: the bank list is gone (#29)
   }
   const into = await receivingAccount(tx, tenantId, v.mode, v.intoAccountId);
   if ("error" in into) return fail("intoAccountId", into.error);
   const net = v.mode === "NetBanking";
-  return { ok: { reference: v.reference, bankName: net ? v.bankName : null, netType: net ? v.netType : null, denominations: undefined, accountId: into.ok.id } } as const;
+  return { ok: { modeName, reference: v.reference, bankName: net ? v.bankName : null, netType: net ? v.netType : null, denominations: undefined, accountId: into.ok.id } } as const;
 }

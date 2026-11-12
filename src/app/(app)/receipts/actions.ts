@@ -18,7 +18,7 @@ import { postOwnerReturn } from "@/lib/posting";
 import { OWNER_PAYABLE } from "@/lib/dues";
 import { canSeePayment, payerOf } from "@/lib/payment-lines";
 import { addReceiptLine, closedDayError, dateOrToday, duesField, type LineCommon, moneyField, pastOrTodayField, payDueLine, pickDues, Refused } from "@/lib/receipt-lines";
-import { checkDenominations, checkPayment, denominationsField, MODE_LABEL, payFields } from "@/lib/payment-options";
+import { checkDenominations, checkPayment, denominationsField, modeLabel, payFields } from "@/lib/payment-options";
 import { authorize } from "@/lib/session";
 
 const receiptSchema = z
@@ -65,6 +65,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         txnDate: dateOrToday(v.txnDate),
         notes: v.notes || null,
         mode: v.mode,
+        modeName: pay.ok.modeName,
         accountId: pay.ok.accountId, // "Received into" (cash drawer for cash)
         reference: pay.ok.reference,
         bankName: pay.ok.bankName,
@@ -74,7 +75,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       const whatsApp = (body: string, relatedType: string, relatedId: string) =>
         tx.messageLog.create({ data: { tenantId: user.tenantId, channel: "WhatsApp", to: customer.mobile, template: "receipt", body, relatedType, relatedId, createdById: user.id } });
       const thanks = (policy: Policy, receiptNo: string) =>
-        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${policy.partner} ${policy.policyNumber}. Receipt ${receiptNo}.`;
+        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${modeLabel(common)}) for ${policy.partner} ${policy.policyNumber}. Receipt ${receiptNo}.`;
 
       const addReceipt = (policy: Policy, lineAmount: Prisma.Decimal, extra: Partial<Prisma.ReceiptUncheckedCreateInput> = {}) =>
         addReceiptLine(tx, common, policy, customer, lineAmount, extra);
@@ -121,7 +122,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         ? await tx.payment.create({
             data: {
               tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), receiptDate: common.receiptDate, txnDate: common.txnDate,
-              customerId: customer.id, amount, mode: v.mode, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
+              customerId: customer.id, amount, mode: v.mode, modeName: common.modeName, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
               notes: v.notes || null, createdById: user.id,
             },
           })
@@ -136,7 +137,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       }
       const accountsPaid = [...new Set(lines.map((l) => l.policy.policyNumber))].join(", ");
       await whatsApp(
-        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${lines.length} dues (${accountsPaid}). Payment receipt ${payment.paymentNo}.`,
+        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${modeLabel(common)}) for ${lines.length} dues (${accountsPaid}). Payment receipt ${payment.paymentNo}.`,
         "Payment", payment.id,
       );
       return { ok: true, id: payment.id, href: `/payments/${payment.id}` };

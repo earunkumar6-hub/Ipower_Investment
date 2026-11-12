@@ -1,15 +1,17 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { submitKeepingValues } from "@/lib/form";
-import { addCustomerBank, addDropdownValue, saveGraceDays, setDropdownActive, setPayOptionActive } from "./money-actions";
+import { MODE_LABEL, RECEIPT_MODES } from "@/lib/payment-modes";
+import { addDropdownValue, deletePayMode, saveGraceDays, savePayMode, setDropdownActive, setPayOptionActive } from "./money-actions";
 
-/** On / off switch for a payment mode, customer bank or dropdown value. */
+/** On / off switch for a payment mode or dropdown value. */
 export function ToggleButton({ kind, id, active }: { kind: "payOption" | "dropdown"; id: string; active: boolean }) {
   const [pending, start] = useTransition();
   return (
@@ -45,9 +47,61 @@ function OneFieldForm({ label, name, submit, hidden, action: serverAction, done 
   );
 }
 
-export const AddCustomerBankForm = () => (
-  <OneFieldForm label="Add a bank to the list" name="name" submit="Add" action={addCustomerBank} done="Bank added" />
-);
+/** Add a pay mode, or (with `mode`) change one the agency added: its name and the built-in mode it works like (#28). */
+export function PayModeForm({ mode, onDone }: { mode?: { id: string; name: string; base: string }; onDone?: () => void }) {
+  const [key, setKey] = useState(0);
+  const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
+    const r = await savePayMode(prev, form);
+    if (r.ok) {
+      toast.success(mode ? "Pay mode changed" : "Pay mode added");
+      setKey((k) => k + 1);
+      onDone?.();
+    }
+    return r;
+  }, { ok: false });
+  const p = mode ? `pm-${mode.id}` : "pm-new";
+  return (
+    <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-2">
+      {mode && <input type="hidden" name="id" value={mode.id} />}
+      <div className="space-y-1.5">
+        <Label htmlFor={`${p}-name`}>Name</Label>
+        <Input id={`${p}-name`} name="name" defaultValue={mode?.name} maxLength={30} aria-invalid={!!state.fieldErrors?.name} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor={`${p}-base`}>Works like</Label>
+        <NativeSelect id={`${p}-base`} name="base" defaultValue={mode?.base ?? ""} className="w-full" aria-invalid={!!state.fieldErrors?.base}>
+          <NativeSelectOption value=""></NativeSelectOption>
+          {RECEIPT_MODES.map((m) => <NativeSelectOption key={m} value={m}>{MODE_LABEL[m]}</NativeSelectOption>)}
+        </NativeSelect>
+      </div>
+      {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : mode ? "Save" : "Add pay mode"}</Button>
+        {mode && <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>}
+      </div>
+    </form>
+  );
+}
+
+/** Change / Delete for a pay mode the agency added. Delete is refused by the server once a receipt uses the mode. */
+export function PayModeRowActions({ mode }: { mode: { id: string; name: string; base: string } }) {
+  const [editing, setEditing] = useState(false);
+  const [pending, start] = useTransition();
+  if (editing) return <div className="w-64"><PayModeForm mode={mode} onDone={() => setEditing(false)} /></div>;
+  return (
+    <span className="flex gap-1">
+      <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>Change</Button>
+      <Button size="sm" variant="ghost" disabled={pending} onClick={() => {
+        if (!window.confirm(`Delete the pay mode ${mode.name}?`)) return;
+        start(async () => {
+          const r = await deletePayMode(mode.id);
+          if (r.ok) toast.success("Pay mode deleted");
+          else toast.error(r.error ?? "Could not delete");
+        });
+      }}>Delete</Button>
+    </span>
+  );
+}
 
 export const AddDropdownValueForm = ({ list, label }: { list: string; label: string }) => (
   <OneFieldForm label={label} name="value" submit="Add" hidden={{ list }} action={addDropdownValue} done="Added" />

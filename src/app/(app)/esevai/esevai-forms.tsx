@@ -184,7 +184,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
       <div className="space-y-1.5"><Label htmlFor="svNotes">Notes</Label><Input id="svNotes" name="notes" /></div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending || !paise(paid) || !paise(collected)} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save"}</Button>
-      <p className="text-xs text-muted-foreground">Change the amounts if the customer paid a different amount. Service charge = collected − paid.</p>
+      <p className="text-xs text-muted-foreground">EB, PAN and certificate amounts come from Settings → ESEVAI &amp; CSC rates; change them if the customer paid a different amount. Service charge = collected − paid.</p>
     </form>
   );
 }

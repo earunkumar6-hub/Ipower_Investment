@@ -13,7 +13,7 @@ import { db } from "@/lib/db";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
 import { ownerScope, userNames } from "@/lib/leads";
 import { OWNER_PAYABLE } from "@/lib/dues";
-import { MODE_LABEL } from "@/lib/payment-modes";
+import { modeLabel } from "@/lib/payment-modes";
 import { monthLabel, RECEIPT_TABS, receiptFilter, receiptTab, type ReceiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
 import { fmtINR, sum, ZERO } from "@/lib/money";
 import { hasPermission } from "@/lib/permissions";
@@ -125,7 +125,7 @@ async function CustomerReceipts({ tenantId, f, total, canPay }: { tenantId: stri
                 <TableCell>{fmtDate(r.txnDate)}</TableCell>
                 <TableCell>{r.customer.name}</TableCell>
                 <TableCell>{r.policy ? `${r.policy.partner === "Post Office" ? r.policy.policyNumber : `${r.policy.partner} ${r.policy.productName}`}` : r.notes}{r.ownerPaid && " (owner-paid)"}</TableCell>
-                <TableCell>{MODE_LABEL[r.mode]}{r.bankName && <span className="block text-xs text-muted-foreground">{r.bankName}</span>}</TableCell>
+                <TableCell>{modeLabel(r)}{r.bankName && <span className="block text-xs text-muted-foreground">{r.bankName}</span>}</TableCell>
                 <TableCell>{accountName(r.accountId)}</TableCell>
                 <TableCell className="text-right">{fmtINR(r.amount)}</TableCell>
                 <TableCell>{nameOf(r.createdById)}</TableCell>
@@ -298,7 +298,7 @@ async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string;
                 <TableCell>{p.payerName}<span className="block text-xs text-muted-foreground">{p.payerMobile}</span></TableCell>
                 <TableCell className="max-w-48 whitespace-normal text-sm">{names.slice(0, 3).join(", ")}{names.length > 3 && ` +${names.length - 3}`}</TableCell>
                 <TableCell className="text-right">{p.receipts.length}</TableCell>
-                <TableCell>{MODE_LABEL[p.mode]}{p.bankName && <span className="block text-xs text-muted-foreground">{p.bankName}</span>}</TableCell>
+                <TableCell>{modeLabel(p)}{p.bankName && <span className="block text-xs text-muted-foreground">{p.bankName}</span>}</TableCell>
                 <TableCell>{accountName(p.receipts[0]?.accountId)}</TableCell>
                 <TableCell className="text-right">{fmtINR(p.amount)}</TableCell>
                 {!family && <TableCell>{p.poReceiptNo ?? "—"}</TableCell>}

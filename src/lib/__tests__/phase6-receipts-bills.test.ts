@@ -75,14 +75,13 @@ describe("Cash denomination and net banking", () => {
     expect(saved.denominations).toEqual({ "500": 1, "100": 1, "50": 1, coins: "50" });
   });
 
-  it("net banking needs the customer's bank (from the list) and a transaction ID; both show in the Day Book row", async () => {
+  it("net banking needs the customer's bank (typed, #29) and a transaction ID; both show in the Day Book row", async () => {
     const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-105" } });
     const bank = await prisma.account.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, type: "Bank", isDefault: true } });
     const common = { ...base, customerId: policy.customerId, policyId: policy.id, amount: "300", mode: "NetBanking", intoAccountId: bank.id };
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1", bankName: "HDFC" }))).fieldErrors).toHaveProperty("netType");
     common.netType = "NEFT";
     expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1" }))).fieldErrors).toHaveProperty("bankName");
-    expect((await createReceipt({ ok: false }, form({ ...common, reference: "TXN1", bankName: "Not a bank" }))).fieldErrors).toHaveProperty("bankName");
     expect((await createReceipt({ ok: false }, form({ ...common, bankName: "HDFC" }))).fieldErrors).toHaveProperty("reference");
 
     const r = await createReceipt({ ok: false }, form({ ...common, reference: "NEFT55120931", bankName: "HDFC" }));
@@ -103,6 +102,28 @@ describe("Cash denomination and net banking", () => {
       expect(r.error).toMatch(/switched off/);
     } finally {
       await prisma.paymentOption.update({ where: { id: opt.id }, data: { active: true } });
+    }
+  });
+
+  it("a pay mode added in Settings follows the mode it works like and its name is kept on the receipt (#28)", async () => {
+    const t = users.admin.tenantId;
+    const opt = await prisma.paymentOption.create({ data: { tenantId: t, kind: "Mode", name: "Vitest GPay", base: "UPI", sort: 90 } });
+    try {
+      const policy = await prisma.policy.findFirstOrThrow({ where: { policyNumber: "RD 2231-105" } });
+      const bank = await prisma.account.findFirstOrThrow({ where: { tenantId: t, type: "Bank", isDefault: true } });
+      const common = { ...base, customerId: policy.customerId, policyId: policy.id, amount: "300", mode: "UPI", intoAccountId: bank.id };
+      expect((await createReceipt({ ok: false }, form({ ...common, modeName: "No such mode", reference: "UTR1" }))).error).toMatch(/switched off/);
+      expect((await createReceipt({ ok: false }, form({ ...common, mode: "Cheque", modeName: "Vitest GPay", reference: "UTR1" }))).error).toMatch(/switched off/);
+      expect((await createReceipt({ ok: false }, form({ ...common, modeName: "Vitest GPay" }))).fieldErrors).toHaveProperty("reference");
+      const r = await createReceipt({ ok: false }, form({ ...common, modeName: "Vitest GPay", reference: "UTR-VT-28" }));
+      expect(r.ok).toBe(true);
+      receipts.push(r.id!);
+      expect(await prisma.receipt.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ mode: "UPI", modeName: "Vitest GPay", reference: "UTR-VT-28", accountId: bank.id });
+      // Once used it can't be deleted, only switched off.
+      const { deletePayMode } = await import("@/app/(app)/settings/money-actions");
+      expect((await deletePayMode(opt.id)).error).toMatch(/can't be deleted/);
+    } finally {
+      await prisma.paymentOption.delete({ where: { id: opt.id } });
     }
   });
 });

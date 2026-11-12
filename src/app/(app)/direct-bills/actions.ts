@@ -10,7 +10,7 @@ import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { D, fmtINR } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
-import { checkPayment, MODE_LABEL, payFields } from "@/lib/payment-options";
+import { checkPayment, modeLabel, payFields } from "@/lib/payment-options";
 import { postDirectBill } from "@/lib/posting";
 import { authorize } from "@/lib/session";
 
@@ -56,7 +56,7 @@ async function createDirectBillUnguarded(_: ActionResult, form: FormData): Promi
       data: {
         tenantId: user.tenantId, billNo: await nextNumber(tx, user.tenantId, "directBill"), billDate,
         customerId: customer?.id ?? null, payerName: v.payerName, payerMobile: v.payerMobile, purpose: v.purpose, amount,
-        mode: v.mode, accountId: pay.ok.accountId, reference: pay.ok.reference, bankName: pay.ok.bankName, netType: pay.ok.netType,
+        mode: v.mode, modeName: pay.ok.modeName, accountId: pay.ok.accountId, reference: pay.ok.reference, bankName: pay.ok.bankName, netType: pay.ok.netType,
         denominations: pay.ok.denominations, createdById: user.id,
       },
     });
@@ -65,7 +65,7 @@ async function createDirectBillUnguarded(_: ActionResult, form: FormData): Promi
     await tx.messageLog.create({
       data: {
         tenantId: user.tenantId, channel: "WhatsApp", to: v.payerMobile, template: "receipt", relatedType: "DirectBill", relatedId: bill.id, createdById: user.id,
-        body: `Thank you ${v.payerName}. Received ${fmtINR(amount)} (${MODE_LABEL[v.mode]}) for ${v.purpose}. Bill ${bill.billNo}.`,
+        body: `Thank you ${v.payerName}. Received ${fmtINR(amount)} (${modeLabel(bill)}) for ${v.purpose}. Bill ${bill.billNo}.`,
       },
     });
     return { ok: true, id: bill.id, href: `/direct-bills/${bill.id}` };
