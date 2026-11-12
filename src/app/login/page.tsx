@@ -9,12 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 
-const DEMO_USERS = [
-  { username: "arun", label: "Arun · User" },
-  { username: "admin", label: "R. Murali · Admin" },
-  { username: "superadmin", label: "Owner · Super Admin" },
-];
-
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -56,17 +50,6 @@ export default function LoginPage() {
               {busy ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-          <div className="mt-6 border-t pt-4 text-xs text-muted-foreground">
-            <p className="mb-2">Demo users (password <code>demo1234</code>):</p>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_USERS.map((u) => (
-                <Button key={u.username} type="button" variant="outline" size="xs"
-                  onClick={() => { setUsername(u.username); setPassword("demo1234"); }}>
-                  {u.label}
-                </Button>
-              ))}
-            </div>
-          </div>
         </CardContent>
       </Card>
     </main>

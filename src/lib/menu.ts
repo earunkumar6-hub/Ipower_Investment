@@ -11,7 +11,7 @@ export const MENU: MenuItem[] = [
   { href: "/customers", label: "Partners / Customers", permission: "Policy.View" },
   { href: "/renewals", label: "Renewals", permission: "Renewal.View" },
   { href: "/receipts", label: "Receipts", permission: "Receipt.View" },
-  { href: "/esevai", label: "E-Sevai", permission: "Service.Record" },
+  { href: "/esevai", label: "ESEVAI & CSC", permission: "Service.Record" },
   { href: "/expenses", label: "Expenses", permission: "Expense.View" },
   { href: "/daybook", label: "Day Book", permission: "DayBook.View" },
   // Commission received is hidden for now (owner, 23 Oct 2026); the page still works at /commission. To show it again:

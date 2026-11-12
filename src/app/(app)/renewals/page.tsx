@@ -50,11 +50,9 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Renewals" user={user} actions={hasPermission(user.role, "Report.Export") && (() => {
         const thisTab = exportLinks("renewals", { tab, ...filter, ...rangeParams, ...(paidTo !== "all" && { paidto: paidTo }) });
-        const monthly = exportLinks("renewal-month");
         return (
           <DownloadMenu groups={[
             { title: `This tab – ${TABS.find(([k]) => k === tab)?.[1]} (current filters)`, items: [{ label: "Excel", href: thisTab.excel, kind: "excel" }, { label: "PDF", href: thisTab.pdf, kind: "pdf" }] },
-            { title: "Monthly renewal report – last month + this month due", items: [{ label: "Excel", href: monthly.excel, kind: "excel" }, { label: "PDF", href: monthly.pdf, kind: "pdf" }] },
           ]} />
         );
       })()} />

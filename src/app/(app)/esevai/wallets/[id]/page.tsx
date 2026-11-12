@@ -36,7 +36,7 @@ export default async function WalletStatementPage({ params, searchParams }: { pa
 
   return (
     <>
-      <PageHeader title={`Wallet statement · ${wallet.name}`} user={user} actions={<Link href="/esevai" className={buttonVariants({ variant: "ghost" })}>Back to E-Sevai</Link>} />
+      <PageHeader title={`Wallet statement · ${wallet.name}`} user={user} actions={<Link href="/esevai" className={buttonVariants({ variant: "ghost" })}>Back to ESEVAI &amp; CSC</Link>} />
       <div className="max-w-5xl rounded-xl border bg-white p-4">
         <form className="mb-3 flex items-end gap-2 text-sm">
           <label className="space-y-1"><span className="block text-xs text-muted-foreground">From</span><DmyDateInput id="ws-from" name="from" defaultValue={isoDate(from)} className="h-8" /></label>

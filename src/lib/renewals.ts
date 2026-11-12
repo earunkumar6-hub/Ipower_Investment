@@ -47,7 +47,7 @@ export async function refreshOverdue(tenantId: string, today: Date) {
 
 export const maturityDate = (p: Pick<Policy, "startDate" | "termMonths">) => (p.termMonths ? addMonths(p.startDate, p.termMonths) : null);
 
-type RowPolicy = Policy & { customer: { id: string; name: string } };
+type RowPolicy = Policy & { customer: { id: string; name: string; mobile: string | null } };
 
 /** An instalment to collect, the maturity of a one-time post office deposit (a reminder only), or a policy not renewed. */
 export type RenewalRow = {
@@ -94,7 +94,7 @@ export async function renewalCards(tenantId: string, policyWhere: Prisma.PolicyW
 export async function loadRenewals(user: SessionUser, sp: Params, today: Date, take?: number) {
   await refreshOverdue(user.tenantId, today);
   const f = renewalFilter(user, sp, today);
-  const include = { customer: { select: { id: true, name: true } } };
+  const include = { customer: { select: { id: true, name: true, mobile: true } } };
   const policyIn = { tenantId: user.tenantId, AND: [f.policyWhere] } satisfies Prisma.PolicyWhereInput;
 
   // By customer: each customer with an active matching policy – due this month, paid this financial year, overdue.

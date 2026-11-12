@@ -205,5 +205,15 @@ describe("Other income", () => {
     const entry = await prisma.dayBookEntry.findFirstOrThrow({ where: { entryType: "OtherIncome", createdAt: { gte: started } } });
     expect([entry.direction, entry.isPassThrough, entry.accountId]).toEqual(["In", false, bank.id]);
     expect(await prisma.auditLog.count({ where: { entity: "DayBook", action: "Other income", createdAt: { gte: started } } })).toBe(1);
+
+    // Received in cash: the notes and coins must add up to the amount (owner change list, #32).
+    const cash = await prisma.account.findFirstOrThrow({ where: { tenantId: users.admin.tenantId, type: "Cash" } });
+    const cashIncome = (denominations: string) =>
+      recordOtherIncome({ ok: false }, form({ date: isoDate(today), amount: "500", accountId: cash.id, reason: "Old newspapers sold", denominations }));
+    expect((await cashIncome("")).error).toMatch(/cash denomination/i);
+    expect((await cashIncome(JSON.stringify({ "100": 4, coins: "0.00" }))).error).toMatch(/adds up to ₹400/);
+    expect((await cashIncome(JSON.stringify({ "500": 1, coins: "0.00" }))).ok).toBe(true);
+    const line = await prisma.dayBookEntry.findFirstOrThrow({ where: { entryType: "OtherIncome", accountId: cash.id, createdAt: { gte: started } } });
+    expect(line.denominations).toMatchObject({ "500": 1 });
   });
 });

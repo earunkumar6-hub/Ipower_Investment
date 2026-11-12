@@ -35,7 +35,7 @@ const accountSchema = z.discriminatedUnion("type", [
     branch: z.string().trim().min(2, "Enter the branch").max(60),
     accountNo: z.string().trim().regex(/^(\d{6,18})?$/, "Account number should be 6–18 digits"),
     ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC looks like SBIN0001234"),
-    micr: z.string().trim().regex(/^\d{9}$/, "MICR code is 9 digits"),
+    micr: z.string().trim().regex(/^(\d{9})?$/, "MICR code is 9 digits"), // optional (owner change list, #27)
     accountKind: z.enum(["Savings", "Current"], "Pick Savings or Current"),
     openingBalance: amount,
   }),
@@ -68,7 +68,7 @@ export async function saveAccount(_: ActionResult, form: FormData): Promise<Acti
         throw e;
       }
     }
-    fields = { bankName: v.bankName, branch: v.branch, ifsc: v.ifsc, micr: v.micr, accountKind: v.accountKind, ...enc };
+    fields = { bankName: v.bankName, branch: v.branch, ifsc: v.ifsc, micr: v.micr || null, accountKind: v.accountKind, ...enc };
   } else {
     if (v.walletKind === "Other" && v.otherName.length < 2) return fail("Enter the wallet name", "otherName");
     fields = { walletKind: v.walletKind, name: v.walletKind === "Other" ? v.otherName : WALLET_KIND_LABEL[v.walletKind], lowBalanceThreshold: v.lowBalanceThreshold.isZero() ? null : v.lowBalanceThreshold };

@@ -323,11 +323,11 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await user.locator("#sv-50").fill("1");
     await user.locator("#sv-20").fill("1");
     await user.locator("#sv-10").fill("1");
-    await user.getByRole("button", { name: "Save and print receipt" }).click();
+    await user.getByRole("button", { name: "Save", exact: true }).click();
     await expect(user.getByText("Enter the transaction number").first()).toBeVisible(); // transaction no. required
     await user.locator("#providerTxnNo").fill("TXN-QA-0007");
     const popup = user.waitForEvent("popup", { timeout: 10_000 }).catch(() => null);
-    await user.getByRole("button", { name: "Save and print receipt" }).click();
+    await user.getByRole("button", { name: "Save", exact: true }).click();
     await (await popup)?.close();
     await user.goto("/esevai");
     await expect(user.getByRole("row", { name: /Ration card QA.*TXN-QA-0007|TXN-QA-0007/ }).first()).toBeVisible();

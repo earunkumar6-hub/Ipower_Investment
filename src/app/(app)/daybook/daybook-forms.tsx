@@ -200,24 +200,31 @@ function OwnerEntryRow({ r, canDecide }: { r: OwnerRow; canDecide: boolean }) {
 }
 
 /** Other income (interest, incentives…): counted in Profit and Loss. Admin and Super Admin only. */
-export function OtherIncomeForm({ date, closed, accounts }: { date: string; closed: boolean; accounts: { id: string; name: string }[] }) {
+export function OtherIncomeForm({ date, closed, accounts, cashAccountId }: { date: string; closed: boolean; accounts: { id: string; name: string }[]; cashAccountId: string }) {
   const [key, setKey] = useState(0);
-  const [state, action, pending] = useDayBookAction(recordOtherIncome, "Other income recorded", () => setKey((k) => k + 1));
+  const [amount, setAmount] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [state, action, pending] = useDayBookAction(recordOtherIncome, "Other income recorded", () => {
+    setAmount("");
+    setAccountId("");
+    setKey((k) => k + 1);
+  });
   return (
     <Panel title="Other income" closed={closed}>
       <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
         <input type="hidden" name="date" value={date} />
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5"><Label htmlFor="oiAmount">Amount</Label><Input id="oiAmount" name="amount" inputMode="decimal" /></div>
+          <div className="space-y-1.5"><Label htmlFor="oiAmount">Amount</Label><Input id="oiAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></div>
           <div className="space-y-1.5">
             <Label htmlFor="oiAccount">Received in</Label>
-            <NativeSelect id="oiAccount" name="accountId" defaultValue="" className="w-full">
+            <NativeSelect id="oiAccount" name="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full">
               <NativeSelectOption value=""></NativeSelectOption>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.name}</NativeSelectOption>)}
             </NativeSelect>
           </div>
         </div>
         <div className="space-y-1.5"><Label htmlFor="oiReason">What is it for</Label><Input id="oiReason" name="reason" /></div>
+        {accountId === cashAccountId && <CashDenominationGrid amount={paise(amount)} idPrefix="oi" />}
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" variant="outline" disabled={pending} className="w-full">{pending ? "Saving…" : "Record other income"}</Button>
         <p className="text-xs text-muted-foreground">Counted as income in Profit and Loss. Not for premiums or bills collected for others.</p>

@@ -117,7 +117,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
           <BankDepositForm date={iso} closed={d.closed} banks={d.bankOptions} />
           <OwnerEntryForm date={iso} closed={d.closed} cashAccountId={d.cashAccountId} banks={d.bankOptions} />
           <CashCountForm date={iso} closed={d.closed} initial={Object.fromEntries(CASH_SOURCES.map((k) => [k, d.cashBySource?.[k] ?? ""]))} />
-          {canAddIncome && <OtherIncomeForm date={iso} closed={d.closed} accounts={incomeAccounts} />}
+          {canAddIncome && <OtherIncomeForm date={iso} closed={d.closed} accounts={incomeAccounts} cashAccountId={d.cashAccountId} />}
         </div>
         <div className="space-y-4">
           <OwnerEntriesPanel canDecide={hasPermission(user.role, "Owner.Confirm")}

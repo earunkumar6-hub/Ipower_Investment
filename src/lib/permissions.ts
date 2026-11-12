@@ -86,7 +86,7 @@ export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[
   { area: "Quotations and proposals", items: [["Quote.View", "See quotations"], ["Quote.Create", "Make quotations"], ["Proposal.View", "See proposals"], ["Proposal.Create", "Make / edit proposals"], ["PII.Edit", "Enter Aadhaar / PAN"]] },
   { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
   { area: "Receipts", items: [["Receipt.View", "See receipts"], ["Receipt.Create", "Take receipts, direct bills"], ["Receipt.Cancel", "Cancel receipts"], ["BillGroup.Manage", "Create / change bill groups"]] },
-  { area: "E-Sevai", items: [["Service.Record", "Record E-Sevai entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
+  { area: "ESEVAI & CSC", items: [["Service.Record", "Record ESEVAI & CSC entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
   { area: "Expenses", items: [["Expense.View", "See expenses"], ["Expense.Create", "Add expenses"], ["Expense.Approve", "Approve expenses"]] },
   {
     area: "Day Book", items: [["DayBook.View", "See the Day Book"], ["DayBook.Create", "Post Day Book entries (ATM, deposits, owner money)"], ["DayBook.Verify", "Verify the cash count"],

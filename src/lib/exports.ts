@@ -228,7 +228,8 @@ export const REPORTS: Record<string, Report> = {
     },
   },
 
-  // One customer's Customer 360 screen: details, holdings, renewals, receipts and owner-paid slips.
+  // One customer's Customer 360 screen: details, holdings, renewals and receipts. Owner-paid slips are left out
+  // of this download (owner change list, #33) – they stay on screen and in the Receipts export.
   customer: {
     permission: "Policy.View",
     async build(user, sp) {
@@ -272,17 +273,12 @@ export const REPORTS: Record<string, Report> = {
             columns: [{ header: "Due", type: "date" }, { header: "Policy / account", width: 22 }, { header: "Amount", type: "money" }, { header: "Status" },
               { header: "Paid on", type: "date" }, { header: "Receipt", width: 24 }],
             rows: renewals.map((r) => [r.dueDate, r.policy.policyNumber, r.premiumAmount, r.status, r.paidOn,
-              r.paidReceiptId ? receiptNo.get(r.paidReceiptId)?.no : r.status === "Paid" ? (slipFor.has(r.id) ? `owner paid · ${slipFor.get(r.id)}` : "before this system") : null]),
+              r.paidReceiptId ? receiptNo.get(r.paidReceiptId)?.no : r.status === "Paid" && !slipFor.has(r.id) ? "before this system" : null]),
           },
           {
             name: "Receipts",
             columns: [{ header: "Receipt" }, { header: "Date", type: "date" }, { header: "For", width: 24 }, { header: "Mode" }, { header: "Amount", type: "money" }, { header: "Status" }],
             rows: c.receipts.map((r) => [r.receiptNo, r.receiptDate, (r.policy?.policyNumber ?? r.notes ?? "") + (r.ownerPaid ? " (owner-paid)" : ""), MODE_LABEL[r.mode], r.amount, r.status]),
-          },
-          {
-            name: "Owner-paid slips",
-            columns: [{ header: "Slip" }, { header: "RD account" }, { header: "Month" }, { header: "Amount", type: "money" }, { header: "Status", width: 28 }, { header: "Closed by receipt" }],
-            rows: c.ownerPaidSlips.map((s) => [s.slipNo, s.policy.policyNumber, monthLabel(s.month), s.amount, SLIP_STATUS[s.status][0], s.closedByReceipt?.receiptNo]),
           },
         ],
       };
@@ -313,7 +309,8 @@ export const REPORTS: Record<string, Report> = {
         sheets: [{
           name,
           totals: true,
-          columns: [{ header: "Customer", width: 24 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
+          // Columns as in the owner's "Renewal Excel format" sheet (#18): Phone (masked, like every export) after Customer.
+          columns: [{ header: "Customer", width: 24 }, { header: "Phone", width: 14 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
             { header: "Amount", type: "money" }, { header: "Status", width: 22 },
             ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }]
               : [{ header: "Reminders sent" }, { header: "Last reminder", type: "datetime" as const, width: 20 }])],
@@ -321,7 +318,7 @@ export const REPORTS: Record<string, Report> = {
             const p = i.policy;
             const [status] = renewalStatus(i, today);
             // A maturity's amount is the deposit / instalment, not money to collect, so it stays out of the totals column.
-            const base: Cell[] = [p.customer.name, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
+            const base: Cell[] = [p.customer.name, p.customer.mobile ? maskMobile(p.customer.mobile) : null, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
               i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (${fmtINR(i.amount)})` : status];
             return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""]
               : [...base, i.reminderCount || null, i.lastReminderAt];
@@ -332,6 +329,7 @@ export const REPORTS: Record<string, Report> = {
   },
 
   // The monthly renewal Excel: last month renewed or not, and this month's dues (the 1st-of-month email sends the same file).
+  // No longer offered on the Renewals screen (owner change list, #17: one Excel that follows the view and dates).
   "renewal-month": {
     permission: "Renewal.View",
     async build(user) {
@@ -456,7 +454,7 @@ export const REPORTS: Record<string, Report> = {
       const account = nameIn(accounts);
       return {
         file: `esevai-${fileDate(today)}.xlsx`,
-        title: `E-Sevai – ${fmtDate(today)}`,
+        title: `ESEVAI & CSC – ${fmtDate(today)}`,
         sheets: [
           {
             name: "Entries",

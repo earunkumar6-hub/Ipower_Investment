@@ -31,7 +31,7 @@ function suggest(s: ServiceOption, paid: string): { paid?: number; collected?: n
   return slab ? { collected: b + paise(slab.charge) } : {};
 }
 
-/** New E-Sevai / CSC entry (#7). "Save and print receipt" opens the customer's receipt. */
+/** New ESEVAI & CSC entry (#7). Save only – no receipt opens (owner change list, #16). */
 export function ServiceEntryForm({ services, wallets, banks }: { services: ServiceOption[]; wallets: Opt[]; banks: Opt[] }) {
   const [key, setKey] = useState(0);
   return <EntryForm key={key} services={services} wallets={wallets} banks={banks} onSaved={() => setKey((k) => k + 1)} />;
@@ -81,7 +81,6 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
     const r = await createServiceEntry(prev, form);
     if (r.ok) {
       toast.success(`${service.name} saved`);
-      if (r.href) window.open(r.href, "_blank");
       onSaved();
     }
     return r;
@@ -92,7 +91,7 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
 
   return (
     <form onSubmit={submitKeepingValues(action)} className="w-[30rem] shrink-0 space-y-3 rounded-xl border bg-white p-4">
-      <h2 className="font-semibold">New E-Sevai / CSC entry</h2>
+      <h2 className="font-semibold">New ESEVAI &amp; CSC entry</h2>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="txnDate">Date</Label>
@@ -184,8 +183,8 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
       {mode === "Cash" && <CashDenominationGrid amount={paise(collected)} idPrefix="sv" error={err.denominations} />}
       <div className="space-y-1.5"><Label htmlFor="svNotes">Notes</Label><Input id="svNotes" name="notes" /></div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" disabled={pending || !paise(paid) || !paise(collected)} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save and print receipt"}</Button>
-      <p className="text-xs text-muted-foreground">EB, PAN and certificate amounts come from Settings → rates; change them if the customer paid a different amount. Service charge = collected − paid.</p>
+      <Button type="submit" disabled={pending || !paise(paid) || !paise(collected)} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save"}</Button>
+      <p className="text-xs text-muted-foreground">Change the amounts if the customer paid a different amount. Service charge = collected − paid.</p>
     </form>
   );
 }

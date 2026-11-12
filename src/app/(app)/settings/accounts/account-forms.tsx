@@ -57,7 +57,7 @@ export function BankAccountForm({ value }: { value?: BankValues }) {
           </NativeSelect>
         </Field>
         <Field id="ifsc" label="IFSC" error={err.ifsc}><Input id="ifsc" name="ifsc" defaultValue={value?.ifsc} className="uppercase" /></Field>
-        <Field id="micr" label="MICR code" error={err.micr}><Input id="micr" name="micr" defaultValue={value?.micr} inputMode="numeric" maxLength={9} /></Field>
+        <Field id="micr" label="MICR code (optional)" error={err.micr}><Input id="micr" name="micr" defaultValue={value?.micr} inputMode="numeric" maxLength={9} /></Field>
         {!editing && <Field id="openingBalance" label="Opening balance today (₹)" error={err.openingBalance}><Input id="openingBalance" name="openingBalance" inputMode="decimal" /></Field>}
       </div>
       <p className="text-xs text-muted-foreground">The account number is stored encrypted and shown as ••••1234.{!editing && " The opening balance can't be changed later."}</p>

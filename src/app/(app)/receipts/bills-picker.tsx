@@ -111,7 +111,7 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
               <TableHead className="w-8">
                 {!search && <input type="checkbox" aria-label="Tick all due bills" checked={allUnpaidTicked} onChange={(e) => onChange(e.target.checked ? { ...counts, ...unpaid } : {})} />}
               </TableHead>
-              <TableHead>Bill</TableHead>{showCustomer && <TableHead>Customer</TableHead>}<TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead>
+              {showCustomer && <TableHead>Customer</TableHead>}<TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -124,7 +124,6 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
                   <TableCell>
                     <input type="checkbox" aria-label={`Pay ${p.label} ${d.label}`} checked={i < n} onChange={(e) => onChange({ ...counts, [p.id]: e.target.checked ? i + 1 : i })} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{d.billNo ?? "—"}</TableCell>
                   {showCustomer && <TableCell>{i === 0 ? p.customer : ""}</TableCell>}
                   <TableCell className="whitespace-normal">{i === 0 ? p.label : ""}</TableCell>
                   <TableCell>{d.label}{range?.from && d.date < range.from && <span className="ml-1 text-xs text-muted-foreground">(before From)</span>}</TableCell>
@@ -136,7 +135,6 @@ export function BillsPicker({ policies, counts, onChange, scope, showCustomer = 
             {settled.map((p) => (
               <TableRow key={p.id} className="text-muted-foreground">
                 <TableCell><input type="checkbox" disabled aria-label={`${p.label}: nothing to pay`} /></TableCell>
-                <TableCell>—</TableCell>
                 {showCustomer && <TableCell>{p.customer}</TableCell>}
                 <TableCell className="whitespace-normal">{p.label}</TableCell>
                 <TableCell colSpan={3} className="text-xs">Nothing to pay{p.paidUntil ? ` · paid up to ${p.paidUntil}` : ""}</TableCell>

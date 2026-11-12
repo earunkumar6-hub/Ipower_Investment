@@ -50,7 +50,7 @@ export default async function ESevaiPage() {
 
   return (
     <>
-      <PageHeader title="E-Sevai" user={user} actions={<ExportButton report="esevai" user={user} />} />
+      <PageHeader title="ESEVAI &amp; CSC" user={user} actions={<ExportButton report="esevai" user={user} />} />
       <div className="mb-4 grid grid-cols-5 gap-3">
         <StatCard title="EB bills paid" value={`${eb.length} · ${fmtINR(total(eb, (t) => t.baseAmount))}`}
           sub={`${eb.filter((t) => accounts.find((a) => a.id === t.paidFromAccountId)?.type === "Wallet").length} from wallet · ${eb.filter((t) => accounts.find((a) => a.id === t.paidFromAccountId)?.type === "Bank").length} from bank`} />
@@ -98,7 +98,7 @@ export default async function ESevaiPage() {
       </div>
 
       <div className="rounded-xl border bg-white p-4">
-        <h2 className="mb-2 font-semibold">Today&apos;s E-Sevai / CSC entries{!seesAll(user.role) && " (yours)"}</h2>
+        <h2 className="mb-2 font-semibold">Today&apos;s ESEVAI &amp; CSC entries{!seesAll(user.role) && " (yours)"}</h2>
         <Table>
           <TableHeader>
             <TableRow>

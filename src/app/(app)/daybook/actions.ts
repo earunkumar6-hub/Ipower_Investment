@@ -428,6 +428,7 @@ const otherIncomeSchema = z.object({
   amount: money.refine((v) => Number(v) > 0, "Amount must be more than 0"),
   accountId: z.string().min(1, "Pick where the money came in"),
   reason: z.string().trim().min(3, "Enter what this income is for (e.g. SBI interest, LIC incentive)").max(200),
+  denominations: denominationsField,
 });
 
 /**
@@ -438,18 +439,21 @@ export async function recordOtherIncome(_: ActionResult, form: FormData): Promis
   const user = await authorize("DayBook.Close");
   const parsed = otherIncomeSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return fail(parsed.error.issues[0].message);
-  const { date, amount, accountId, reason } = parsed.data;
+  const { date, amount, accountId, reason, denominations } = parsed.data;
   if (checkDate(date)) return fail(checkDate(date)!);
   return guarded(() =>
     db.$transaction(async (tx) => {
       const account = await tx.account.findFirst({ where: { id: accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
       if (!account) return fail("Pick the cash or bank account the money came into");
+      // Cash received: the notes and coins must add up to the amount (owner change list, #32).
+      const notes = account.type === "Cash" ? checkDenominations(denominations, new D(amount)) : null;
+      if (notes && "error" in notes) return fail(notes.error);
       const sourceId = randomUUID();
       await post(tx, {
         tenantId: user.tenantId, entryDate: date, sourceType: "Manual", sourceId, createdById: user.id,
         lines: [{
           key: "in", accountId: account.id, direction: "In", amount, entryType: "OtherIncome", mode: account.type === "Cash" ? "Cash" : "Bank",
-          particulars: `Other income · ${reason}`, productCategory: "Other income", notes: reason,
+          particulars: `Other income · ${reason}`, productCategory: "Other income", notes: reason, denominations: notes?.ok,
         }],
       });
       await audit(tx, user, {

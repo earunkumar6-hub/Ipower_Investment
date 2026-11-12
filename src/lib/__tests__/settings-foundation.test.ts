@@ -71,6 +71,8 @@ describe("Bank accounts and wallets", () => {
     as("admin");
     expect((await m.saveAccount({ ok: false }, form({ ...bank, ifsc: "IOB1234" }))).fieldErrors).toHaveProperty("ifsc");
     expect((await m.saveAccount({ ok: false }, form({ ...bank, micr: "12345" }))).fieldErrors).toHaveProperty("micr");
+    // MICR may be left blank (owner change list, #27): only the account type is refused here.
+    expect((await m.saveAccount({ ok: false }, form({ ...bank, micr: "", accountKind: "" }))).fieldErrors).not.toHaveProperty("micr");
     expect((await m.saveAccount({ ok: false }, form({ ...bank, accountKind: "" }))).fieldErrors).toHaveProperty("accountKind");
     expect((await m.saveAccount({ ok: false }, form({ ...bank, accountNo: "" }))).fieldErrors).toHaveProperty("accountNo");
   });
