@@ -15,7 +15,9 @@ export const REFERENCE_LABEL: Record<Exclude<ReceiptMode, "Cash">, string> = {
 export const NET_TYPES = ["NEFT", "IMPS", "RTGS"] as const;
 export const NOTES = [500, 200, 100, 50, 20, 10] as const;
 /** Note counts by face value plus coins in rupees: { "500": 4, "200": 2, coins: "12.50" }. */
-export type Denominations = Partial<Record<`${(typeof NOTES)[number]}`, number>> & { coins?: string };
+export type NoteCounts = Partial<Record<`${(typeof NOTES)[number]}`, number>> & { coins?: string };
+/** Notes received, and the change given back when there was any (#47): received − change = the cash amount. */
+export type Denominations = NoteCounts & { change?: NoteCounts };
 
 /**
  * A pay mode staff can pick (Settings → Payment modes): a built-in one (`name` null), or one the agency added –

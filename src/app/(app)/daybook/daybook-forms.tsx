@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { CASH_SOURCE_LABEL, CASH_SOURCES, UPI_ADJUSTMENT_REASONS, type CashSource } from "@/lib/daybook-labels";
 import { submitKeepingValues } from "@/lib/form";
 import { cn } from "@/lib/utils";
-import { closeDayBook, decideOwnerEntry, depositToBank, depositToPostOffice, recordAtmWithdrawal, recordOtherIncome, recordOwnerEntry, saveCashCount, saveVerification } from "./actions";
+import { closeDayBook, decideOwnerEntry, depositToBank, depositToPostOffice, recordAtmWithdrawal, recordCashUpiExchange, recordOtherIncome, recordOwnerEntry, saveCashCount, saveVerification } from "./actions";
 
 const paise = (v: string) => (/^\d+(\.\d{1,2})?$/.test(v.trim()) ? Math.round(Number(v) * 100) : 0);
 const inr = (p: number) => (p / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
@@ -73,6 +73,53 @@ export function AtmForm({ date, closed, banks, staff, me }: { date: string; clos
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : "Record ATM withdrawal"}</Button>
         <p className="text-xs text-muted-foreground">Bank → cash. A transfer, never an expense.</p>
+      </form>
+    </Panel>
+  );
+}
+
+/**
+ * Cash / UPI exchange (owner change list, #22): cash given for UPI received, or UPI sent for cash received. One mode
+ * goes down and the other up by the same amount; the net total doesn't change. UPI transaction no. required.
+ */
+export function CashUpiExchangeForm({ date, closed, banks }: { date: string; closed: boolean; banks: Opt[] }) {
+  const [key, setKey] = useState(0);
+  const [amount, setAmount] = useState("");
+  const [direction, setDirection] = useState<"CashForUpi" | "UpiForCash">("CashForUpi");
+  const [state, action, pending] = useDayBookAction(recordCashUpiExchange, "Cash / UPI exchange posted", () => {
+    setAmount("");
+    setKey((k) => k + 1);
+  });
+  const cashOut = direction === "CashForUpi";
+  return (
+    <Panel title="Cash / UPI exchange" closed={closed}>
+      <form key={key} onSubmit={submitKeepingValues(action)} className="space-y-3">
+        <input type="hidden" name="date" value={date} />
+        <input type="hidden" name="direction" value={direction} />
+        <div className="flex gap-2">
+          {(["CashForUpi", "UpiForCash"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setDirection(k)}
+              className={cn("h-8 flex-1 rounded-lg border px-1 text-xs", direction === k ? "border-brand-600 bg-saffron-50 font-medium text-brand-700" : "hover:bg-slate-50")}>
+              {k === "CashForUpi" ? "Cash given · UPI received" : "UPI sent · cash received"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5"><Label htmlFor="cxAmount">Amount</Label><Input id="cxAmount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cxBank">{cashOut ? "UPI received into" : "UPI sent from"}</Label>
+            <NativeSelect id="cxBank" name="bankAccountId" defaultValue={banks[0]?.id ?? ""} className="w-full">
+              {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="cxRef">UPI transaction no.</Label><Input id="cxRef" name="reference" /></div>
+          <div className="space-y-1.5"><Label htmlFor="cxPerson">Person</Label><Input id="cxPerson" name="person" /></div>
+          <div className="space-y-1.5"><Label htmlFor="cxMobile">Mobile <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="cxMobile" name="mobile" inputMode="numeric" maxLength={10} /></div>
+        </div>
+        <CashDenominationGrid amount={paise(amount)} idPrefix="cx" />
+        {state.error && <p className="text-xs text-destructive">{state.error}</p>}
+        <Button type="submit" variant="outline" disabled={pending || !paise(amount)} className="w-full">{pending ? "Saving…" : "Record exchange"}</Button>
+        <p className="text-xs text-muted-foreground">{cashOut ? "Cash down, bank up" : "Cash up, bank down"} by the same amount – the total doesn&apos;t change. Not income or expense.</p>
       </form>
     </Panel>
   );

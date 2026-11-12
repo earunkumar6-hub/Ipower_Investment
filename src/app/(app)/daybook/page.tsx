@@ -14,7 +14,7 @@ import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { graceBadge } from "@/lib/daybook-grace";
-import { AtmForm, BankDepositForm, CashCountForm, OtherIncomeForm, OwnerEntriesPanel, OwnerEntryForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
+import { AtmForm, BankDepositForm, CashCountForm, CashUpiExchangeForm, OtherIncomeForm, OwnerEntriesPanel, OwnerEntryForm, PoDepositForm, VerifyCloseForm } from "./daybook-forms";
 import { DayBookTabs } from "./daybook-tabs";
 
 export default async function DayBookPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
@@ -107,7 +107,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
               {b.lines.map((l) => ` ${l.amount.isNegative() ? "−" : "+"} ${fmtINR(l.amount.abs())} ${l.label.slice(2)}`).join("")} = <b>{fmtINR(b.closing)}</b>
             </p>
           ))}
-          <p className="mt-2 text-xs text-muted-foreground">Only cash movements count here. UPI, bank and cheque change the bank balance; an ATM withdrawal moves bank → cash and is never an expense.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Only cash movements count here. UPI, bank and cheque change the bank balance; an ATM withdrawal moves bank → cash and a cash / UPI exchange swaps cash and bank – neither is income or expense.</p>
         </div>
       </div>
 
@@ -115,6 +115,7 @@ export default async function DayBookPage({ searchParams }: { searchParams: Prom
         <div className="space-y-4">
           <AtmForm date={iso} closed={d.closed} banks={d.bankOptions} staff={d.staff} me={user.id} />
           <BankDepositForm date={iso} closed={d.closed} banks={d.bankOptions} />
+          <CashUpiExchangeForm date={iso} closed={d.closed} banks={d.bankOptions} />
           <OwnerEntryForm date={iso} closed={d.closed} cashAccountId={d.cashAccountId} banks={d.bankOptions} />
           <CashCountForm date={iso} closed={d.closed} initial={Object.fromEntries(CASH_SOURCES.map((k) => [k, d.cashBySource?.[k] ?? ""]))} />
           {canAddIncome && <OtherIncomeForm date={iso} closed={d.closed} accounts={incomeAccounts} cashAccountId={d.cashAccountId} />}

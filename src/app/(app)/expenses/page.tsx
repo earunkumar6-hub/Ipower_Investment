@@ -93,11 +93,11 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
                     <div className="text-xs text-muted-foreground">by {nameOf(e.createdById)}{e.approvedById && e.status !== "Cancelled" && ` · ${e.status === "Rejected" ? "rejected" : "approved"} by ${nameOf(e.approvedById)}`}{note && ` · ${note}`}</div>
                   </TableCell>
                   <TableCell>
-                    {e.vendor.name} · {e.billNo}
+                    {e.vendor.name}{e.billNo && ` · ${e.billNo}`}
                     {e.billPhotoPath && <a href={`/api/expenses/${e.id}/bill`} target="_blank" className="ml-1 text-xs text-brand-700 hover:underline">bill</a>}
                   </TableCell>
                   <TableCell>{e.paidBy === "Company" ? "Company" : `${e.paidBy}: ${e.paidByName}`}</TableCell>
-                  <TableCell>{e.mode}</TableCell>
+                  <TableCell>{e.mode === "Bank" ? "Net banking" : e.mode}{e.reference && <div className="text-xs text-muted-foreground">{e.reference}</div>}</TableCell>
                   <TableCell className="text-right">{fmtINR(e.amount)}</TableCell>
                   <TableCell><StatusBadge tone={tone}>{label}</StatusBadge></TableCell>
                   <TableCell className="text-right">

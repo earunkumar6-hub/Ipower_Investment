@@ -212,7 +212,7 @@ describe("Expenses: notes mandatory, purpose from the list, From account", () =>
 
   it("saves with notes and pays from the picked account (non-default bank)", async () => {
     as("arun");
-    const r = await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-3", fromAccount: created.accounts[0], mode: "UPI", notes: "Asked by owner" }));
+    const r = await createExpense({ ok: false }, form({ ...expense(), billNo: "VS-3", fromAccount: created.accounts[0], mode: "UPI", reference: "UTR-VS-3", notes: "Asked by owner" }));
     expect(r).toMatchObject({ ok: true });
     const e = await prisma.expense.findUniqueOrThrow({ where: { id: r.id } });
     expect(e).toMatchObject({ notes: "Asked by owner", category: "Pooja", fromAccountId: created.accounts[0] });

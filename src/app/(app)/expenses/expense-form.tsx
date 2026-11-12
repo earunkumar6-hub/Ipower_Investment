@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,8 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<"Company" | "Employee" | "Owner">("Company");
   const [fromAccount, setFromAccount] = useState(accounts[0]?.id ?? "");
+  const [mode, setMode] = useState("Cash");
+  const [dupOpen, setDupOpen] = useState(false);
   const fromCash = paidBy === "Company" && !!accounts.find((a) => a.id === fromAccount)?.cash;
   const [formKey, setFormKey] = useState(0);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
@@ -36,8 +39,10 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
       setAmount("");
       setPaidBy("Company");
       setFromAccount(accounts[0]?.id ?? "");
+      setMode("Cash");
       setFormKey((k) => k + 1);
     }
+    if (r.duplicateBill) setDupOpen(true);
     return r;
   }, { ok: false });
   const err = state.fieldErrors ?? {};
@@ -59,7 +64,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
         <Field label="Vendor" error={err.vendor}>
           <Input id="vendor" name="vendor" aria-invalid={!!err.vendor} />
         </Field>
-        <Field label="Bill number" error={err.billNo}>
+        <Field label="Bill number (optional)" error={err.billNo}>
           <Input id="billNo" name="billNo" className="not-placeholder-shown:uppercase" aria-invalid={!!err.billNo} />
         </Field>
         <Field label="Date" error={err.expenseDate}>
@@ -73,10 +78,15 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
           </NativeSelect>
         </Field>
         <Field label="Mode">
-          <NativeSelect id="mode" name="mode" className="w-full" defaultValue="Cash">
+          <NativeSelect id="mode" name="mode" className="w-full" value={mode} onChange={(e) => setMode(e.target.value)}>
             {["Cash", "UPI", "Bank", "Card", "Cheque"].map((m) => <NativeSelectOption key={m} value={m}>{m === "Bank" ? "Net banking" : m}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
+        {mode !== "Cash" && (
+          <Field label={mode === "Cheque" ? "Cheque number" : "Transaction ID"} error={err.reference}>
+            <Input id="reference" name="reference" aria-invalid={!!err.reference} />
+          </Field>
+        )}
         {paidBy === "Company" ? (
           <Field label="From account" error={err.fromAccount}>
             <NativeSelect id="fromAccount" name="fromAccount" className="w-full" value={fromAccount} onChange={(e) => setFromAccount(e.target.value)}>
@@ -108,6 +118,18 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
       {state.error && <p className="rounded-lg bg-orange-50 p-2 text-sm text-orange-900">{state.error}</p>}
       {hint && <p className="rounded-lg bg-saffron-50 p-2 text-sm text-saffron-900">{hint}{paidBy !== "Company" && " Stays “to be repaid” until the company pays it back."}</p>}
       <Button type="submit" disabled={pending} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Submit"}</Button>
+      <Dialog open={dupOpen} onOpenChange={setDupOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogTitle className="text-lg font-semibold">Bill already entered</DialogTitle>
+          {state.duplicateBill && (
+            <p className="text-sm">
+              Bill <b>{state.duplicateBill.billNo}</b> from <b>{state.duplicateBill.vendor}</b> is already expense {state.duplicateBill.expenseNo}
+              ({state.duplicateBill.date}, {state.duplicateBill.amount}). The same bill can&apos;t be entered twice – check the bill number or leave it blank.
+            </p>
+          )}
+          <div className="flex justify-end"><Button type="button" onClick={() => setDupOpen(false)}>Go back and correct</Button></div>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

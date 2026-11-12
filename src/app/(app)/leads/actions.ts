@@ -19,6 +19,8 @@ export type ActionResult = {
   ok: boolean; error?: string; message?: string; fieldErrors?: Record<string, string>; id?: string; href?: string;
   /** Aadhaar / PAN / company CIF already belongs to someone else (#28 pop-up). */
   duplicate?: Duplicate;
+  /** Expenses: the same vendor's bill number is already entered (#42 pop-up). */
+  duplicateBill?: { expenseNo: string; date: string; amount: string; vendor: string; billNo: string };
 };
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });

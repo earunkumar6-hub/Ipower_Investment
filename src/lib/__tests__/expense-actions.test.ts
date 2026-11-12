@@ -74,6 +74,7 @@ describe("Expenses", () => {
     const dup = await createExpense({ ok: false }, form({ ...base, amount: "1600", billNo: "VT-1045", vendor: VENDOR.toLowerCase() }));
     expect(dup.ok).toBe(false);
     expect(dup.error).toMatch(/already entered/);
+    expect(dup.duplicateBill).toMatchObject({ billNo: "VT-1045", expenseNo: e.expenseNo }); // the pop-up (#42)
 
     // Staff can't approve; Admin can
     await expect(approveExpense(e.id)).rejects.toThrow(/Expense.Approve/);
@@ -83,6 +84,15 @@ describe("Expenses", () => {
     expect(e.status).toBe("Approved");
     const [out] = await entries(e.id);
     expect([out.direction, out.amount.toFixed(2), out.account.name, out.entryType]).toEqual(["Out", "3200.00", "Cash", "Expense"]);
+  });
+
+  it("bill number is optional and blank bills never clash; cash keeps no transaction ID; a cheque needs its number (#42)", async () => {
+    as("divya");
+    const a = await createExpense({ ok: false }, form({ ...base, amount: "120", reference: "ignored for cash" }));
+    const b = await createExpense({ ok: false }, form({ ...base, amount: "130" }));
+    expect([a.ok, b.ok]).toEqual([true, true]);
+    expect(await prisma.expense.findUniqueOrThrow({ where: { id: a.id } })).toMatchObject({ billNo: null, reference: null });
+    expect((await createExpense({ ok: false }, form({ ...base, amount: "140", mode: "Cheque", fromAccount: "bank" }))).error).toMatch(/cheque number/);
   });
 
   it("≤ ₹2,000 is saved and paid at once", async () => {
@@ -95,9 +105,11 @@ describe("Expenses", () => {
 
   it("an Admin's own ₹4,800 goes to the Super Admin; Admin can't approve it", async () => {
     as("admin");
-    const r = await createExpense({ ok: false }, form({ ...base, amount: "4800", billNo: "VT-3", fromAccount: "bank", mode: "UPI" }));
+    // UPI needs its transaction ID (#42).
+    expect((await createExpense({ ok: false }, form({ ...base, amount: "4800", billNo: "VT-3", fromAccount: "bank", mode: "UPI" }))).fieldErrors).toHaveProperty("reference");
+    const r = await createExpense({ ok: false }, form({ ...base, amount: "4800", billNo: "VT-3", fromAccount: "bank", mode: "UPI", reference: "UTR-VT-3" }));
     const e = await prisma.expense.findUniqueOrThrow({ where: { id: r.id } });
-    expect(e.approvalLevel).toBe("SuperAdmin");
+    expect([e.approvalLevel, e.reference]).toEqual(["SuperAdmin", "UTR-VT-3"]);
     expect((await approveExpense(e.id)).ok).toBe(false);
     as("superadmin");
     expect(await approveExpense(e.id)).toEqual({ ok: true });

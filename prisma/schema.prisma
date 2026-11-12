@@ -1029,11 +1029,12 @@ model Expense {
   amount              Decimal         @db.Decimal(12, 2)
   vendorId            String
   vendor              Vendor          @relation(fields: [vendorId], references: [id])
-  billNo              String
+  billNo              String? // optional (#42); the same vendor's bill no. can't be entered twice
   billPhotoPath       String?
   paidBy              PaidBy          @default(Company)
   paidByName          String?
   mode                PaymentMode
+  reference           String? // transaction ID (UPI / net banking / card) or cheque no.; none for cash (#42)
   fromAccountId       String? // company account when paidBy = Company
   repaymentStatus     RepaymentStatus @default(NotNeeded)
   repaidOn            DateTime?       @db.Date
@@ -1065,6 +1066,7 @@ enum EntryType {
   ExpenseRepayment
   Withdrawal // ATM / bank → cash (contra)
   DepositToBank // cash → bank (contra)
+  CashUpiExchange // cash given for UPI received, or UPI sent for cash received (contra, #22)
   DepositToPo
   PaidToCompany
   OwnerReturn

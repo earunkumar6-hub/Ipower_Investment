@@ -22,6 +22,7 @@ export const ENTRY_LABEL: Record<EntryType, string> = {
   ExpenseRepayment: "Expense repayment",
   Withdrawal: "ATM withdrawal",
   DepositToBank: "Deposit to bank",
+  CashUpiExchange: "Cash / UPI exchange",
   DepositToPo: "Deposit to post office",
   PaidToCompany: "Paid to company",
   OwnerReturn: "Return to owner",
@@ -89,7 +90,7 @@ export async function loadDayBook(user: SessionUser, date: Date) {
   const earlierOpen = await earliestOpenDayBefore(db as unknown as Tx, tenantId, date);
   const pastGrace = await daysPastGrace(db as unknown as Tx, tenantId, today, tenant.dayCloseGraceDays);
 
-  // A transfer between own accounts (ATM withdrawal, deposit to bank) is two lines; the list shows it as one row.
+  // A transfer between own accounts (ATM withdrawal, deposit to bank, cash / UPI exchange) is two lines; the list shows it as one row.
   const rows: typeof entries[number][][] = [];
   for (const e of entries) {
     const pair = e.sourceType === "Contra" && e.sourceId ? rows.find((r) => r[0].sourceType === "Contra" && r[0].sourceId === e.sourceId) : undefined;

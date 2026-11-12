@@ -3,7 +3,7 @@ import { z } from "zod";
 import { receivingAccount } from "@/lib/accounts";
 import type { Tx } from "@/lib/db";
 import { D, fmtINR } from "@/lib/money";
-import { MODE_LABEL, modeLabel, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type PayModeOption, type ReceiptMode } from "@/lib/payment-modes";
+import { MODE_LABEL, modeLabel, modeText, NET_TYPES, NOTES, RECEIPT_MODES, REFERENCE_LABEL, type Denominations, type NoteCounts, type PayModeOption, type ReceiptMode } from "@/lib/payment-modes";
 
 // Payment modes offered on receipts / direct bills (Settings → Payment modes) and cash denomination.
 // Plain labels / constants (safe for client components) live in payment-modes.ts.
@@ -28,23 +28,31 @@ export async function payOptions(tx: Pick<Tx, "paymentOption">, tenantId: string
   };
 }
 
+const countsTotal = (d: NoteCounts) => NOTES.reduce((t, n) => t.plus(new D(n).times(d[`${n}`] ?? 0)), new D(d.coins || 0));
+/** Cash kept: notes received minus any change given back (#47). */
 export function denominationTotal(d: Denominations) {
-  return NOTES.reduce((t, n) => t.plus(new D(n).times(d[`${n}`] ?? 0)), new D(d.coins || 0));
+  return countsTotal(d).minus(d.change ? countsTotal(d.change) : 0);
 }
 
-const denominationSchema = z.object({
+const countsShape = {
   ...Object.fromEntries(NOTES.map((n) => [`${n}`, z.number().int().min(0).max(100000).optional()])),
   coins: z.union([z.literal(""), z.string().regex(/^\d+(\.\d{1,2})?$/)]).optional(),
-}) as unknown as z.ZodType<Denominations>;
+};
+const denominationSchema = z.object({ ...countsShape, change: z.object(countsShape).optional() }) as unknown as z.ZodType<Denominations>;
 
-/** "₹500 × 4, ₹200 × 2, coins ₹12.50" for the bill, receipt page and PDF. */
+const countsText = (v: NoteCounts) => {
+  const parts = NOTES.filter((n) => (v[`${n}`] ?? 0) > 0).map((n) => `₹${n} × ${v[`${n}`]}`);
+  if (v.coins && Number(v.coins) > 0) parts.push(`coins ${fmtINR(v.coins)}`);
+  return parts.join(", ");
+};
+
+/** "₹500 × 4, ₹200 × 2, coins ₹12.50" (+ " · change given back ₹50 × 1") for the bill, receipt page and PDF. */
 export function denominationText(d: unknown) {
   const parsed = denominationSchema.safeParse(d);
   if (!parsed.success) return "";
   const v = parsed.data;
-  const parts = NOTES.filter((n) => (v[`${n}`] ?? 0) > 0).map((n) => `₹${n} × ${v[`${n}`]}`);
-  if (v.coins && Number(v.coins) > 0) parts.push(`coins ${fmtINR(v.coins)}`);
-  return parts.join(", ");
+  const change = v.change && countsTotal(v.change).gt(0) ? countsText(v.change) : "";
+  return [countsText(v), change && `change given back ${change}`].filter(Boolean).join(" · ");
 }
 
 const parseJson = (v: string): unknown => {
@@ -74,9 +82,14 @@ type PayInput = { mode: ReceiptMode; modeName?: string; reference: string; bankN
 export function checkDenominations(raw: string, amount: Prisma.Decimal): { error: string } | { ok: Prisma.InputJsonValue } {
   const parsed = denominationSchema.safeParse(parseJson(raw));
   if (!raw || !parsed.success) return { error: "Enter the cash denomination (notes and coins)" };
-  const total = denominationTotal(parsed.data);
-  if (!total.equals(amount)) return { error: `Cash denomination adds up to ${fmtINR(total)}, not ${fmtINR(amount)}` };
-  return { ok: parsed.data as Prisma.InputJsonValue };
+  const v = parsed.data;
+  const total = denominationTotal(v);
+  const change = v.change && countsTotal(v.change).gt(0);
+  if (!total.equals(amount)) {
+    return { error: change ? `Received minus change comes to ${fmtINR(total)}, not ${fmtINR(amount)}` : `Cash denomination adds up to ${fmtINR(total)}, not ${fmtINR(amount)}` };
+  }
+  // Change only when some was given back, so a plain count is stored as before.
+  return { ok: (change ? v : { ...v, change: undefined }) as Prisma.InputJsonValue };
 }
 
 /** Form field carrying the cash denomination JSON. */

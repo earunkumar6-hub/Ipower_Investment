@@ -27,15 +27,21 @@ const expenseSchema = z
     notes: z.string().default("").transform((s) => s.trim()).pipe(z.string().min(3, "Enter notes – required for every expense").max(500)),
     amount: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount").refine((v) => Number(v) > 0, "Amount must be more than 0"),
     vendor: z.string().trim().min(2, "Enter the vendor"),
-    billNo: z.string().trim().min(1, "Bill number is required").max(40).transform((v) => v.toUpperCase()),
+    billNo: z.string().trim().max(40).default("").transform((v) => v.toUpperCase()), // optional (#42)
     paidBy: z.enum(["Company", "Employee", "Owner"]),
     paidByName: z.string().trim().max(80).default(""), // absent when the company paid
     mode: z.enum(["Cash", "UPI", "Bank", "Card", "Cheque"]),
+    reference: z.string().trim().max(60).default(""), // transaction ID, or cheque no. for a cheque; not for cash (#42)
     fromAccount: z.string().default(""), // company account id; absent when an employee or the owner paid
     denominations: denominationsField, // when paid from office cash
   })
   .refine((v) => v.paidBy !== "Company" || v.fromAccount, { message: "Pick the company account", path: ["fromAccount"] })
-  .refine((v) => v.paidBy !== "Employee" || v.paidByName, { message: "Enter the employee's name", path: ["paidByName"] });
+  .refine((v) => v.paidBy !== "Employee" || v.paidByName, { message: "Enter the employee's name", path: ["paidByName"] })
+  .superRefine((v, ctx) => {
+    if (v.mode !== "Cash" && v.reference.length < 2) {
+      ctx.addIssue({ code: "custom", message: `Enter the ${v.mode === "Cheque" ? "cheque number" : "transaction ID"}`, path: ["reference"] });
+    }
+  });
 
 /** Thrown inside a transaction so the expense change is rolled back with the payment. */
 class PaymentBlocked extends Error {}
@@ -74,10 +80,13 @@ async function createExpenseUnguarded(_: ActionResult, form: FormData): Promise<
       const vendor =
         (await tx.vendor.findFirst({ where: { tenantId: user.tenantId, name: { equals: v.vendor, mode: "insensitive" } } })) ??
         (await tx.vendor.create({ data: { tenantId: user.tenantId, name: v.vendor } }));
-      // One bill cannot be entered twice (e.g. split to dodge approval).
-      const dup = await tx.expense.findFirst({ where: { tenantId: user.tenantId, vendorId: vendor.id, billNo: v.billNo } });
+      // One bill cannot be entered twice (e.g. split to dodge approval) – checked only when a bill number is given (#42).
+      const dup = v.billNo ? await tx.expense.findFirst({ where: { tenantId: user.tenantId, vendorId: vendor.id, billNo: v.billNo } }) : null;
       if (dup) {
-        return fail(`Bill ${v.billNo} from ${vendor.name} is already entered (${dup.expenseNo}, ${fmtDate(dup.expenseDate)}). The same bill number cannot be entered twice.`, "billNo");
+        return {
+          ...fail(`Bill ${v.billNo} from ${vendor.name} is already entered (${dup.expenseNo}, ${fmtDate(dup.expenseDate)}, ${fmtINR(dup.amount)}). The same bill number cannot be entered twice.`, "billNo"),
+          duplicateBill: { expenseNo: dup.expenseNo, date: fmtDate(dup.expenseDate), amount: fmtINR(dup.amount), vendor: vendor.name, billNo: v.billNo },
+        };
       }
       const company = v.paidBy === "Company";
       // Settings → Bank accounts and wallets: active bank accounts or office cash.
@@ -93,8 +102,9 @@ async function createExpenseUnguarded(_: ActionResult, form: FormData): Promise<
       const e = await tx.expense.create({
         data: {
           tenantId: user.tenantId, expenseNo: await nextNumber(tx, user.tenantId, "expense"), expenseDate,
-          category: purpose.value, description: v.description, notes: v.notes, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo,
+          category: purpose.value, description: v.description, notes: v.notes, amount: new D(v.amount), vendorId: vendor.id, billNo: v.billNo || null,
           paidBy: v.paidBy, paidByName: v.paidBy === "Owner" ? "Owner" : v.paidBy === "Employee" ? v.paidByName : null, mode: v.mode,
+          reference: v.mode === "Cash" ? null : v.reference,
           fromAccountId: from?.id ?? null,
           denominations: cash?.ok ?? undefined,
           repaymentStatus: company ? "NotNeeded" : "ToBeRepaid",

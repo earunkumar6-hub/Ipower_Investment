@@ -3,12 +3,12 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { cashJson, cashTotal, DenominationInputs, inr, paise } from "@/components/cash-denomination-grid";
+import { type Cash, cashJson, cashTotal, DenominationInputs, inr, paise } from "@/components/cash-denomination-grid";
 import { NET_TYPES, REFERENCE_LABEL, type PayModeOption, type ReceiptMode } from "@/lib/payment-modes";
 import { cn } from "@/lib/utils";
 
 /** `mode` is the built-in mode; `modeName` the agency's own mode picked ("" for a built-in one). */
-export type PayValue = { mode: ReceiptMode; modeName: string; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string; intoAccountId: string };
+export type PayValue = { mode: ReceiptMode; modeName: string; reference: string; bankName: string; netType: string; notes: Record<string, string>; coins: string; change?: Cash["change"]; intoAccountId: string };
 /** A bank account for the "Received into" picker. */
 export type IntoAccount = { id: string; label: string };
 /** `accounts[0]` (the default bank) is picked to start with. */

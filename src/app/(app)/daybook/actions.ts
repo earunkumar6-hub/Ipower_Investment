@@ -16,6 +16,7 @@ import { fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { D, fmtINR, sum, ZERO } from "@/lib/money";
 import { canActOn } from "@/lib/leads";
+import { maskMobile } from "@/lib/lead-labels";
 import { hasPermission, seesAll } from "@/lib/permissions";
 import { postPoDeposit } from "@/lib/posting";
 import { authorize } from "@/lib/session";
@@ -111,6 +112,59 @@ export async function depositToBank(_: ActionResult, form: FormData): Promise<Ac
           { key: "out", accountId: cash.id, direction: "Out", amount: a, entryType: "DepositToBank", mode: "Cash", particulars, notes: remark || undefined, denominations: notes.ok },
           { key: "in", accountId: bank.id, direction: "In", amount: a, entryType: "DepositToBank", mode: "Bank", particulars, notes: remark || undefined },
         ],
+      });
+      return { ok: true };
+    }),
+  );
+}
+
+const exchangeSchema = z.object({
+  date: isoDay,
+  direction: z.enum(["CashForUpi", "UpiForCash"], "Pick which way the money went"),
+  amount: positive,
+  bankAccountId: z.string().min(1, "Pick the bank account"),
+  reference: ref("UPI transaction no."),
+  person: z.string().trim().min(2, "Enter the person's name").max(60),
+  mobile: z.string().trim().regex(/^(\d{10})?$/, "Mobile number is 10 digits").default(""),
+  denominations: denominationsField,
+});
+
+/**
+ * Cash / UPI exchange (owner change list, #22): someone pays by UPI and takes cash ("CashForUpi": bank up, cash down),
+ * or hands over cash and gets UPI ("UpiForCash": cash up, bank down). One mode goes down and the other up by the same
+ * amount – a contra, never income or expense. The cash side needs its notes, the bank side the UPI transaction no.
+ */
+export async function recordCashUpiExchange(_: ActionResult, form: FormData): Promise<ActionResult> {
+  const user = await authorize("DayBook.Create");
+  const parsed = exchangeSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const v = parsed.data;
+  if (checkDate(v.date)) return fail(checkDate(v.date)!);
+  const a = new D(v.amount);
+  const notes = checkDenominations(v.denominations, a);
+  if ("error" in notes) return fail(notes.error);
+  const cashOut = v.direction === "CashForUpi";
+  return guarded(() =>
+    db.$transaction(async (tx) => {
+      const bank = await pickBank(tx, user.tenantId, v.bankAccountId);
+      if (!bank) return fail("Pick an active bank account");
+      const cash = await cashAccount(tx, user.tenantId);
+      const from = cashOut ? cash : bank;
+      const balance = await balanceAt(tx, from.id, v.date);
+      if (balance.lt(a)) return fail(cashOut ? `Cash in hand is only ${fmtINR(balance)}` : `${accountLabel(bank)} has only ${fmtINR(balance)}`);
+      const who = `${v.person}${v.mobile ? ` (${maskMobile(v.mobile)})` : ""}`;
+      const particulars = `${cashOut ? "Cash given for UPI received" : "UPI sent for cash received"} · ${fmtINR(a)} cash / ${fmtINR(a)} bank · UPI ${v.reference} · ${who}`;
+      const sourceId = randomUUID();
+      await post(tx, {
+        tenantId: user.tenantId, entryDate: v.date, sourceType: "Contra", sourceId, sourceNo: v.reference, createdById: user.id,
+        lines: [
+          { key: "cash", accountId: cash.id, direction: cashOut ? "Out" : "In", amount: a, entryType: "CashUpiExchange", mode: "Cash", particulars, notes: who, denominations: notes.ok },
+          { key: "bank", accountId: bank.id, direction: cashOut ? "In" : "Out", amount: a, entryType: "CashUpiExchange", mode: "UPI", particulars, notes: who },
+        ],
+      });
+      await audit(tx, user, {
+        entity: "DayBook", entityId: sourceId, action: "Cash / UPI exchange",
+        summary: `${cashOut ? "Cash given for UPI" : "UPI sent for cash"} ${fmtINR(a)} · ${accountLabel(bank)} · UPI ${v.reference} · ${v.person} on ${fmtDate(v.date)}`,
       });
       return { ok: true };
     }),

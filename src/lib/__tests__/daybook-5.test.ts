@@ -1,6 +1,7 @@
 // Change set phase 5 – Day Book: ATM withdrawal, deposit to bank, owner withdrawal / contribution, grace period.
 // Runs against the seeded database; every row it creates is removed afterwards.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 import { addDays, isoDate, istToday } from "@/lib/dates";
 import { db, prisma, type Tx } from "@/lib/db";
 import { daysPastGrace, graceBadge, graceState } from "@/lib/daybook-grace";
@@ -22,7 +23,8 @@ vi.mock("@/lib/session", async () => {
   };
 });
 
-const { recordAtmWithdrawal, depositToBank, recordOwnerEntry, decideOwnerEntry, closeDayBook } = await import("@/app/(app)/daybook/actions");
+const { recordAtmWithdrawal, depositToBank, recordCashUpiExchange, recordOwnerEntry, decideOwnerEntry, closeDayBook } = await import("@/app/(app)/daybook/actions");
+const { checkDenominations, denominationText } = await import("@/lib/payment-options");
 
 const form = (o: Record<string, string>) => {
   const f = new FormData();
@@ -52,6 +54,7 @@ afterAll(async () => {
   await prisma.dayBookEntry.deleteMany({ where: { createdAt: { gte: started }, reversalOfId: { not: null } } });
   await prisma.dayBookEntry.deleteMany({ where: { OR: [{ id: { in: testEntries } }, { createdAt: { gte: started }, OR: [{ sourceType: "Contra", sourceNo: { startsWith: "VT5-" } }, { sourceId: { in: ownerIds } }] }] } });
   await prisma.auditLog.deleteMany({ where: { entityId: { in: ownerIds } } });
+  await prisma.auditLog.deleteMany({ where: { createdAt: { gte: started }, action: "Cash / UPI exchange" } });
   await prisma.ownerEntry.deleteMany({ where: { id: { in: ownerIds } } });
   await prisma.$disconnect();
 });
@@ -83,6 +86,52 @@ describe("ATM withdrawal (#9)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].account).toMatch(/→ Cash$/);
     expect(d.tally.lines.some((l) => l.label === "ATM withdrawal")).toBe(true);
+  });
+});
+
+describe("Change given back (#47)", () => {
+  it("received − change must equal the amount; the text shows both; a plain count is stored as before", () => {
+    // Charge ₹20, customer gives ₹100 → change ₹50 + ₹20 + ₹10 = ₹80, cash kept ₹20.
+    const paid = { "100": 1, coins: "", change: { "50": 1, "20": 1, "10": 1, coins: "" } };
+    const ok = checkDenominations(JSON.stringify(paid), new Prisma.Decimal(20));
+    expect(ok).toEqual({ ok: paid });
+    expect(denominationText(paid)).toBe("₹100 × 1 · change given back ₹50 × 1, ₹20 × 1, ₹10 × 1");
+    expect(checkDenominations(JSON.stringify({ ...paid, change: { "50": 1, coins: "" } }), new Prisma.Decimal(20))).toEqual({ error: "Received minus change comes to ₹50, not ₹20" });
+    // An empty change part is dropped, so the stored count looks as it always did.
+    expect(checkDenominations(JSON.stringify({ "20": 1, coins: "", change: { coins: "" } }), new Prisma.Decimal(20))).toEqual({ ok: { "20": 1, coins: "" } });
+  });
+});
+
+describe("Cash / UPI exchange (#22)", () => {
+  const ex = (o: Record<string, string> = {}) =>
+    form({ date, direction: "CashForUpi", amount: "700", bankAccountId: bank, reference: "VT5-UPI1", person: "Walk-in Kumar", mobile: "9876543210", denominations: notes(700), ...o });
+
+  it("needs the UPI transaction no., the person and notes adding up", async () => {
+    as("arun");
+    expect((await recordCashUpiExchange({ ok: false }, ex({ reference: "" }))).error).toMatch(/UPI transaction no/);
+    expect((await recordCashUpiExchange({ ok: false }, ex({ person: "" }))).error).toMatch(/person/);
+    expect((await recordCashUpiExchange({ ok: false }, ex({ denominations: notes(500) }))).error).toMatch(/adds up to ₹500/);
+  });
+
+  it("cash given for UPI: cash down, bank up by the same amount (one row); UPI sent for cash: the other way", async () => {
+    as("arun");
+    const before = await profitAndLoss(users.admin.tenantId, monthRange(monthKey(today)));
+    expect(await recordCashUpiExchange({ ok: false }, ex())).toEqual({ ok: true });
+    const lines = await prisma.dayBookEntry.findMany({ where: { sourceNo: "VT5-UPI1", createdAt: { gte: started } } });
+    expect(lines.find((l) => l.accountId === cash)).toMatchObject({ direction: "Out", entryType: "CashUpiExchange", mode: "Cash", denominations: { "500": 1 } });
+    expect(lines.find((l) => l.accountId === bank)).toMatchObject({ direction: "In", entryType: "CashUpiExchange", mode: "UPI" });
+    expect(lines[0].particulars).toContain("98xxxxxx10"); // the mobile is masked
+    expect(lines[0].particulars).not.toContain("9876543210");
+
+    expect(await recordCashUpiExchange({ ok: false }, ex({ direction: "UpiForCash", reference: "VT5-UPI2" }))).toEqual({ ok: true });
+    const back = await prisma.dayBookEntry.findMany({ where: { sourceNo: "VT5-UPI2", createdAt: { gte: started } } });
+    expect([back.find((l) => l.accountId === cash)?.direction, back.find((l) => l.accountId === bank)?.direction]).toEqual(["In", "Out"]);
+
+    const d = await loadDayBook(users.admin, today);
+    expect(d.transactions.filter((t) => t.particulars.includes("VT5-UPI1"))).toHaveLength(1);
+    // Not income or expense.
+    const after = await profitAndLoss(users.admin.tenantId, monthRange(monthKey(today)));
+    expect(after.profit.minus(before.profit).toFixed(2)).toBe("0.00");
   });
 });
 
