@@ -55,7 +55,7 @@ export function leadFilter(user: SessionUser, sp: Params) {
   return { status, source, q, where };
 }
 
-export const HOLDING_STATUS = [["all", "All"], ["Active", "Active"], ["Matured", "Matured"], ["PrematureClosed", "Premature closed"], ["Withdrawn", "Withdrawn"], ["Lapsed", "Lapsed"]] as const;
+export const HOLDING_STATUS = [["all", "All"], ["Active", "Active"], ["Matured", "Matured"], ["PrematureClosed", "Premature closed"], ["Withdrawn", "Withdrawn"], ["Deactivated", "Deactivated"], ["Lapsed", "Lapsed"]] as const;
 
 /**
  * Customers list: search (name, any mobile, policy no.) and a holdings filter – product → company → scheme
@@ -91,7 +91,8 @@ export function customerFilter(user: SessionUser, sp: Params) {
   return { q, product, company, scheme: plan ?? poScheme, status, where, holdingWhere, filtered, filterLabel };
 }
 
-export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["paid", "Paid"], ["customers", "By customer"]] as const;
+// Renewals (premium due) and Maturity are separate tabs (owner change list, #20).
+export const RENEWAL_TABS = [["due", "Due"], ["overdue", "Overdue"], ["maturity", "Maturity"], ["paid", "Paid"], ["customers", "By customer"]] as const;
 export type RenewalTab = (typeof RENEWAL_TABS)[number][0];
 
 /** Quick picks for the Renewals date range. */
@@ -116,7 +117,7 @@ export function pickRange(key: string, today: Date): { from: Date; to: Date } | 
 
 /**
  * The Renewals date range: From / To, else a quick pick, else the old `within` days, else the tab's default
- * (Due: next 30 days · Paid: last 30 days · Overdue / By customer: no limit).
+ * (Due: next 30 days · Paid: last 30 days · Overdue / By customer: no limit · Maturity: none – see `maturityShown`).
  */
 export function renewalRange(tab: RenewalTab, sp: Params, today: Date): { from: Date; to: Date; pick: string } | null {
   const from = isoDay(sp.from), to = isoDay(sp.to);
@@ -173,12 +174,12 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
     ...(company && { partner: company }),
     ...(plan && { productName: plan }),
   };
-  // Maturity reminders (owner, 20 Oct 2026: every scheme with a maturity, from a month before – the Due tab's
-  // default range). Health renews until closed and mutual funds are open-ended, so they have none. After
-  // maturity only one-time deposits stay listed (Overdue, until "Mark matured"); billed policies mature by themselves.
-  const maturityWhere: Prisma.PolicyWhereInput | null = tab === "due" || tab === "overdue"
+  // Maturity tab (#20; owner, 20 Oct 2026: every scheme with a maturity, from a month before). Health renews until
+  // closed and mutual funds are open-ended, so they have none. Billed policies mature by themselves; one-time deposits
+  // stay listed after maturity until "Mark matured" (see `maturityShown`).
+  const maturityWhere: Prisma.PolicyWhereInput | null = tab === "maturity"
     ? {
-        tenantId: user.tenantId, AND: [policyWhere, tab === "overdue" ? { productType: { in: MATURITY_SCHEMES } } : { productType: { not: "MutualFund" } }],
+        tenantId: user.tenantId, AND: [policyWhere, { productType: { not: "MutualFund" } }],
         status: "Active", termMonths: { not: null }, NOT: { product: { invoiceRule: "UntilClosed" } },
       }
     : null;
@@ -195,6 +196,16 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
   };
   const orderBy: Prisma.RenewalItemOrderByWithRelationInput = tab === "paid" ? { paidOn: "desc" } : { dueDate: "asc" };
   return { tab, product, company, scheme, paidTo, range, policyWhere, where, orderBy, maturityWhere, filterLabel };
+}
+
+/**
+ * Is a maturity listed on the Maturity tab? With a date range: when it falls inside it. Without one: from a month
+ * before (the next 30 days), and after the date only for one-time deposits not yet marked matured.
+ */
+export function maturityShown(p: { productType: ProductType }, date: Date, today: Date, range: { from: Date; to: Date } | null) {
+  if (date < today && !MATURITY_SCHEMES.includes(p.productType)) return false; // billed policies mature by themselves
+  if (range) return date >= range.from && date <= range.to;
+  return date < today || date <= addDays(today, 29);
 }
 
 export const EXPENSE_TABS = [["all", "All"], ["approve", "Waiting for my approval"], ["repay", "To be repaid"]] as const;

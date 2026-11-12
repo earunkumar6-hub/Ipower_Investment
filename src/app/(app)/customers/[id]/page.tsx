@@ -28,6 +28,7 @@ import { EditCustomerButton, HoldingsTable } from "./customer-forms";
 const RENEWAL_TONE: Record<string, Tone> = { Due: "orange", Overdue: "red", Paid: "green", Lapsed: "slate", Stopped: "slate" };
 const POLICY_STATUS: Record<string, [string, Tone]> = {
   Active: ["Active", "green"], Lapsed: ["Lapsed", "red"], Matured: ["Matured", "slate"], PrematureClosed: ["Premature closed", "slate"], Withdrawn: ["Withdrawn", "slate"],
+  Deactivated: ["Deactivated", "orange"],
 };
 const SLIP: Record<string, [string, Tone]> = {
   CustomerOwes: ["Owner paid – customer owes", "indigo"], CollectedReturnToOwner: ["Collected – return to owner", "orange"], Settled: ["Settled", "green"], Cancelled: ["Cancelled", "slate"],
@@ -43,6 +44,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   const { c, owner, renewals, receiptNo, holdings, cards, services, directBills, followUps, nextFollowUp, activity, oneTimeTotal, regular, slipFor } = data;
   const today = istToday();
   const canEdit = hasPermission(user.role, "Policy.Create");
+  const canDeactivate = hasPermission(user.role, "Policy.Deactivate");
+  const canDeletePolicy = hasPermission(user.role, "Policy.Delete");
   const files = await attachmentRows(user, "Customer", c.id);
   const mobiles = c.mobiles.length ? c.mobiles : [{ number: c.mobile, isWhatsApp: false }];
 
@@ -84,7 +87,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       </div>
 
       <Section title="Products invested">
-        <HoldingsTable rows={holdings.map((p) => ({
+        <HoldingsTable canDeactivate={canDeactivate} canDelete={canDeletePolicy} rows={holdings.map((p) => ({
           id: p.id,
           customerId: c.id,
           kind: KIND[p.productType],
@@ -99,7 +102,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           lockIn: p.lockIn && p.lockIn > p.startDate ? fmtDate(p.lockIn) : "—",
           maturity: p.maturity ? fmtDate(p.maturity) : "—",
           status: POLICY_STATUS[p.status],
-          closedNote: p.closedOn ? fmtDate(p.closedOn) : null,
+          closedNote: p.closedOn ? `${fmtDate(p.closedOn)}${p.status === "Deactivated" && p.closeReason ? ` · ${p.closeReason}` : ""}` : null,
+          manage: p.status === "Active" || p.status === "Deactivated" ? { label: `${p.partner} ${p.productName} · ${p.policyNumber}`, deactivated: p.status === "Deactivated" } : null,
           details: p.details,
           close: canEdit && p.status === "Active" ? (() => {
             const b = closureButton(p, p.lockIn && p.lockIn > p.startDate ? p.lockIn : null, today, fmtDate);
@@ -128,7 +132,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                     <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link></TableCell>
                     <TableCell>{isPostal(p) ? `${p.firstHolderCif ?? "—"} / ${p.secondHolderCif ?? "—"}` : p.folioNo ? `Folio ${p.folioNo}` : "—"}</TableCell>
                     <TableCell className="text-right">{p.premiumAmount.gt(0) ? <>{fmtINR(p.premiumAmount)} {PER_LABEL[p.frequency]}</> : "—"}</TableCell>
-                    <TableCell>{POLICY_STATUS[p.status]}</TableCell>
+                    <TableCell>{POLICY_STATUS[p.status][0]}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

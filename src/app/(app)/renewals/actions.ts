@@ -7,7 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { refuseOnClosedDay } from "@/lib/action-guard";
 import { audit } from "@/lib/audit";
 import { assertDayOpen, balanceAt } from "@/lib/daybook";
-import { fmtDate, istToday } from "@/lib/dates";
+import { fmtDate, fmtDateTime, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn } from "@/lib/leads";
 import { MATURITY_SCHEMES } from "@/lib/lists";
@@ -161,6 +161,33 @@ export async function sendMaturityReminder(policyId: string): Promise<ActionResu
   });
   revalidatePath("/renewals");
   return { ok: true };
+}
+
+export type ReminderLine = { at: string; channel: string; by: string; status: string; text: string };
+
+/**
+ * Every reminder sent for one renewal bill or one maturity, newest first, from Sent messages (#24). `kind` "bill" is a
+ * renewal item id, "maturity" a policy id.
+ */
+export async function reminderHistory(kind: "bill" | "maturity", id: string): Promise<{ ok: boolean; error?: string; lines?: ReminderLine[] }> {
+  const user = await authorize("Renewal.View");
+  const policy = kind === "bill"
+    ? (await db.renewalItem.findFirst({ where: { id, tenantId: user.tenantId }, select: { policy: { select: { ownerId: true } } } }))?.policy
+    : await db.policy.findFirst({ where: { id, tenantId: user.tenantId }, select: { ownerId: true } });
+  if (!policy) return { ok: false, error: "Not found" };
+  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  const logs = await db.messageLog.findMany({
+    where: { tenantId: user.tenantId, relatedId: id, ...(kind === "bill" ? { relatedType: "RenewalItem" } : { relatedType: "Policy", template: "maturity_reminder" }) },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  const users = await db.user.findMany({ where: { id: { in: [...new Set(logs.map((l) => l.createdById).filter((x): x is string => !!x))] } }, select: { id: true, name: true } });
+  return {
+    ok: true,
+    lines: logs.map((l) => ({
+      at: fmtDateTime(l.createdAt), channel: l.channel, by: users.find((u) => u.id === l.createdById)?.name ?? "System", status: l.status, text: l.body,
+    })),
+  };
 }
 
 /** "Send reminder to ticked" (Post office schemes): the same reminder as "Send now", for every ticked row. */

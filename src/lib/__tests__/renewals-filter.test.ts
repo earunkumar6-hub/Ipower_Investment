@@ -58,20 +58,25 @@ describe("Renewals filter", () => {
     expect(po.schemes.map(([, l]) => l)).toEqual(["RD", "TD", "MIS", "SCSS", "SSA", "PPF", "NSC", "KVP"]);
   });
 
-  it("post office: SSA/PPF yearly dues, SCSS/MIS maturity reminders kept out of the total", async () => {
+  it("post office: SSA/PPF yearly dues on Due / Overdue; SCSS/MIS maturities on their own tab, out of the total (#20)", async () => {
     const u = admin as SessionUser;
     const due = await loadRenewals(u, { tab: "due", product: "po" }, today);
-    expect(numbers(due.rows)).toEqual(expect.arrayContaining(["SSA 5510-08", "SCSS 7730-02"]));
-    const scss = due.rows.find((r) => r.policy.policyNumber === "SCSS 7730-02")!;
-    expect(scss.kind).toBe("maturity");
-    const instalments = due.rows.filter((r) => r.kind === "instalment").reduce((s, r) => s + Number(r.amount), 0);
-    expect(Number(due.total)).toBe(instalments);
+    expect(numbers(due.rows)).toContain("SSA 5510-08");
+    expect(due.rows.every((r) => r.kind === "instalment")).toBe(true);
 
     const overdue = await loadRenewals(u, { tab: "overdue", product: "po" }, today);
-    expect(numbers(overdue.rows)).toEqual(expect.arrayContaining(["PPF 6620-14", "MIS 8840-31"]));
+    expect(numbers(overdue.rows)).toContain("PPF 6620-14");
+    expect(overdue.rows.every((r) => r.kind === "instalment")).toBe(true);
     expect(numbers((await loadRenewals(u, { tab: "overdue", product: "po", scheme: "PoPpf" }, today)).rows)).toEqual(["PPF 6620-14"]);
     expect((await loadRenewals(u, { tab: "paid", product: "po", scheme: "PoMis" }, today)).rows).toEqual([]);
-    expect((await loadRenewals(u, { tab: "due", product: "insurance" }, today)).rows.some((r) => r.kind === "maturity")).toBe(false);
+
+    // Maturity: SCSS coming up within a month, MIS matured and not yet marked; nothing counts as money to collect.
+    const maturity = await loadRenewals(u, { tab: "maturity", product: "po" }, today);
+    expect(numbers(maturity.rows)).toEqual(expect.arrayContaining(["SCSS 7730-02", "MIS 8840-31"]));
+    expect(maturity.rows.every((r) => r.kind === "maturity")).toBe(true);
+    expect(Number(maturity.total)).toBe(0);
+    expect(numbers((await loadRenewals(u, { tab: "maturity", product: "po", scheme: "PoMis" }, today)).rows)).toEqual(["MIS 8840-31"]);
+    expect((await loadRenewals(u, { tab: "maturity", product: "mf" }, today)).rows).toEqual([]);
   });
 
   it("a matured deposit can be marked matured once; one not yet matured cannot", async () => {

@@ -6,7 +6,7 @@ import { addMonths } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { companyStatus, depositStatusSelect, nameLookup, type CompanyStatus } from "@/lib/deposit-status";
 import { ownerScope, userNames } from "@/lib/leads";
-import { PO_SCHEMES, PRODUCT_SHORT, renewalFilter, type Params } from "@/lib/lists";
+import { maturityShown, PO_SCHEMES, PRODUCT_SHORT, renewalFilter, type Params } from "@/lib/lists";
 import { sum, ZERO } from "@/lib/money";
 import type { SessionUser } from "@/lib/session";
 
@@ -65,6 +65,7 @@ export type RenewalRow = {
   companyStatus: CompanyStatus | null; // Paid tab only
   lastReminderAt: Date | null;
   reminderCount: number;
+  lastReminderChannel: string | null; // from Sent messages (#24)
 };
 
 /** By customer tab: everything one customer owes and has paid, across their policies. */
@@ -122,16 +123,32 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
   }
 
   const [items, deposits, users] = await Promise.all([
-    db.renewalItem.findMany({ where: f.where, include: { policy: { include }, paidReceipt: { select: depositStatusSelect } }, orderBy: f.orderBy, take }),
+    f.tab === "maturity" ? Promise.resolve([]) : db.renewalItem.findMany({ where: f.where, include: { policy: { include }, paidReceipt: { select: depositStatusSelect } }, orderBy: f.orderBy, take }),
     f.maturityWhere ? db.policy.findMany({ where: f.maturityWhere, include }) : Promise.resolve([]),
     userNames(user.tenantId),
   ]);
   const nameOf = nameLookup(users);
-  const maturities: RenewalRow[] = deposits.flatMap((p) => {
-    const date = maturityDate(p)!;
-    const inRange = !f.range || (date >= f.range.from && date <= f.range.to);
-    const show = (f.tab === "due" ? date >= today : date < today) && inRange;
-    return show ? [{ id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: f.tab === "due" ? "Due" as const : "Overdue" as const, paidOn: null, paidReceiptId: null, paidReceiptNo: null, paidReceiptHref: null, collectedBy: null, companyStatus: null, lastReminderAt: null, reminderCount: 0 }] : [];
+  const shown = deposits.flatMap((p) => { const date = maturityDate(p)!; return maturityShown(p, date, today, f.range) ? [{ p, date }] : []; });
+  // Reminders sent, from Sent messages: maturity reminders by policy, the channel of the last renewal reminder (#24).
+  const logs = await db.messageLog.findMany({
+    where: {
+      tenantId: user.tenantId,
+      OR: [
+        { relatedType: "Policy", template: "maturity_reminder", relatedId: { in: shown.map((x) => x.p.id) } },
+        { relatedType: "RenewalItem", relatedId: { in: items.map((i) => i.id) } },
+      ],
+    },
+    select: { relatedId: true, channel: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const sentFor = (id: string) => logs.filter((l) => l.relatedId === id);
+  const maturities: RenewalRow[] = shown.map(({ p, date }) => {
+    const sent = sentFor(p.id);
+    return {
+      id: `m-${p.id}`, kind: "maturity" as const, policy: p, date, amount: p.premiumAmount, status: date < today ? "Overdue" as const : "Due" as const,
+      paidOn: null, paidReceiptId: null, paidReceiptNo: null, paidReceiptHref: null, collectedBy: null, companyStatus: null,
+      lastReminderAt: sent[0]?.createdAt ?? null, reminderCount: sent.length, lastReminderChannel: sent[0]?.channel ?? null,
+    };
   });
   const instalments: RenewalRow[] = items.map((i) => ({
     id: i.id, kind: "instalment", policy: i.policy, date: i.dueDate, amount: i.premiumAmount, status: i.status,
@@ -139,9 +156,10 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
     paidReceiptNo: i.paidReceipt ? receiptRef(i.paidReceipt).no : null, paidReceiptHref: i.paidReceipt ? receiptRef(i.paidReceipt).href : null,
     collectedBy: i.paidReceipt ? nameOf(i.paidReceipt.createdById) : null,
     companyStatus: i.status === "Paid" ? companyStatus(i.paidReceipt, i.policy.partner, nameOf) : null, lastReminderAt: i.lastReminderAt, reminderCount: i.reminderCount,
+    lastReminderChannel: sentFor(i.id)[0]?.channel ?? null,
   }));
-  // Paid rows keep their paid-on order; maturities only appear on Due / Overdue.
-  const rows = maturities.length ? [...instalments, ...maturities].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, take) : instalments;
+  // Maturities are only on the Maturity tab, oldest first (past one-time deposits waiting to be marked matured on top).
+  const rows = f.tab === "maturity" ? maturities.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, take) : instalments;
   // Only instalments are money to collect; a maturity is paid out by the post office.
   return { ...f, rows, customers: [] as CustomerRenewalRow[], total: instalments.length ? sum(instalments.map((i) => i.amount)) : ZERO };
 }

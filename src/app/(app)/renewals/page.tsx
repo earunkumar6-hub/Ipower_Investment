@@ -17,6 +17,8 @@ import { PaidTable, type PaidRow } from "./paid-table";
 import { RenewalFilters } from "./renewal-filters";
 import { PoCheck, PoCheckAll, PoSelection, type TickItem } from "./po-select";
 import { MaturityRowActions, RenewalRowActions } from "./row-actions";
+import { ReminderHistory } from "./reminder-history";
+import { PolicyManageButton } from "../customers/[id]/policy-manage";
 
 type Search = { tab?: string; product?: string; company?: string; scheme?: string; paidto?: string; within?: string; range?: string; from?: string; to?: string };
 
@@ -40,11 +42,12 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
     status: i.companyStatus!,
   })) : [];
   const link = (t: string) => `/renewals?${new URLSearchParams({ tab: t, ...filter })}`;
-  const maturities = rows.filter((x) => x.kind === "maturity").length;
-  const instalments = rows.length - maturities;
+  const canDeactivate = hasPermission(user.role, "Policy.Deactivate");
+  const canDeletePolicy = hasPermission(user.role, "Policy.Delete");
+  const pastMaturities = rows.filter((x) => x.kind === "maturity" && x.date < today).length;
   const summary = tab === "customers" ? `${customers.length} customers · ${fmtINR(total)} overdue`
-    : `${instalments} ${tab === "due" ? "due" : tab === "overdue" ? "overdue" : paidTo === "pending" ? "collected, not yet paid to Post office / insurer" : "paid"} · ${tab === "paid" && paidTo === "pending" ? "" : `${rangeLabel(range)} · `}${fmtINR(total)}`
-      + (maturities ? ` · ${maturities} maturit${maturities === 1 ? "y" : "ies"} ${tab === "due" ? "coming up" : "not yet closed"}` : "");
+    : tab === "maturity" ? `${rows.length} maturit${rows.length === 1 ? "y" : "ies"} · ${range ? rangeLabel(range) : "next 30 days"}${pastMaturities ? ` · ${pastMaturities} matured, not yet marked` : ""}`
+    : `${rows.length} ${tab === "due" ? "due" : tab === "overdue" ? "overdue" : paidTo === "pending" ? "collected, not yet paid to Post office / insurer" : "paid"} · ${tab === "paid" && paidTo === "pending" ? "" : `${rangeLabel(range)} · `}${fmtINR(total)}`;
 
   return (
     <>
@@ -78,7 +81,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
 
         {tab === "paid" && <PaidTable rows={paidRows} />}
 
-        {(tab === "due" || tab === "overdue") && (() => {
+        {(tab === "due" || tab === "overdue" || tab === "maturity") && (() => {
           // Post office schemes: tick rows (or all) to send reminders or take one combined receipt.
           const ticks = product === "po";
           const table = (
@@ -86,7 +89,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
             <TableHeader>
               <TableRow>
                 {ticks && <TableHead className="w-8"><PoCheckAll /></TableHead>}
-                <TableHead>Customer</TableHead><TableHead>Product</TableHead><TableHead>Policy / account</TableHead><TableHead>Due date</TableHead>
+                <TableHead>Customer</TableHead><TableHead>Product</TableHead><TableHead>Policy / account</TableHead><TableHead>{tab === "maturity" ? "Maturity date" : "Due date"}</TableHead>
                 <TableHead className="text-right">Amount</TableHead><TableHead>{tab === "overdue" ? "Overdue" : "Status"}</TableHead>
                 <TableHead>Reminders sent</TableHead><TableHead />
               </TableRow>
@@ -102,13 +105,20 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
                     <TableCell><Link href={`/customers/${p.customer.id}`} className="text-brand-700 hover:underline">{p.customer.name}</Link></TableCell>
                     <TableCell className="max-w-48 whitespace-normal">{p.productType === "PoRd" ? "Post office RD" : p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}</TableCell>
                     <TableCell><Link href={`/customers/${p.customer.id}/schedule/${p.id}`} className="hover:underline" title="View schedule">{p.policyNumber}</Link></TableCell>
-                    <TableCell>{fmtDate(i.date)}{maturity && <div className="text-xs text-muted-foreground">maturity</div>}</TableCell>
+                    <TableCell>{fmtDate(i.date)}</TableCell>
                     <TableCell className="text-right">{fmtINR(i.amount)}{maturity && <div className="text-xs text-muted-foreground">{p.frequency === "OneTime" ? "deposited" : "instalment"}</div>}</TableCell>
                     <TableCell><StatusBadge tone={tone}>{status}</StatusBadge></TableCell>
-                    <TableCell className="text-sm">{i.reminderCount ? `${i.reminderCount}${i.lastReminderAt ? ` (last ${dayShort(i.lastReminderAt)})` : ""}` : "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      <ReminderHistory kind={maturity ? "maturity" : "bill"} id={maturity ? p.id : i.id} count={i.reminderCount}
+                        last={i.lastReminderAt ? dayShort(i.lastReminderAt) : null} channel={i.lastReminderChannel} title={`${p.customer.name} · ${p.policyNumber}`} />
+                    </TableCell>
                     <TableCell className="w-0 text-right">
-                      {maturity ? <MaturityRowActions policyId={p.id} matured={tab === "overdue"} />
-                        : <RenewalRowActions renewalItemId={i.id} customerId={p.customer.id} overdue={tab === "overdue"} />}
+                      <div className="flex justify-end gap-1">
+                        {maturity ? <MaturityRowActions policyId={p.id} matured={i.date < today} />
+                          : <RenewalRowActions renewalItemId={i.id} customerId={p.customer.id} overdue={tab === "overdue"} />}
+                        <PolicyManageButton policyId={p.id} label={`${p.customer.name} · ${p.partner} ${p.productName} · ${p.policyNumber}`} deactivated={false}
+                          canDeactivate={canDeactivate} canDelete={canDeletePolicy} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -145,8 +155,9 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
           </Table>
         )}
         <p className="mt-3 text-xs text-muted-foreground">
-          Reminders are mocked: &quot;Send reminder&quot; writes the WhatsApp message to Sent messages instead of sending it. Maturities show from a month before for every scheme with a maturity date (health renews until closed); their amount is not in the total.
-          Click a policy number to see its full schedule.
+          Reminders are mocked: &quot;Send reminder&quot; writes the WhatsApp message to Sent messages instead of sending it; click a reminder count to see each one.
+          The Maturity tab lists every scheme with a maturity date from a month before (health renews until closed); one-time deposits stay there after maturity until &quot;Mark matured&quot;.
+          Deactivating a product stops its bills and reminders; switch it back on from the customer&apos;s page. Click a policy number to see its full schedule.
         </p>
       </div>
     </>

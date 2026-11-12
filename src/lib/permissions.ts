@@ -8,6 +8,8 @@ export const PERMISSIONS = [
   "Proposal.View", "Proposal.Create", "PII.Edit",
   "Policy.View", "Policy.Create",
   "Customer.Delete", // delete a customer that has no records (Admin, Super Admin)
+  "Policy.Deactivate", // switch a holding off / back on: bills and reminders stop (Admin, Super Admin) – #25
+  "Policy.Delete", // delete a holding entered by mistake, while it has no money records (Super Admin) – #25
   "Renewal.View",
   "Receipt.View", "Receipt.Create", "Receipt.Cancel",
   "BillGroup.Manage", // create bill groups, add / remove policies (Admin, Super Admin)
@@ -34,13 +36,13 @@ export type Action = Split<Permission>[1];
 export type AppAbility = MongoAbility<[Action, Subject]>;
 
 const STAFF_DENIED: Permission[] = [
-  "Customer.Delete", "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
+  "Customer.Delete", "Policy.Deactivate", "Policy.Delete", "Receipt.Cancel", "BillGroup.Manage", "Wallet.Recharge", "Expense.Approve",
   "DayBook.Verify", "DayBook.Close", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "PnL.View", "Report.Export",
   "Settings.Edit", "Audit.View", "Ticket.Manage", "Data.SeeAll", "Access.Manage",
 ];
 
 /** Only the owner (Super Admin) by default. */
-const OWNER_ONLY: Permission[] = ["PnL.View", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "Access.Manage"];
+const OWNER_ONLY: Permission[] = ["Policy.Delete", "PnL.View", "DayBook.CloseLate", "Owner.Confirm", "Commission.View", "Access.Manage"];
 
 /** Can't be changed on the Roles and access screen. Commission received stays Super Admin only (owner, 23 Oct 2026). */
 export const LOCKED_PERMISSIONS: Permission[] = ["Access.Manage", "Commission.View"];
@@ -84,7 +86,7 @@ export const ROLE_LABEL: Record<Role, string> = { SuperAdmin: "Super Admin", Adm
 export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[] = [
   { area: "Leads and follow-ups", items: [["Lead.View", "See leads and follow-ups"], ["Lead.Create", "Add leads, schedule calls"], ["Lead.Edit", "Edit leads"]] },
   { area: "Quotations and proposals", items: [["Quote.View", "See quotations"], ["Quote.Create", "Make quotations"], ["Proposal.View", "See proposals"], ["Proposal.Create", "Make / edit proposals"], ["PII.Edit", "Enter Aadhaar / PAN"]] },
-  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
+  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Policy.Deactivate", "Deactivate / switch back on a product"], ["Policy.Delete", "Delete a product entered by mistake"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
   { area: "Receipts", items: [["Receipt.View", "See receipts"], ["Receipt.Create", "Take receipts, direct bills"], ["Receipt.Cancel", "Cancel receipts"], ["BillGroup.Manage", "Create / change bill groups"]] },
   { area: "ESEVAI & CSC", items: [["Service.Record", "Record ESEVAI & CSC entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
   { area: "Expenses", items: [["Expense.View", "See expenses"], ["Expense.Create", "Add expenses"], ["Expense.Approve", "Approve expenses"]] },

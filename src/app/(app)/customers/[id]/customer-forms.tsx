@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { MobileEntry } from "@/lib/mobiles";
 import { editCustomer } from "../actions";
 import { ClosePolicyButton } from "./close-policy-dialog";
+import { PolicyManageButton } from "./policy-manage";
 
 type Details = { id: string; name: string; email: string; address: string; mobiles: MobileEntry[] };
 
@@ -76,12 +77,14 @@ export function EditCustomerButton({ customer, startOpen = false }: { customer: 
 export type HoldingRow = {
   id: string; customerId: string; kind: string; plan: string; cover: string | null; policyNumber: string; amount: string; per: string; rate: string; commenced: string;
   tenure: string; lockIn: string; maturity: string; status: [string, Tone]; closedNote: string | null; details: [string, string][];
+  /** Deactivate / switch back on / delete (#25): offered on active and deactivated products. */
+  manage: { label: string; deactivated: boolean } | null;
   /** Premature closure button: hidden ("Not allowed"), greyed out during the lock-in, or active. */
   close: { state: "hidden" | "locked"; text: string } | { state: "active"; label: string; isMf: boolean; today: string; startDate: string; lockInUntil: string | null } | null;
 };
 
 /** Products invested: one row per policy/account; "Details" opens nominee, custom fields and masked bank details. */
-export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
+export function HoldingsTable({ rows, canDeactivate, canDelete }: { rows: HoldingRow[]; canDeactivate: boolean; canDelete: boolean }) {
   const [open, setOpen] = useState<string[]>([]);
   const toggle = (id: string) => setOpen(open.includes(id) ? open.filter((x) => x !== id) : [...open, id]);
   return (
@@ -121,6 +124,7 @@ export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
                 {r.close?.state === "active" && <ClosePolicyButton policyId={r.id} {...r.close} />}
                 {r.close?.state === "locked" && <Button type="button" size="xs" variant="outline" disabled title={r.close.text}>Close early</Button>}
                 {r.close && r.close.state !== "active" && <div className="text-xs text-muted-foreground">{r.close.text}</div>}
+                {r.manage && <PolicyManageButton policyId={r.id} label={r.manage.label} deactivated={r.manage.deactivated} canDeactivate={canDeactivate} canDelete={canDelete} />}
               </TableCell>
             </TableRow>
             {open.includes(r.id) && (

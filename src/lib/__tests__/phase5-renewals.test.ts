@@ -24,7 +24,8 @@ const { pickRange, renewalRange } = await import("@/lib/lists");
 const { billEnd, fullSchedule } = await import("@/lib/policies");
 const { payableDues } = await import("@/lib/dues");
 const { loadRenewals, refreshOverdue, renewalCards } = await import("@/lib/renewals");
-const { markNotRenewed, sendRenewalReminder, sendMaturityReminder } = await import("@/app/(app)/renewals/actions");
+const { markNotRenewed, reminderHistory, sendRenewalReminder, sendMaturityReminder } = await import("@/app/(app)/renewals/actions");
+const { deactivatePolicy, deletePolicy, reactivatePolicy } = await import("@/app/(app)/customers/policy-actions");
 const { REPORTS } = await import("@/lib/exports");
 
 const started = new Date();
@@ -107,11 +108,18 @@ describe("Maturity and lifecycle", () => {
     const lic = await policy({ startDate: addDays(addMonths(today, -240), 20), termMonths: 240 });
     const care = await prisma.product.findFirstOrThrow({ where: { name: "Care Supreme" } });
     const health = await policy({ partner: "Care Health", productName: "Care Supreme", productId: care.id, startDate: addDays(addMonths(today, -12), 10), termMonths: 12 });
-    const rows = (await loadRenewals(arun as SessionUser, { tab: "due" }, today)).rows;
+    // Maturities have their own tab (#20) and are no longer on Due.
+    const rows = (await loadRenewals(arun as SessionUser, { tab: "maturity" }, today)).rows;
     expect(rows.some((r) => r.kind === "maturity" && r.policy.id === lic.id)).toBe(true);
     expect(rows.some((r) => r.kind === "maturity" && r.policy.id === health.id)).toBe(false);
+    expect((await loadRenewals(arun as SessionUser, { tab: "due" }, today)).rows.some((r) => r.kind === "maturity")).toBe(false);
     expect((await sendMaturityReminder(lic.id)).ok).toBe(true);
     expect(await prisma.messageLog.count({ where: { relatedId: lic.id, template: "maturity_reminder" } })).toBe(1);
+    // The row shows the reminder (#24): count, last date and channel, with the full history behind it.
+    const row = (await loadRenewals(arun as SessionUser, { tab: "maturity" }, today)).rows.find((r) => r.policy.id === lic.id)!;
+    expect([row.reminderCount, row.lastReminderChannel, !!row.lastReminderAt]).toEqual([1, "WhatsApp", true]);
+    const history = await reminderHistory("maturity", lic.id);
+    expect(history.lines?.map((l) => [l.channel, l.by])).toEqual([["WhatsApp", arun.name]]);
   });
 
   it("a billed policy past maturity with nothing unpaid becomes Matured; with an unpaid instalment it stays Active", async () => {
@@ -141,6 +149,58 @@ describe("Reminders and Not renewed", () => {
     expect([after.status, after.closeReason, after.renewals[0].status]).toEqual(["Lapsed", "Moved to another insurer", "Lapsed"]);
     expect((await sendRenewalReminder(item.id)).ok).toBe(false);
     expect((await prisma.auditLog.findFirstOrThrow({ where: { entityId: p.id, action: "Not renewed" } })).reason).toBe("Moved to another insurer");
+  });
+});
+
+describe("Deactivate, switch back on, delete a product (#25)", () => {
+  const as = async (username: string) => {
+    const u = await prisma.user.findFirstOrThrow({ where: { username } });
+    session.user = { id: u.id, name: u.name, username, role: u.role, tenantId: u.tenantId };
+  };
+
+  it("deactivate stops bills and reminders; switching back on makes them due again", async () => {
+    const p = await policy({ startDate: addMonths(today, -14) });
+    const late = await prisma.renewalItem.create({ data: { tenantId: arun.tenantId, policyId: p.id, dueDate: addMonths(today, -2), premiumAmount: "10000.00", status: "Overdue" } });
+    const next = await prisma.renewalItem.create({ data: { tenantId: arun.tenantId, policyId: p.id, dueDate: addMonths(today, 10), premiumAmount: "10000.00", status: "Due" } });
+    try {
+      await expect(deactivatePolicy(p.id, "Customer asked to stop")).rejects.toThrow(/Not allowed/); // a User can't
+      await as("admin");
+      expect((await deactivatePolicy(p.id, "")).error).toMatch(/why/);
+      expect(await deactivatePolicy(p.id, "Customer asked to stop")).toEqual({ ok: true });
+      const off = await prisma.policy.findUniqueOrThrow({ where: { id: p.id }, include: { renewals: { orderBy: { dueDate: "asc" } } } });
+      expect([off.status, off.closeReason, ...off.renewals.map((r) => r.status)]).toEqual(["Deactivated", "Customer asked to stop", "Stopped", "Stopped"]);
+      expect((await sendRenewalReminder(late.id)).ok).toBe(false);
+      expect((await loadRenewals(session.user as SessionUser, { tab: "overdue" }, today)).rows.some((r) => r.id === late.id)).toBe(false);
+      expect((await deactivatePolicy(p.id, "again")).error).toMatch(/Only an active/);
+
+      expect(await reactivatePolicy(p.id)).toEqual({ ok: true });
+      const on = await prisma.policy.findUniqueOrThrow({ where: { id: p.id } });
+      expect([on.status, on.closeReason]).toEqual(["Active", null]);
+      const [a, b] = await Promise.all([prisma.renewalItem.findUniqueOrThrow({ where: { id: late.id } }), prisma.renewalItem.findUniqueOrThrow({ where: { id: next.id } })]);
+      expect([a.status, b.status]).toEqual(["Overdue", "Due"]);
+      expect(await prisma.auditLog.count({ where: { entityId: p.id, action: { in: ["Deactivated", "Reactivated"] } } })).toBe(2);
+    } finally {
+      session.user = arun;
+    }
+  });
+
+  it("only the Super Admin deletes, only with DELETE typed and no money records", async () => {
+    const p = await policy({ startDate: addMonths(today, -2) });
+    await prisma.renewalItem.create({ data: { tenantId: arun.tenantId, policyId: p.id, dueDate: addMonths(today, 10), premiumAmount: "10000.00", status: "Due" } });
+    const withReceipt = await prisma.policy.findFirstOrThrow({ where: { tenantId: arun.tenantId, receipts: { some: {} } } });
+    try {
+      await as("admin");
+      await expect(deletePolicy(p.id, "DELETE")).rejects.toThrow(/Not allowed/);
+      await as("superadmin");
+      expect((await deletePolicy(p.id, "delete it")).error).toMatch(/Type DELETE/);
+      expect((await deletePolicy(withReceipt.id, "DELETE")).error).toMatch(/receipt.*can't be deleted – deactivate it instead/);
+      expect(await deletePolicy(p.id, "delete")).toEqual({ ok: true });
+      expect(await prisma.policy.count({ where: { id: p.id } })).toBe(0);
+      expect(await prisma.renewalItem.count({ where: { policyId: p.id } })).toBe(0);
+      expect(await prisma.auditLog.count({ where: { entityId: p.id, action: "Deleted" } })).toBe(1);
+    } finally {
+      session.user = arun;
+    }
   });
 });
 

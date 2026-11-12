@@ -440,6 +440,7 @@ enum PolicyStatus {
   Matured
   PrematureClosed // closed before maturity (date + reason); bills and reminders stop
   Withdrawn // mutual funds: withdraw date entered
+  Deactivated // switched off by an Admin (#25): bills and reminders stop, records stay; can be switched back on
 }
 
 model Policy {
@@ -494,7 +495,7 @@ enum RenewalStatus {
   Overdue
   Paid
   Lapsed
-  Stopped // policy closed early or withdrawn before this was paid
+  Stopped // policy closed early, withdrawn or deactivated before this was paid
 }
 
 // ── Settings → Products and schemes ──
