@@ -36,9 +36,8 @@ const entrySchema = z
     collected: money("Enter the amount collected from the customer"),
     mode: z.enum(["Cash", "UPI"]),
     intoAccountId: z.string().trim().default(""), // UPI: the bank account it came into
-    reference: z.string().trim().max(40).default(""), // UPI: UTR (optional)
+    // No UTR or notes on new entries (owner, 12 Nov 2026); older entries keep theirs.
     denominations: denominationsField, // cash notes / coins collected
-    notes: z.string().trim().max(200).default(""),
   })
   .refine((v) => v.serviceCode !== "OTHER" || v.serviceName.length >= 2, { message: "Type the service name", path: ["serviceName"] })
   .refine((v) => v.serviceCode !== "EB" || v.providerRef, { message: "Enter the EB consumer / service no.", path: ["providerRef"] });
@@ -108,8 +107,8 @@ async function createServiceEntryUnguarded(_: ActionResult, form: FormData): Pro
         customerName: v.customerName || customer?.name || null, customerMobile: v.customerMobile || null, customerId: customer?.id ?? null,
         gender: v.gender || null, paidVia: v.paidVia, paidFromAccountId: payFrom.id, receivedAccountId: into.ok.id,
         baseAmount: paid, walletCost: paid, serviceCharge: profit, customerAmount: collected, profit,
-        providerRef: v.providerRef || null, providerTxnNo: v.providerTxnNo || null, paymentMode: v.mode, reference: v.mode === "UPI" ? v.reference || null : null,
-        denominations: cash?.ok, notes: v.notes || null, createdById: user.id,
+        providerRef: v.providerRef || null, providerTxnNo: v.providerTxnNo || null, paymentMode: v.mode,
+        denominations: cash?.ok, createdById: user.id,
       },
     });
     await postServiceTransaction(tx, txn, { serviceCode: type.code, serviceName: txn.serviceName ?? type.name });

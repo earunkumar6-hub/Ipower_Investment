@@ -169,19 +169,15 @@ function EntryForm({ services, wallets, banks, onSaved }: { services: ServiceOpt
           </NativeSelect>
         </div>
         {mode === "UPI" && (
-          <>
-            <div className="space-y-1.5">
-              <Label htmlFor="intoAccountId">Received into</Label>
-              <NativeSelect id="intoAccountId" name="intoAccountId" defaultValue={banks[0]?.id ?? ""} className="w-full" aria-invalid={!!err.intoAccountId}>
-                {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
-              </NativeSelect>
-            </div>
-            <div className="space-y-1.5"><Label htmlFor="reference">UTR (optional)</Label><Input id="reference" name="reference" /></div>
-          </>
+          <div className="space-y-1.5">
+            <Label htmlFor="intoAccountId">Received into</Label>
+            <NativeSelect id="intoAccountId" name="intoAccountId" defaultValue={banks[0]?.id ?? ""} className="w-full" aria-invalid={!!err.intoAccountId}>
+              {banks.map((b) => <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>)}
+            </NativeSelect>
+          </div>
         )}
       </div>
       {mode === "Cash" && <CashDenominationGrid amount={paise(collected)} idPrefix="sv" error={err.denominations} />}
-      <div className="space-y-1.5"><Label htmlFor="svNotes">Notes</Label><Input id="svNotes" name="notes" /></div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" disabled={pending || !paise(paid) || !paise(collected)} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save"}</Button>
       <p className="text-xs text-muted-foreground">EB, PAN and certificate amounts come from Settings → ESEVAI &amp; CSC rates; change them if the customer paid a different amount. Service charge = collected − paid.</p>

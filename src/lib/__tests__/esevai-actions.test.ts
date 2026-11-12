@@ -36,7 +36,7 @@ const entry = (o: Record<string, string> = {}) => {
   const v = {
     serviceCode: "EB", serviceName: "", providerRef: "TNEB-TEST", customerMobile: "", customerName: "", gender: "",
     paidAmount: "850", paidVia: "Wallet", paidFromAccountId: acc.eb, providerTxnNo: "VT6-1", collected: "860",
-    mode: "Cash", intoAccountId: "", reference: "", notes: "", ...o,
+    mode: "Cash", intoAccountId: "", ...o,
   };
   return form({ denominations: v.mode === "Cash" ? notes(Number(v.collected)) : "", ...v, ...o });
 };
@@ -108,7 +108,8 @@ describe("E-Sevai entries (#7)", () => {
     expect(r).toMatchObject({ ok: true, href: expect.stringMatching(/^\/api\/esevai\/.+\/pdf$/) });
     const t = await prisma.serviceTransaction.findUniqueOrThrow({ where: { id: r.id } });
     expect([t.customerAmount, t.walletCost, t.profit].map((d) => d.toFixed(2))).toEqual(["860.00", "850.00", "10.00"]);
-    expect(t).toMatchObject({ providerTxnNo: "VT6-1", paidVia: "Wallet", receivedAccountId: acc.bank });
+    // No UTR or notes are kept on new entries (owner, 12 Nov 2026), even if an old form sends them.
+    expect(t).toMatchObject({ providerTxnNo: "VT6-1", paidVia: "Wallet", receivedAccountId: acc.bank, reference: null, notes: null });
     const lines = await prisma.dayBookEntry.findMany({ where: { sourceId: r.id }, include: { account: true }, orderBy: { direction: "asc" } });
     expect(lines.map((l) => [l.direction, l.amount.toFixed(2), l.account.name])).toEqual([["In", "860.00", "SBI current ••1234"], ["Out", "850.00", "EB wallet"]]);
   });
