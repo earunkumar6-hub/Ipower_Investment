@@ -235,7 +235,7 @@ async function OwnerPaid({ user, f }: { user: SessionUser; f: Filter }) {
   );
 }
 
-/** Combined and Family grouped (bill-group) receipts: one row per PAY- receipt, made out to the payer. */
+/** Combined and Family grouped (bill-group) receipts: one row per AA- receipt, made out to the payer. */
 async function GroupedReceipts({ tenantId, f, kind, total }: { tenantId: string; f: Filter; kind: "Combined" | "BillGroup"; total: number }) {
   const [payments, accounts, users, groupsWithPolicies] = await Promise.all([
     db.payment.findMany({

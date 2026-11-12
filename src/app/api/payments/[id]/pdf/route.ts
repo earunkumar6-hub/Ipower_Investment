@@ -26,8 +26,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const cash = denominationText(p.denominations);
   const several = p.kind !== "Customer"; // combined / bill group: lines under different customers
   const items = await db.renewalItem.findMany({ where: { id: { in: p.receipts.map((r) => r.renewalItemId).filter((x): x is string => !!x) } } });
+  // The bills this one receipt pays (#45): bill no., policy, due and amount – the lines' own numbers are not printed.
   const lines = p.receipts.map((r) => `<tr>
-      <td>${esc(r.receiptNo)}</td>
       <td>${esc(items.find((i) => i.id === r.renewalItemId)?.billNo ?? "—")}</td>
       ${several ? `<td>${esc(r.customer.name)}</td>` : ""}
       <td>${esc(r.policy ? `${r.policy.partner} ${r.policy.productName} · ${r.policy.policyNumber}` : r.notes ?? "")}</td>
@@ -38,7 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${PDF_STYLE}
     .stamp { color:#b91c1c; border:2px solid #b91c1c; display:inline-block; padding:4px 10px; font-weight:700; transform:rotate(-6deg); }
   </style></head><body>
-    ${pdfHeader(tenant.name, `<h1>Payment receipt</h1><div>${esc(p.paymentNo)}</div>`)}
+    ${pdfHeader(tenant.name, `<h1>Receipt</h1><div>${esc(p.paymentNo)}</div>`)}
     ${p.status === "Cancelled" ? `<p class="stamp">CANCELLED</p>` : ""}
     <table>
       <tr><th style="width:30%">Received from</th><td>${esc(payerOf(p).name)} · ${esc(payerOf(p).mobile)}</td></tr>
@@ -52,7 +52,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       <tr><th>Received by</th><td>${esc(receivedBy?.name ?? "—")}</td></tr>
     </table>
     <table>
-      <thead><tr><th>Receipt no.</th><th>Bill no.</th>${several ? "<th>Customer</th>" : ""}<th>Towards</th><th>Due</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th>Bill no.</th>${several ? "<th>Customer</th>" : ""}<th>Towards</th><th>Due</th><th class="num">Amount</th></tr></thead>
       <tbody>${lines}</tbody>
       <tfoot><tr class="total"><td colspan="${several ? 5 : 4}">Total</td><td class="num">${esc(fmtINR(p.amount))}</td></tr></tfoot>
     </table>

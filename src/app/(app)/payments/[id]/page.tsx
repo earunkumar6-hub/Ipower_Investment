@@ -17,7 +17,8 @@ import { canSeePayment, dueLabel, payerOf } from "@/lib/payment-lines";
 import { CancelPaymentForm } from "./cancel-form";
 import { ShareButton } from "../../receipts/share-button";
 
-const KIND_TITLE = { Customer: "Payment", Combined: "Combined receipt", BillGroup: "Bill group receipt" } as const;
+// One receipt for several bills (#45): the customer holds this one number; each bill below is a line of it.
+const KIND_TITLE = { Customer: "Receipt", Combined: "Combined receipt", BillGroup: "Bill group receipt" } as const;
 
 export default async function PaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Receipt.View");
@@ -73,7 +74,7 @@ export default async function PaymentPage({ params }: { params: Promise<{ id: st
           <h3 className="mt-4 mb-1 text-sm font-medium">Dues paid ({p.receipts.length})</h3>
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Receipt no.</TableHead><TableHead>Bill</TableHead>{several && <TableHead>Customer</TableHead>}<TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>RD status</TableHead></TableRow>
+              <TableRow><TableHead>Line</TableHead><TableHead>Bill</TableHead>{several && <TableHead>Customer</TableHead>}<TableHead>Policy / account</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>RD status</TableHead></TableRow>
             </TableHeader>
             <TableBody>
               {p.receipts.map((r) => (

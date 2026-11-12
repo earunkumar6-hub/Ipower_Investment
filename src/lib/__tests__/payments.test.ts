@@ -5,6 +5,7 @@ import { addMonths, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { payableDues, seriesDate, STEP_MONTHS } from "@/lib/dues";
 import { sum } from "@/lib/money";
+import { nextNumber } from "@/lib/numbering";
 
 const session = vi.hoisted(() => ({ user: null as null | { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string } }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -119,7 +120,7 @@ describe("Paying several dues at once", () => {
     expect((await cancelReceipt({ ok: false }, form({ receiptId: r.id!, reason: "test" }))).ok).toBe(true);
   });
 
-  it("RD (incl. advance months) + insurance → one PAY with a numbered RCPT per due; cancel reverses all", async () => {
+  it("RD (incl. advance months) + insurance → one AA- receipt with a numbered line per due; cancel reverses all", async () => {
     const rdDues = await payable("RD 3102-214");
     const open = rdDues.filter((d) => d.itemId).length;
     const rdCount = open + 2; // two advance months
@@ -131,10 +132,13 @@ describe("Paying several dues at once", () => {
     expect(r).toMatchObject({ ok: true, href: `/payments/${r.id}` });
     paymentIds.push(r.id!);
     const payment = await prisma.payment.findUniqueOrThrow({ where: { id: r.id }, include: { receipts: true } });
-    expect(payment.paymentNo).toMatch(/^PAY-\d{4}$/);
+    // One AA- receipt for all the bills (#45); each bill is a line of it, AA-05/1, AA-05/2 … – no other AA- number is used.
+    expect(payment.paymentNo).toMatch(/^AA-\d{2,}$/);
     expect(payment.amount.toFixed(2)).toBe(total.toFixed(2));
     expect(payment.receipts).toHaveLength(rdCount + 1);
-    expect(new Set(payment.receipts.map((x) => x.receiptNo)).size).toBe(rdCount + 1);
+    expect(payment.receipts.map((x) => x.receiptNo).sort()).toEqual(Array.from({ length: rdCount + 1 }, (_, i) => `${payment.paymentNo}/${i + 1}`).sort());
+    const nextAa = await prisma.$transaction((tx) => nextNumber(tx as never, payment.tenantId, "receipt"));
+    expect(Number(nextAa.slice(3))).toBe(Number(payment.paymentNo.slice(3)) + 1);
     expect(sum(payment.receipts.map((x) => x.amount)).toFixed(2)).toBe(total.toFixed(2));
 
     // Every due is paid; advance months now exist as Paid on the right dates.
@@ -152,7 +156,7 @@ describe("Paying several dues at once", () => {
 
     // A line can't be cancelled alone; the whole payment can.
     const line = await cancelReceipt({ ok: false }, form({ receiptId: payment.receipts[0].id, reason: "test" }));
-    expect(line.error).toMatch(/Part of payment PAY-/);
+    expect(line.error).toMatch(/part of receipt AA-\d{2,}; cancel that whole receipt/);
     expect(await cancelPayment({ ok: false }, form({ paymentId: payment.id, reason: "test" }))).toEqual({ ok: true });
     const after = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id }, include: { receipts: true } });
     expect(after.status).toBe("Cancelled");

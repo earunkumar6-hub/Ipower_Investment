@@ -622,7 +622,7 @@ model RenewalItem {
   paidOn         DateTime?       @db.Date
   lastReminderAt DateTime?
   reminderCount  Int             @default(0)
-  billNo         String          @default(dbgenerated("next_bill_no()")) // BL-0001, given by the database
+  billNo         String          @default(dbgenerated("next_bill_no()")) // IP-01 (older bills BL-0001), given by the database
   ownerPaidSlips OwnerPaidSlip[]
 
   @@unique([tenantId, billNo])
@@ -1428,4 +1428,14 @@ model TicketComment {
   createdAt  DateTime      @default(now())
 
   @@index([ticketId])
+}
+
+/// One saved counter per number series (#44): RR- leads, AA- receipts. Increased in the same transaction as the record,
+/// so numbers are unique and never reused, even after a cancellation. Bills (IP-) use the database sequence ip_bill_no_seq.
+model NumberCounter {
+  tenantId String
+  series   String
+  value    Int    @default(0)
+
+  @@id([tenantId, series])
 }

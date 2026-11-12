@@ -175,7 +175,7 @@ describe("Follow-ups", () => {
     const r = await add({ mobile: [num(0)], status: "CallBack", callDate: tomorrow, callTime: "09:30" });
     const call = await prisma.call.findFirstOrThrow({ where: { leadId: r.id } });
     const up = await loadFollowUps(users.arun as SessionUser, { tab: "upcoming" });
-    expect(up.rows.some((x) => x.id === call.id && x.forLabel.startsWith("Lead L-"))).toBe(true);
+    expect(up.rows.some((x) => x.id === call.id && x.forLabel.startsWith("Lead RR-"))).toBe(true);
     const before = (await loadFollowUps(users.arun as SessionUser, { tab: "closed" })).cards.closed;
     await saveCallOutcome({ ok: false }, form({ callId: call.id, outcome: "NotInterested", note: "", reason: "Has a policy", callDate: "", callTime: "" }));
     const closed = await loadFollowUps(users.arun as SessionUser, { tab: "closed" });

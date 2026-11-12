@@ -163,7 +163,7 @@ export async function removeBillGroupMember(_: ActionResult, form: FormData): Pr
   return result;
 }
 
-// ── Combined (#5) and bill-group (#21) receipts: one PAY- receipt, one RCPT line per bill under its own customer ──
+// ── Combined (#5) and bill-group (#21) receipts: one AA- receipt, one line (AA-05/1 …) per bill under its own customer ──
 
 const groupReceiptSchema = z.object({
   kind: z.enum(["Combined", "BillGroup"]),
@@ -214,7 +214,7 @@ async function createGroupReceiptUnguarded(_: ActionResult, form: FormData): Pro
       };
       const payment = await tx.payment.create({
         data: {
-          tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), kind: v.kind, billGroupId: members ? v.billGroupId : null,
+          tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "receipt"), kind: v.kind, billGroupId: members ? v.billGroupId : null,
           receiptDate: billDate, txnDate: common.txnDate, customerId: null, payerName: v.payerName, payerMobile: v.payerMobile, poReceiptNo: v.poReceiptNo || null,
           amount, mode: v.mode, modeName: common.modeName, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
           notes: common.notes, createdById: user.id,

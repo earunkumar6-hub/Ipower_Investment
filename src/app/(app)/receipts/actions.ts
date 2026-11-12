@@ -121,7 +121,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       const payment = lines.length > 1
         ? await tx.payment.create({
             data: {
-              tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "payment"), receiptDate: common.receiptDate, txnDate: common.txnDate,
+              tenantId: user.tenantId, paymentNo: await nextNumber(tx, user.tenantId, "receipt"), receiptDate: common.receiptDate, txnDate: common.txnDate,
               customerId: customer.id, amount, mode: v.mode, modeName: common.modeName, reference: common.reference, bankName: common.bankName, netType: common.netType, denominations: pay.ok.denominations,
               notes: v.notes || null, createdById: user.id,
             },
@@ -137,7 +137,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       }
       const accountsPaid = [...new Set(lines.map((l) => l.policy.policyNumber))].join(", ");
       await whatsApp(
-        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${modeLabel(common)}) for ${lines.length} dues (${accountsPaid}). Payment receipt ${payment.paymentNo}.`,
+        `Thank you ${customer.name}. Received ${fmtINR(amount)} (${modeLabel(common)}) for ${lines.length} dues (${accountsPaid}). Receipt ${payment.paymentNo}.`,
         "Payment", payment.id,
       );
       return { ok: true, id: payment.id, href: `/payments/${payment.id}` };
@@ -181,7 +181,7 @@ async function cancelReceiptUnguarded(_: ActionResult, form: FormData): Promise<
     const r = await tx.receipt.findFirst({ where: { id: receiptId, tenantId: user.tenantId }, include: { payment: { select: { paymentNo: true } } } });
     if (!r) return { ok: false, error: "Receipt not found" };
     if (r.status === "Cancelled") return { ok: false, error: "Already cancelled" };
-    if (r.payment) return { ok: false, error: `Part of payment ${r.payment.paymentNo}; cancel the whole payment instead` };
+    if (r.payment) return { ok: false, error: `This bill is part of receipt ${r.payment.paymentNo}; cancel that whole receipt instead` };
     if (depositedAtPo(r)) return { ok: false, error: "Already deposited at the post office; it can't be cancelled here" };
     if (r.companyPaymentId) return { ok: false, error: "Already paid to the company; it can't be cancelled here" };
     await reverseReceipt(tx, r, { tenantId: user.tenantId, userId: user.id, reason, today });

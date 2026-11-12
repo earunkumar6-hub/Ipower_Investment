@@ -205,7 +205,7 @@ describe("Instalments by date (#23): advance bills", () => {
     expect(r.ok).toBe(true);
     const raised = await prisma.renewalItem.findMany({ where: { policyId: p.id, id: { notIn: p.renewals.map((x) => x.id) } } });
     expect(raised.length).toBeGreaterThanOrEqual(expected.length);
-    expect(raised.every((i) => i.status === "Due" && i.dueDate <= to && /^BL-/.test(i.billNo))).toBe(true);
+    expect(raised.every((i) => i.status === "Due" && i.dueDate <= to && /^IP-\d{2,}$/.test(i.billNo))).toBe(true);
     const end = billEnd(p, p.product?.invoiceRule);
     if (end) expect(raised.every((i) => i.dueDate < end)).toBe(true);
 

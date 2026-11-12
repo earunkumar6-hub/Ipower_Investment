@@ -144,7 +144,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
     },
     oneTimeTotal: sum([...oneTime.map((p) => p.premiumAmount), ZERO]),
     regular: active.filter((p) => p.frequency !== "OneTime").map((p) => ({ amount: p.premiumAmount, frequency: p.frequency })),
-    receiptNo: new Map(c.receipts.map((r) => [r.id, receiptRef(r)])), // paid bill → the customer's receipt (PAY- when paid with other dues)
+    receiptNo: new Map(c.receipts.map((r) => [r.id, receiptRef(r)])), // paid bill → the customer's receipt (its AA- receipt when paid with other dues)
     yearlyPremium: active.filter((p) => p.productType === "Insurance").map((p) => p.premiumAmount),
     unpaid: renewals.filter((r) => r.status === "Overdue" || (r.status === "Due" && r.dueDate <= addDays(today, 30))),
     slipFor: new Map(c.ownerPaidSlips.filter((s) => s.renewalItemId).map((s) => [s.renewalItemId!, s.slipNo])),

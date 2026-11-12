@@ -16,6 +16,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) {
     return new Response("Not found", { status: 404 });
   }
+  // A bill paid inside one receipt for several bills: the customer's copy is that one receipt (#45).
+  if (r.paymentId) return Response.redirect(new URL(`/api/payments/${r.paymentId}/pdf`, _.url), 303);
   const [tenant, receivedBy] = await Promise.all([
     db.tenant.findUniqueOrThrow({ where: { id: user.tenantId } }),
     db.user.findUnique({ where: { id: r.createdById }, select: { name: true } }),

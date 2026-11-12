@@ -40,7 +40,7 @@ async function reset() {
   const tables = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
   await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(", ")} CASCADE`);
-  await prisma.$executeRawUnsafe(`SELECT setval('bill_no_seq', 1, false)`); // BL- numbers start again at BL-0001
+  await prisma.$executeRawUnsafe(`SELECT setval('ip_bill_no_seq', 1, false)`); // IP- bill numbers start again at IP-01
   await prisma.$executeRawUnsafe(`SELECT setval('cif_no_seq', 1, false)`); // customer IDs start again at CIF-000001
 }
 

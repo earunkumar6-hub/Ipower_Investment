@@ -59,7 +59,7 @@ export type RenewalRow = {
   status: RenewalStatus;
   paidOn: Date | null;
   paidReceiptId: string | null;
-  paidReceiptNo: string | null; // the customer's receipt: PAY- when paid with other dues
+  paidReceiptNo: string | null; // the customer's receipt: the AA- receipt when paid with other dues
   paidReceiptHref: string | null;
   collectedBy: string | null; // user who entered the receipt (Paid tab)
   companyStatus: CompanyStatus | null; // Paid tab only

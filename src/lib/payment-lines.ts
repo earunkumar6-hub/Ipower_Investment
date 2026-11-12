@@ -13,7 +13,7 @@ export function dueLabel(r: { renewalItemId: string | null; policy: { frequency:
   return r.policy?.frequency === "Monthly" ? monthLabel(item.dueDate) : fmtDate(item.dueDate);
 }
 
-/** The receipt number the customer holds for a paid bill: the PAY- receipt when it was paid with other dues, else its RCPT. */
+/** The receipt number the customer holds for a paid bill: the one AA- receipt when it was paid with other dues (older: PAY-), else its own receipt. */
 export const receiptRef = (r: { id: string; receiptNo: string; payment?: { id: string; paymentNo: string } | null }) =>
   r.payment ? { no: r.payment.paymentNo, href: `/payments/${r.payment.id}` } : { no: r.receiptNo, href: `/receipts/${r.id}` };
 

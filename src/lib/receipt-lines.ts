@@ -4,7 +4,7 @@ import { poCommission } from "@/lib/commission";
 import type { Tx } from "@/lib/db";
 import { ADVANCE_MONTHS, lockPolicyDues, payableDues, type Due } from "@/lib/dues";
 import { canActOn } from "@/lib/leads";
-import { nextNumber } from "@/lib/numbering";
+import { lineNumber, nextNumber } from "@/lib/numbering";
 import { billEnd } from "@/lib/policies";
 import { postReceipt } from "@/lib/posting";
 import type { SessionUser } from "@/lib/session";
@@ -99,7 +99,17 @@ export async function pickDues(
   return { lines };
 }
 
-/** One RCPT for one policy: Day Book in; RD → Collected + commission expected. Numbered at insert time. */
+/**
+ * The number of a receipt line: its own AA- number for a receipt for one bill, or – inside one receipt for several
+ * bills (#45) – that receipt's number with the line's position, AA-05/1, AA-05/2 … (no AA- number is used up).
+ */
+async function receiptLineNo(tx: Tx, tenantId: string, paymentId: string | null | undefined) {
+  if (!paymentId) return nextNumber(tx, tenantId, "receipt");
+  const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId }, select: { paymentNo: true, _count: { select: { receipts: true } } } });
+  return lineNumber(payment.paymentNo, payment._count.receipts + 1);
+}
+
+/** One receipt line for one policy: Day Book in; RD → Collected + commission expected. Numbered at insert time. */
 export async function addReceiptLine(
   tx: Tx, common: LineCommon, policy: Policy, customer: { id: string; name: string }, amount: Prisma.Decimal,
   extra: Partial<Prisma.ReceiptUncheckedCreateInput> = {},
@@ -107,7 +117,7 @@ export async function addReceiptLine(
   const isRd = policy.productType === "PoRd" && !extra.ownerPaid;
   const receipt = await tx.receipt.create({
     data: {
-      ...common, customerId: customer.id, receiptNo: await nextNumber(tx, common.tenantId, "receipt"), amount,
+      ...common, customerId: customer.id, receiptNo: await receiptLineNo(tx, common.tenantId, extra.paymentId), amount,
       policyId: policy.id, rdStatus: isRd ? "Collected" : null, ...extra,
     },
   });

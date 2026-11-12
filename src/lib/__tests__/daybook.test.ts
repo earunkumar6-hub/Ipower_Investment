@@ -131,11 +131,18 @@ describe("Numbering", () => {
   it("continues each series per tenant", async () => {
     const { tenantId, userId } = await ctx();
     await inRollback(async (tx) => {
+      // Counter series (#36, #37, #44): RR- leads and AA- receipts, two digits and growing, one saved counter each.
       const first = await nextNumber(tx, tenantId, "lead");
-      expect(first).toMatch(/^L-\d{4}$/);
-      await tx.lead.create({ data: { tenantId, leadNo: first, name: "Test", firstName: "Test", mobile: "9000000001", source: "Direct", ownerId: userId } });
+      expect(first).toMatch(/^RR-\d{2,}$/);
       const second = await nextNumber(tx, tenantId, "lead");
-      expect(Number(second.slice(2))).toBe(Number(first.slice(2)) + 1);
+      expect(Number(second.slice(3))).toBe(Number(first.slice(3)) + 1);
+      const receipt = await nextNumber(tx, tenantId, "receipt");
+      expect(receipt).toMatch(/^AA-\d{2,}$/);
+      expect(Number((await nextNumber(tx, tenantId, "receipt")).slice(3))).toBe(Number(receipt.slice(3)) + 1);
+      // The counter never looks at existing numbers: a lead added by hand with a higher number doesn't move it.
+      await tx.lead.create({ data: { tenantId, leadNo: "RR-9999", name: "Test", firstName: "Test", mobile: "9000000001", source: "Direct", ownerId: userId } });
+      expect(Number((await nextNumber(tx, tenantId, "lead")).slice(3))).toBe(Number(second.slice(3)) + 1);
+      // Other series continue after the highest number of their own prefix.
       expect(await nextNumber(tx, tenantId, "proposal")).toMatch(/^P-\d{4}$/);
     });
   });

@@ -47,7 +47,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   ];
   if (r.denominations) rows.push(["Cash denomination", denominationText(r.denominations)]);
   if (r.renewalItems[0]) rows.push(["Bill", `${r.renewalItems[0].billNo} · due ${fmtDate(r.renewalItems[0].dueDate)}`]);
-  if (r.payment) rows.push(["Part of payment", <Link key="pay" href={`/payments/${r.payment.id}`} className="text-brand-700 hover:underline">{r.payment.paymentNo}</Link>]);
+  if (r.payment) rows.push(["Customer's receipt", <Link key="pay" href={`/payments/${r.payment.id}`} className="text-brand-700 hover:underline">{r.payment.paymentNo} (one receipt for several bills – this is one of its bills)</Link>]);
   if (r.rdStatus && r.status !== "Cancelled") rows.push(["RD status", r.poDepositLine ? `${r.rdStatus} · PO receipt ${r.poDepositLine.poDeposit.poReceiptNo}` : r.rdStatus]);
   if (deposit) rows.push(["Deposit status", <StatusBadge key="dep" tone={deposit.state === "paid" ? "green" : "orange"}>{deposit.text}</StatusBadge>]);
   if (r.closedSlips.length) rows.push(["Owner-paid slips closed", r.closedSlips.map((s) => s.slipNo).join(", ")]);

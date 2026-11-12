@@ -102,7 +102,7 @@ export function GroupReceiptForm({ kind, billGroupId, policies, payer, modes, ac
         {pending ? "Saving…" : `Generate one receipt${t.count ? ` · ${t.count} bill(s) · ${inr(t.total)}` : ""}`}
       </Button>
       <p className="text-xs text-muted-foreground">
-        One PAY- receipt for the payer; each bill is marked paid with that receipt number and keeps its own line under its customer
+        One AA- receipt for the payer; each bill is marked paid with that receipt number and keeps its own line under its customer
         (RD lines go to the post office deposit as usual). The PDF lists the split per bill.{paise(amount) === 0 && " Tick at least one bill."}
       </p>
     </form>

@@ -236,11 +236,12 @@ describe("Post office verification", () => {
   });
 });
 
-describe("BL- bill numbers", () => {
-  it("every due has a unique BL- number", async () => {
+describe("Bill numbers (IP-, #38)", () => {
+  it("every due has a unique bill number; new bills are IP-01, IP-02 … (older ones BL-)", async () => {
     const all = await prisma.renewalItem.findMany({ where: { tenantId: users.admin.tenantId }, select: { billNo: true } });
     expect(all.length).toBeGreaterThan(0);
-    expect(all.every((i) => /^BL-\d{4,}$/.test(i.billNo))).toBe(true);
+    expect(all.every((i) => /^(IP-\d{2,}|BL-\d{4,})$/.test(i.billNo))).toBe(true);
+    expect(all.some((i) => i.billNo.startsWith("IP-"))).toBe(true);
     expect(new Set(all.map((i) => i.billNo)).size).toBe(all.length);
   });
 });
