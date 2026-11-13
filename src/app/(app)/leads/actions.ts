@@ -215,6 +215,7 @@ export async function updateLead(_: ActionResult, form: FormData): Promise<Actio
     if (v.status === "NotInterested") {
       await tx.lead.update({ where: { id: lead.id }, data: { status: "NotInterested", notInterestedReason: v.note } });
       await closeLeadCalls(tx, lead.id, v.note);
+      await audit(tx, user, { entity: "Lead", entityId: lead.id, action: "Status", summary: `Lead ${lead.leadNo} marked not interested`, reason: v.note });
       return;
     }
     if (callAt) {
@@ -224,6 +225,7 @@ export async function updateLead(_: ActionResult, form: FormData): Promise<Actio
       await tx.call.update({ where: { id: open.id }, data: { note: v.note } });
     }
     await tx.lead.update({ where: { id: lead.id }, data: { status: v.status, notInterestedReason: null } });
+    await audit(tx, user, { entity: "Lead", entityId: lead.id, action: "Status", summary: `Lead ${lead.leadNo} status → ${v.status}${callAt ? ", next call set" : ""}` });
   });
   revalidatePath("/", "layout");
   return { ok: true };
@@ -284,6 +286,7 @@ export async function saveCallOutcome(_: ActionResult, form: FormData): Promise<
         await tx.lead.update({ where: { id: lead.id }, data: { status: v.outcome === "Interested" ? "Interested" : "CallBack", notInterestedReason: null } });
       }
     }
+    await audit(tx, user, { entity: "Call", entityId: call.id, action: "Outcome", summary: `Call outcome ${v.outcome}${lead ? ` (lead ${lead.leadNo})` : ""}${nextAt ? ", next call set" : ""}`, reason: v.outcome === "NotInterested" ? v.reason : null });
     revalidatePath("/", "layout");
     return { ok: true };
   });
@@ -317,13 +320,14 @@ export async function scheduleCall(_: ActionResult, form: FormData): Promise<Act
   if (v.kind === "policy" && (record as { status: string }).status !== "Active") return fail("This policy is no longer active");
 
   await db.$transaction(async (tx) => {
-    await tx.call.create({
+    const scheduled = await tx.call.create({
       data: {
         tenantId: user.tenantId, ownerId: record.ownerId, dueAt: at, note: v.note || null,
         ...(v.kind === "lead" ? { leadId: record.id } : v.kind === "policy" ? { policyId: record.id } : v.kind === "customer" ? { customerId: record.id } : { proposalId: record.id }),
       },
     });
     if (v.kind === "lead") await tx.lead.update({ where: { id: record.id }, data: { status: "CallBack" } });
+    await audit(tx, user, { entity: "Call", entityId: scheduled.id, action: "Schedule", summary: `Call scheduled for a ${v.kind}${v.note ? `: ${v.note}` : ""}` });
   });
   revalidatePath("/", "layout");
   return { ok: true };

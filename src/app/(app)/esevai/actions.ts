@@ -112,6 +112,7 @@ async function createServiceEntryUnguarded(_: ActionResult, form: FormData): Pro
       },
     });
     await postServiceTransaction(tx, txn, { serviceCode: type.code, serviceName: txn.serviceName ?? type.name });
+    await audit(tx, user, { entity: "ServiceTransaction", entityId: txn.id, action: "Create", summary: `${txn.txnNo} · ${txn.serviceName ?? type.name} · paid ${fmtINR(paid)} from ${accountLabel(payFrom)} · collected ${fmtINR(collected)} (${v.mode})` });
     return { ok: true, id: txn.id, href: `/api/esevai/${txn.id}/pdf` };
   });
   if (lowAlert) await alertLowBalance(...(lowAlert as Parameters<typeof alertLowBalance>));

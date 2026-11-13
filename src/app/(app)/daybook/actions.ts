@@ -12,7 +12,7 @@ import { accountLabel } from "@/lib/accounts";
 import { accountDay, assertDayOpen, balanceAt, earliestOpenDayBefore, lockDay, post, reverseSource } from "@/lib/daybook";
 import { graceState } from "@/lib/daybook-grace";
 import { CASH_SOURCES, UPI_ADJUSTMENT_REASONS } from "@/lib/daybook-labels";
-import { fmtDate, istToday } from "@/lib/dates";
+import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { D, fmtINR, sum, ZERO } from "@/lib/money";
 import { canWorkOn } from "@/lib/leads";
@@ -316,6 +316,7 @@ export async function depositToPostOffice(_: ActionResult, form: FormData): Prom
       await tx.receipt.updateMany({ where: { id: { in: receipts.map((r) => r.id) } }, data: { rdStatus: "Deposited" } });
       await tx.commission.updateMany({ where: { receiptId: { in: receipts.map((r) => r.id) } }, data: { poDepositId: deposit.id } });
       await postPoDeposit(tx, deposit, { accountId: cash.id, mode: "Cash", receiptCount: receipts.length, denominations: notes.ok });
+      await audit(tx, user, { entity: "PoDeposit", entityId: deposit.id, action: "Create", summary: `Post office deposit ${v.poReceiptNo} · ${receipts.length} receipt(s) · ${fmtINR(amount)}`, reason: reasons || null });
       return { ok: true };
     }),
   );
@@ -369,6 +370,7 @@ export async function depositOneRdReceipt(_: ActionResult, form: FormData): Prom
       if (updated.count !== 1) throw new Error("Receipt changed while saving; try again");
       await tx.commission.updateMany({ where: { receiptId: r.id }, data: { poDepositId: deposit.id } });
       await postPoDeposit(tx, deposit, { accountId: account.id, mode, receiptCount: 1, denominations: notes?.ok });
+      await audit(tx, user, { entity: "PoDeposit", entityId: deposit.id, action: "Create", summary: `${r.receiptNo} deposited at the post office (${v.reference}) from ${account.name} · ${fmtINR(r.amount)}` });
       return { ok: true };
     }),
   );
@@ -396,11 +398,12 @@ export async function saveCashCount(_: ActionResult, form: FormData): Promise<Ac
         opening: day.opening, totalIn: day.totalIn, totalOut: day.totalOut, computed: day.closing,
         physical, difference: physical.minus(day.closing), cashBySource: bySource,
       };
-      await tx.dayClose.upsert({
+      const counted = await tx.dayClose.upsert({
         where: { tenantId_accountId_date: { tenantId: user.tenantId, accountId: cash.id, date: v.date } },
         create: { tenantId: user.tenantId, accountId: cash.id, date: v.date, ...values },
         update: values,
       });
+      await audit(tx, user, { entity: "DayClose", entityId: counted.id, action: "CashCount", summary: `${fmtDate(v.date)}: cash counted ${fmtINR(physical)} vs computed ${fmtINR(day.closing)} (difference ${fmtINR(physical.minus(day.closing))})` });
       return { ok: true };
     }),
   );
@@ -422,6 +425,7 @@ export async function saveVerification(_: ActionResult, form: FormData): Promise
       const row = await tx.dayClose.findUnique({ where: { tenantId_accountId_date: { tenantId: user.tenantId, accountId: cash.id, date } } });
       if (!row?.physical) return fail("Save the cash count first");
       await tx.dayClose.update({ where: { id: row.id }, data: { verifiedById, verifiedAt: new Date() } });
+      await audit(tx, user, { entity: "DayClose", entityId: row.id, action: "Verify", summary: `${fmtDate(date)}: cash count verified by ${verifier.name}` });
       return { ok: true };
     }),
   );
@@ -472,6 +476,7 @@ export async function closeDayBook(_: ActionResult, form: FormData): Promise<Act
           update: values,
         });
       }
+      await audit(tx, user, { entity: "DayBook", entityId: isoDate(date), action: "Close", summary: `${fmtDate(date)} closed – cash counted ${fmtINR(cashRow.physical)}, tallied` });
       return { ok: true };
     }),
   );

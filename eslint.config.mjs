@@ -17,6 +17,7 @@ const eslintConfig = [
       ".next/**",
       "out/**",
       "build/**",
+      "qa/**", // Playwright suite: its fixture `use(...)` is not a React hook
       "next-env.d.ts",
     ],
   },

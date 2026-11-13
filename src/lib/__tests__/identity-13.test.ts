@@ -28,7 +28,7 @@ const form = (o: Record<string, string>) => {
 };
 const users: Record<string, U> = {};
 const started = new Date();
-const AADHAAR_B = "987654321012", PAN_B = "BBBBB1234B", AADHAAR_A = "555566667777";
+const AADHAAR_B = "987654321012", PAN_B = "BBBBB1234B", AADHAAR_A = "555566667771";
 let a: { id: string; name: string; mobile: string }, b: { id: string; name: string; mobile: string; cifNo: string };
 let proposalId = "";
 let bPolicy: { id: string; partner: string; firstHolderCif: string | null };
@@ -107,7 +107,7 @@ describe("Aadhaar / PAN unique (#13) with the existing customer's details (#28)"
   it("issuing copies the encrypted numbers and the consent to the customer", async () => {
     expect((await issuePolicy({ ok: false }, form({ proposalId, policyNumber: `VT13-${started.getTime()}` }))).ok).toBe(true);
     const c = await prisma.customer.findUniqueOrThrow({ where: { id: a.id } });
-    expect(c).toMatchObject({ aadhaarLast4: "7777", aadhaarHash: fingerprint("aadhaar", AADHAAR_A) });
+    expect(c).toMatchObject({ aadhaarLast4: "7771", aadhaarHash: fingerprint("aadhaar", AADHAAR_A) });
     expect(c.consentAt).not.toBeNull();
   });
 });

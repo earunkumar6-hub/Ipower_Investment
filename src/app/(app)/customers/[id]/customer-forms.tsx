@@ -3,7 +3,7 @@
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ActionResult } from "@/app/(app)/leads/actions";
 import { useConfirmBeforeSave } from "@/components/confirm-save";
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { MobileEntry } from "@/lib/mobiles";
-import { editCustomer } from "../actions";
+import { editCustomer, startEditing, stopEditing, takeOverEditing, type EditingState } from "../actions";
 import { customerVersion } from "@/lib/customer-version";
 import { ClosePolicyButton } from "./close-policy-dialog";
 import { PolicyManageButton } from "./policy-manage";
@@ -27,9 +27,43 @@ type Details = { id: string; name: string; email: string; address: string; mobil
 export function EditCustomerButton({ customer, startOpen = false }: { customer: Details; startOpen?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(startOpen);
+  // "Someone is editing" ticket (QA D-02): null = still asking, ok = ours, else who has it.
+  const [editing, setEditing] = useState<EditingState | null>(null);
+  const mine = useRef(false);
+  const alive = useRef(false); // false once the box has closed: a ticket that arrives late is handed straight back
+  // The box opens with the customer as saved NOW (someone may have saved since this page loaded), not with the page's copy.
+  const [fresh, setFresh] = useState<Details | null>(null);
+  const current = fresh ?? customer;
+  const ask = useCallback(async (first = false) => {
+    const r = await startEditing(customer.id);
+    if (!alive.current) { if (r.ok) void stopEditing(customer.id); return; } // opened and cancelled before the answer came
+    mine.current = r.ok;
+    if (r.ok && first) setFresh(r.details);
+    setEditing(r);
+  }, [customer.id]);
+  // Take the ticket when the box opens, renew it every minute, give it back when the box closes.
+  useEffect(() => {
+    if (!open) return;
+    alive.current = true;
+    void ask(true);
+    const timer = setInterval(() => void ask(), 60_000);
+    // Tab closed or page left with the box open: give the ticket back at once.
+    const leave = () => { if (mine.current) navigator.sendBeacon(`/api/customers/${customer.id}/stop-editing`); };
+    window.addEventListener("pagehide", leave);
+    return () => {
+      alive.current = false;
+      clearInterval(timer);
+      window.removeEventListener("pagehide", leave);
+      if (mine.current) { mine.current = false; void stopEditing(customer.id); }
+      setEditing(null);
+      setFresh(null);
+    };
+  }, [open, ask, customer.id]);
+  const blocked = !!editing && !editing.ok;
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const r = await editCustomer(prev, form);
     if (r.ok) {
+      mine.current = false; // the save released the ticket
       toast.success("Customer details saved");
       setOpen(false);
       router.refresh();
@@ -52,19 +86,31 @@ export function EditCustomerButton({ customer, startOpen = false }: { customer: 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="text-lg font-semibold">Edit customer</DialogTitle>
-          <form onSubmit={confirm.onSubmit} className="space-y-3">
+          <form key={customerVersion(current)} onSubmit={confirm.onSubmit} className="space-y-3">
             <input type="hidden" name="customerId" value={customer.id} />
+            {blocked && (
+              <div role="alert" className="space-y-2 rounded-lg border border-saffron-300 bg-saffron-50 p-3 text-sm text-saffron-900">
+                <p>{editing.error}</p>
+                {editing.canTakeOver && (
+                  <Button type="button" size="xs" variant="outline" onClick={async () => { const r = await takeOverEditing(customer.id); if (r.ok) await ask(); else toast.error(r.error); }}>
+                    Take over editing
+                  </Button>
+                )}
+              </div>
+            )}
             {/* The details this form was opened with: a save after someone else changed them is refused (D-02). */}
-            <input type="hidden" name="version" value={customerVersion(customer)} />
+            <input type="hidden" name="version" value={customerVersion(current)} />
             {/* One Save, at the bottom (owner, 13 Nov 2026: the top one in this pop-up removed). */}
-            <div className="space-y-1.5"><Label htmlFor="c-name">Name</Label><Input id="c-name" name="name" defaultValue={customer.name} aria-invalid={!!err.name} /></div>
-            <MobilesField initial={customer.mobiles.length ? customer.mobiles : [{ number: "", isWhatsApp: true }]} error={err.mobile} />
-            <div className="space-y-1.5"><Label htmlFor="c-email">Email</Label><Input id="c-email" name="email" type="email" defaultValue={customer.email} aria-invalid={!!err.email} /></div>
-            <div className="space-y-1.5"><Label htmlFor="c-address">Address</Label><Input id="c-address" name="address" defaultValue={customer.address} maxLength={300} /></div>
+            <fieldset disabled={blocked} className="space-y-3 border-0 p-0">
+            <div className="space-y-1.5"><Label htmlFor="c-name">Name</Label><Input id="c-name" name="name" defaultValue={current.name} aria-invalid={!!err.name} /></div>
+            <MobilesField initial={current.mobiles.length ? current.mobiles : [{ number: "", isWhatsApp: true }]} error={err.mobile} />
+            <div className="space-y-1.5"><Label htmlFor="c-email">Email</Label><Input id="c-email" name="email" type="email" defaultValue={current.email} aria-invalid={!!err.email} /></div>
+            <div className="space-y-1.5"><Label htmlFor="c-address">Address</Label><Input id="c-address" name="address" defaultValue={current.address} maxLength={300} /></div>
+            </fieldset>
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save changes"}</Button>
+              <Button type="submit" disabled={pending || blocked || editing === null} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save changes"}</Button>
             </div>
           </form>
           {confirm.dialog}

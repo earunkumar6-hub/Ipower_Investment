@@ -109,6 +109,19 @@ describe("Receipts", () => {
     expect((await prisma.ownerPaidSlip.findUniqueOrThrow({ where: { id: slip.id } })).status).toBe("CustomerOwes");
   });
 
+  it("two people repaying the same owner-paid slip at once: only one receipt is saved (QA D-01)", async () => {
+    const slip = await prisma.ownerPaidSlip.findFirstOrThrow({ where: { slipNo: "OWN-0014" } });
+    touchedSlips.push(slip.id);
+    const before = await prisma.receipt.count({ where: { customerId: slip.customerId, status: "Saved", ownerPaid: true } });
+    const pay = () => createReceipt({ ok: false }, form({ ...base, customerId: slip.customerId, amount: "1000", mode: "Cash", slipIds: slip.id }));
+    const results = await Promise.all([pay(), pay()]);
+    results.filter((r) => r.ok).forEach((r) => created.push(r.id!));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.find((r) => !r.ok)?.error).toMatch(/slip/i);
+    expect(await prisma.receipt.count({ where: { customerId: slip.customerId, status: "Saved", ownerPaid: true } })).toBe(before + 1);
+    await cancelReceipt({ ok: false }, form({ receiptId: created[created.length - 1], reason: "test" })); // reopen the slip for the other tests
+  });
+
   it("bill date drives Day Book, paid-on and commission; transaction date is stored as entered", async () => {
     const today = istToday();
     const lastClose = await prisma.dayClose.findFirstOrThrow({ where: { status: "Closed" }, orderBy: { date: "desc" } });

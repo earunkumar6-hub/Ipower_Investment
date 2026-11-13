@@ -108,7 +108,7 @@ describe("Save proposal", () => {
     const r = await saveProposal({ ok: false }, form({ ...base(), startDate: today, term: "20", premiumPayingTerm: "15", schemeId: plan20.id, sumInsured: "800000", jointAccount: "on", policyNumber: "LIC-NO-ISSUE" }));
     expect(r.error).toBe("Pick the second holder, or untick Joint account (policy details saved)");
     expect(await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } })).toMatchObject({ status: "Draft", termMonths: 240 });
-    expect((await saveProposal({ ok: false }, form({ ...base(), startDate: today, aadhaar: "1234" }))).error).toBe("Aadhaar has 12 digits and does not start with 0 or 1 (policy details and account holders saved)");
+    expect((await saveProposal({ ok: false }, form({ ...base(), startDate: today, aadhaar: "1234" }))).error).toBe("Aadhaar number is not valid: 12 digits, not starting with 0 or 1, with the correct last (check) digit (policy details and account holders saved)");
   });
 
   it("add product directly: insurance with a policy number needs the sum assured (health: no term / PPT)", async () => {

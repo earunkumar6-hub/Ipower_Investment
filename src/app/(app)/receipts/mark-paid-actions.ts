@@ -1,5 +1,6 @@
 "use server";
 
+import { audit } from "@/lib/audit";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -102,6 +103,7 @@ export async function markReceiptsPaid(_: ActionResult, form: FormData): Promise
         done.push(`Post office RD deposit ${fmtINR(amount)}`);
       }
       summary = `${receipts.length} ${receipts.length === 1 ? "receipt" : "receipts"} marked paid: ${done.join(" · ")}`;
+      await audit(tx, user, { entity: "Receipt", entityId: receipts[0].id, action: "MarkPaid", summary: `${summary} (${receipts.map((x) => x.receiptNo).join(", ")}) from ${account.name}, ref ${v.reference}` });
       return { ok: true };
     }),
   );

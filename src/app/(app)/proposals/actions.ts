@@ -10,7 +10,7 @@ import { createPolicyWithSchedule } from "@/lib/policies";
 import { BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, missingInsuranceDetails, needsSipDay, rateOn } from "@/lib/products";
 import { audit } from "@/lib/audit";
 import { EncryptionKeyMissing } from "@/lib/crypto";
-import { AADHAAR_RE, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
+import { AADHAAR_MESSAGE, isValidAadhaar, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { authorize, type SessionUser } from "@/lib/session";
 import { policyNumberLabel } from "./labels";
@@ -35,7 +35,7 @@ async function loadProposal(tx: Tx, user: SessionUser, proposalId: string) {
 const kycSchema = z.object({
   consent: z.string().default(""), // "on" = "Customer consent taken" ticked
   pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(PAN_RE, "PAN looks like ABCDE1234F")])),
-  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits and does not start with 0 or 1")])),
+  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().refine(isValidAadhaar, AADHAAR_MESSAGE)])),
 });
 
 /**
@@ -133,6 +133,7 @@ export async function savePolicyDetails(_: ActionResult, form: FormData): Promis
       where: { id: r.p.id },
       data: { sipDay, ...(premium !== undefined && { premium }), ...(v.sumInsured !== undefined && { sumInsured: v.sumInsured || null }), frequency: v.frequency, termMonths: v.term ?? scheme?.tenureMonths ?? null, startDate: v.startDate, premiumPayingTermMonths: v.premiumPayingTerm, ...(scheme && { schemeId: scheme.id }) },
     });
+    await audit(tx, user, { entity: "Proposal", entityId: r.p.id, action: "Details", summary: `Proposal ${r.p.proposalNo}: policy details saved (${v.frequency}${premium !== undefined ? `, ${premium}` : ""})` });
     return { ok: true };
   });
   revalidatePath(`/proposals/${v.proposalId}`);

@@ -70,6 +70,7 @@ export async function payToCompany(_: ActionResult, form: FormData): Promise<Act
       const updated = await tx.receipt.updateMany({ where: { id: { in: receipts.map((x) => x.id) }, companyPaymentId: null }, data: { companyPaymentId: payment.id } });
       if (updated.count !== receipts.length) throw new Error("Receipts changed while saving; try again");
       await postCompanyPayment(tx, payment, { receiptCount: receipts.length, productCategory: PRODUCT_CATEGORY[receipts[0].policy!.productType], denominations: notes?.ok });
+      await audit(tx, user, { entity: "CompanyPayment", entityId: payment.id, action: "Create", summary: `Paid ${companies[0]} ${fmtINR(amount)} for ${receipts.length} receipt(s) from ${account.name} · ref ${v.reference}` });
       return { ok: true };
     }),
   );
@@ -85,7 +86,10 @@ export async function markMatured(policyId: string): Promise<ActionResult> {
   if (!canWorkOn(user, policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
   const matures = maturityDate(policy);
   if (!matures || matures > istToday()) return { ok: false, error: "This deposit has not matured yet" };
-  await db.policy.update({ where: { id: policy.id }, data: { status: "Matured", closedOn: matures } });
+  await db.$transaction(async (tx) => {
+    await tx.policy.update({ where: { id: policy.id }, data: { status: "Matured", closedOn: matures } });
+    await audit(tx, user, { entity: "Policy", entityId: policy.id, action: "Matured", summary: `${policy.policyNumber} marked matured (matured ${fmtDate(matures)})` });
+  });
   revalidatePath("/renewals");
   return { ok: true };
 }

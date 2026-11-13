@@ -56,6 +56,7 @@ async function payNow(tx: Tx, e: Expense, user: SessionUser, accountId: string, 
   const balance = await balanceAt(tx, accountId, today);
   if (balance.lt(e.amount)) return `${account.name} has only ${fmtINR(balance)} for this ${fmtINR(e.amount)} payment`;
   await postExpensePayment(tx, e, { vendorName, date: today, createdById: user.id, mode, denominations });
+  await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Pay", summary: `${e.expenseNo} paid ${fmtINR(e.amount)} to ${vendorName} from ${account.name}` });
   return null;
 }
 
@@ -228,6 +229,7 @@ async function repayExpenseUnguarded(_: ActionResult, form: FormData): Promise<A
         where: { id: e.id },
         data: { repaymentStatus: "Repaid", repaidOn: istToday(), repaidFromAccountId: account.id },
       });
+      await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Repay", summary: `${e.expenseNo} repaid to ${e.paidByName ?? e.paidBy} from ${account.name}` });
       const err = await payNow(tx, updated, user, account.id, e.vendor.name, parsed.data.from === "cash" ? "Cash" : "Bank", cash?.ok);
       if (err) throw new PaymentBlocked(err);
       return { ok: true };

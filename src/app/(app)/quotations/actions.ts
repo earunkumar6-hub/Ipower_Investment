@@ -177,6 +177,7 @@ export async function createProposalsFromSelected(quotationId: string, itemIds: 
     await tx.quotationItem.updateMany({ where: { quotationId: q.id, decision: "Pending", id: { notIn: ids } }, data: { decision: "NotAccepted" } });
     await tx.quotation.update({ where: { id: q.id }, data: { status: "Accepted", acceptedAt: q.acceptedAt ?? new Date() } });
     if (q.leadId) await advanceStage(tx, q.leadId, "Proposal");
+    await audit(tx, user, { entity: "Quotation", entityId: q.id, action: "Accepted", summary: `Quotation ${q.quoteNo}: ${picked.length} product(s) accepted → proposals, the rest not accepted` });
   });
   revalidatePath("/", "layout");
   return { ok: true, message: `${picked.length} proposal${picked.length > 1 ? "s" : ""} created` };
@@ -192,10 +193,11 @@ export async function markNotAccepted(quotationId: string, reason: string): Prom
   const why = reasonSchema.safeParse(reason);
   if (!why.success) return { ok: false, error: why.error.issues[0].message };
   if (r.q.items.some((i) => i.proposal)) return { ok: false, error: "Proposals were already made from this quotation" };
-  await db.$transaction([
-    db.quotation.update({ where: { id: r.q.id }, data: { status: "NotAccepted", notAcceptedReason: why.data } }),
-    db.quotationItem.updateMany({ where: { quotationId: r.q.id }, data: { decision: "NotAccepted" } }),
-  ]);
+  await db.$transaction(async (tx) => {
+    await tx.quotation.update({ where: { id: r.q.id }, data: { status: "NotAccepted", notAcceptedReason: why.data } });
+    await tx.quotationItem.updateMany({ where: { quotationId: r.q.id }, data: { decision: "NotAccepted" } });
+    await audit(tx, user, { entity: "Quotation", entityId: r.q.id, action: "NotAccepted", summary: `Quotation ${r.q.quoteNo} marked not accepted`, reason: why.data });
+  });
   revalidatePath("/quotations");
   revalidatePath(`/quotations/${r.q.id}`);
   return { ok: true };

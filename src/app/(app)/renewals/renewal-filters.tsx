@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DmyDateInput } from "@/components/dmy-date-input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,11 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
   const router = useRouter();
   const pathname = usePathname();
   const custom = range?.pick === "custom";
+  // "Custom dates" (spec #19): picking it shows the From / To boxes; they are not shown for the quick picks.
+  const [showCustom, setShowCustom] = useState(custom);
+  const fromBox = useRef<HTMLDivElement>(null);
+  useEffect(() => setShowCustom(custom), [custom, range?.pick]);
+  useEffect(() => { if (showCustom && !custom) fromBox.current?.querySelector("input")?.focus(); }, [showCustom, custom]);
 
   function go(next: { product?: string; company?: string; scheme?: string; paidto?: string; range?: string; from?: string; to?: string }) {
     const base = { product, company, scheme, paidto: paidTo, ...(range && (custom ? { from: range.from, to: range.to } : range.pick !== "within" ? { range: range.pick } : {})) };
@@ -61,22 +67,21 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
         <>
           <div className="space-y-1">
             <Label htmlFor="range" className="text-xs">View</Label>
-            <NativeSelect id="range" size="sm" value={custom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => {
-              // "Custom dates" (spec #19): the From / To boxes set the range – go to From instead of reloading.
-              if (e.target.value === "custom") return document.querySelector<HTMLInputElement>('input[aria-label="From date"], #from')?.focus();
+            <NativeSelect id="range" size="sm" value={showCustom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => {
+              if (e.target.value === "custom") return setShowCustom(true); // wait for From / To, then "Show renewals"
+              setShowCustom(false);
               go({ range: e.target.value || undefined });
             }}>
               <NativeSelectOption value="">{tab === "overdue" ? "Any date" : "Default"}</NativeSelectOption>
               {rangePicks.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
               <NativeSelectOption value="custom">Custom dates</NativeSelectOption>
-              {custom && <NativeSelectOption value="custom">Custom dates</NativeSelectOption>}
             </NativeSelect>
           </div>
-          <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); go({ from: String(fd.get("from") ?? ""), to: String(fd.get("to") ?? "") }); }}>
-            <div className="space-y-1"><Label htmlFor="from" className="text-xs">From date</Label><DmyDateInput name="from" defaultValue={range?.from ?? ""} className="h-7 w-36" /></div>
-            <div className="space-y-1"><Label htmlFor="to" className="text-xs">To date</Label><DmyDateInput name="to" defaultValue={range?.to ?? ""} className="h-7 w-36" /></div>
+          {showCustom && <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); go({ from: String(fd.get("from") ?? ""), to: String(fd.get("to") ?? "") }); }}>
+            <div ref={fromBox} className="space-y-1"><Label htmlFor="from" className="text-xs">From date</Label><DmyDateInput name="from" defaultValue={custom ? range?.from ?? "" : ""} className="h-7 w-36" /></div>
+            <div className="space-y-1"><Label htmlFor="to" className="text-xs">To date</Label><DmyDateInput name="to" defaultValue={custom ? range?.to ?? "" : ""} className="h-7 w-36" /></div>
             <Button type="submit" size="sm" variant="outline">Show renewals</Button>
-          </form>
+          </form>}
         </>
       )}
       {tab === "paid" && (

@@ -35,9 +35,10 @@ export async function uploadAttachment(_: ActionResult, form: FormData): Promise
   const kind = resolved.value;
   if (isIdCopy(kind) && !isSmallJpeg(file!)) return { ok: false, error: ID_COPY_RULE };
   const storedName = await storeFile(file!);
-  await db.attachment.create({
+  const added = await db.attachment.create({
     data: { tenantId: user.tenantId, ownerType, ownerId, kind, fileName: file!.name.slice(0, 120), storedName, contentType: file!.type, size: file!.size, uploadedById: user.id },
   });
+  await db.$transaction((tx) => audit(tx, user, { entity: "Attachment", entityId: added.id, action: "Upload", summary: `${kind} file ${file!.name.slice(0, 60)} added to ${ownerType.toLowerCase()} ${owner.label}` }));
   revalidatePath(`${PATH[ownerType]}/${ownerId}`);
   return { ok: true };
 }

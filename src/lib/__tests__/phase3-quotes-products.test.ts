@@ -141,13 +141,13 @@ describe("Proposal policy details", () => {
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, schemeId: individual.id, sumInsured: "500000", premium: "20000" }))).ok).toBe(true);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, premium: "0" }))).error).toBe("Premium must be more than 0");
     // Aadhaar / PAN: only after "Customer consent taken" (#1); then any time, one without the other
-    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "2234 5678 9012" }))).fieldErrors).toHaveProperty("consent");
-    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "2234 5678 9012" }))).ok).toBe(true);
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "2234 5678 9018" }))).fieldErrors).toHaveProperty("consent");
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "2234 5678 9018" }))).ok).toBe(true);
     expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "" }))).error).toMatch(/both are optional/);
     // Yearly × 3 years → renewals in years 2 and 3 (the 12-month horizon stores the first); no PAN needed
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: `CARE-T-${Date.now() % 100000}` }))).ok).toBe(true);
     const policy = await prisma.policy.findFirstOrThrow({ where: { proposalId: p.id }, include: { renewals: true, customer: true } });
-    expect([policy.frequency, policy.termMonths, policy.productId !== null, policy.renewals.length, policy.customer.aadhaarLast4]).toEqual(["Yearly", 36, true, 1, "9012"]);
+    expect([policy.frequency, policy.termMonths, policy.productId !== null, policy.renewals.length, policy.customer.aadhaarLast4]).toEqual(["Yearly", 36, true, 1, "9018"]);
   });
 
   it("one Save (3 Nov 2026): blank policy number saves the details only; with a number it also issues", async () => {

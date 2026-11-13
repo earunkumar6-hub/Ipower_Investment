@@ -8,7 +8,7 @@ import { audit, changedOnly } from "@/lib/audit";
 import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { AADHAAR_RE, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
+import { AADHAAR_MESSAGE, isValidAadhaar, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { canWorkOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
@@ -19,6 +19,8 @@ import { createPolicyWithSchedule } from "@/lib/policies";
 import { BANK_FIELDS, BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
 import { customerVersion } from "@/lib/customer-version";
+import { seesAll } from "@/lib/permissions";
+import { acquireEditLock, editLockHolder, editLockMessage, releaseEditLock, takeOverEditLock } from "@/lib/customer-lock";
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
 
@@ -267,6 +269,9 @@ export async function editCustomer(_: ActionResult, form: FormData): Promise<Act
   const refused = await db.$transaction(async (tx) => {
     // Lock the customer row so two saves can't both pass the check.
     await tx.$executeRaw`SELECT id FROM "Customer" WHERE id = ${c.id} FOR UPDATE`;
+    // Someone else holds the "editing" ticket (QA D-02): look, but no saving.
+    const other = await editLockHolder(tx, c.id, user.id);
+    if (other) return editLockMessage(other.holder, other.since);
     const why = await clash(tx);
     if (why) return why;
     await tx.customer.update({ where: { id: c.id }, data: { name: v.name, email: v.email || null, address: v.address || null, mobile: m.numbers[0].number } });
@@ -275,12 +280,59 @@ export async function editCustomer(_: ActionResult, form: FormData): Promise<Act
     const snap = (x: { name: string; email: string | null; address: string | null }, ms: { number: string; isWhatsApp: boolean }[]) => ({ name: x.name, mobiles: mobilesText(ms), email: x.email, address: x.address });
     const diff = changedOnly(snap(c, c.mobiles), snap({ name: v.name, email: v.email || null, address: v.address || null }, m.numbers));
     if (Object.keys(diff.after).length) await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Updated", summary: `Customer ${v.name} details corrected`, ...diff });
+    await releaseEditLock(tx, c.id, user.id);
     return null;
   });
   if (refused) return fail(refused);
   revalidatePath(`/customers/${c.id}`);
   revalidatePath("/customers");
   return { ok: true };
+}
+
+/** What the Edit details box shows: it holds the ticket, or who has it (and whether the user may take it over). */
+export type EditingDetails = { id: string; name: string; email: string; address: string; mobiles: { number: string; isWhatsApp: boolean }[] };
+export type EditingState = { ok: true; details: EditingDetails } | { ok: false; error: string; holder?: string; canTakeOver?: boolean };
+
+async function editableCustomer(customerId: string) {
+  const user = await authorize("Policy.Create");
+  const c = await db.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId }, select: { id: true, ownerId: true } });
+  if (!c) return { user, c: null, error: "Customer not found" } as const;
+  if (!canWorkOn(user, c.ownerId)) return { user, c: null, error: "This customer belongs to another user" } as const;
+  return { user, c, error: null } as const;
+}
+
+/** The customer as saved right now: the box opens with this, not with what the page showed when it loaded. */
+async function latestDetails(customerId: string): Promise<EditingDetails> {
+  const c = await db.customer.findUniqueOrThrow({ where: { id: customerId }, include: { mobiles: { orderBy: { sort: "asc" } } } });
+  return { id: c.id, name: c.name, email: c.email ?? "", address: c.address ?? "", mobiles: c.mobiles.map((m) => ({ number: m.number, isWhatsApp: m.isWhatsApp })) };
+}
+
+/** Edit details opened (and every minute while it stays open): take or renew the 5-minute "editing" ticket. */
+export async function startEditing(customerId: string): Promise<EditingState> {
+  const r = await editableCustomer(customerId);
+  if (!r.c) return { ok: false, error: r.error };
+  const got = await acquireEditLock(db, r.user.tenantId, r.c.id, r.user.id);
+  if (got.ok) return { ok: true, details: await latestDetails(r.c.id) };
+  return { ok: false, error: editLockMessage(got.holder, got.since), holder: got.holder, canTakeOver: seesAll(r.user.role) };
+}
+
+/** Save, Cancel or closing the box: give the ticket back. */
+export async function stopEditing(customerId: string): Promise<void> {
+  const r = await editableCustomer(customerId);
+  if (!r.c) return;
+  await releaseEditLock(db, r.c.id, r.user.id);
+}
+
+/** Admin / Super Admin: the person who walked away loses the ticket; it is logged. */
+export async function takeOverEditing(customerId: string): Promise<EditingState> {
+  const r = await editableCustomer(customerId);
+  if (!r.c) return { ok: false, error: r.error };
+  if (!seesAll(r.user.role)) return { ok: false, error: "Only an Admin can take over editing" };
+  await db.$transaction(async (tx) => {
+    const previous = await takeOverEditLock(tx, r.user.tenantId, r.c.id, r.user.id);
+    await audit(tx, r.user, { entity: "Customer", entityId: r.c.id, action: "EditTakeover", summary: `Editing taken over${previous ? ` from ${previous}` : ""}` });
+  });
+  return { ok: true, details: await latestDetails(r.c.id) };
 }
 
 /** "Change photo" on the customer record: JPG / PNG up to 2 MB, logged. */
@@ -307,7 +359,7 @@ const identitySchema = z.object({
   customerId: z.string().min(1),
   consent: z.string().default(""),
   pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(PAN_RE, "PAN looks like ABCDE1234F")])),
-  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits and does not start with 0 or 1")])),
+  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().refine(isValidAadhaar, AADHAAR_MESSAGE)])),
 });
 
 /**

@@ -93,10 +93,12 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
         }
         const policy = await tx.policy.findUniqueOrThrow({ where: { id: slips[0].policyId } });
         const receipt = await addReceipt(policy, amount, { ownerPaid: true, denominations: pay.ok.denominations, notes: v.notes || `Owner-paid ${slips.map((s) => s.slipNo).join(", ")}` });
-        await tx.ownerPaidSlip.updateMany({
+        const closed = await tx.ownerPaidSlip.updateMany({
           where: { id: { in: slipIds }, status: "CustomerOwes" },
           data: { status: "CollectedReturnToOwner", closedByReceiptId: receipt.id },
         });
+        // Someone else repaid the same slip a moment ago (two PCs, QA D-01): thrown, so this receipt is rolled back too.
+        if (closed.count !== slipIds.length) throw new Refused({ ok: false, error: "Some owner-paid slips were just settled by someone else; reload and check before taking this payment" });
         await whatsApp(thanks(policy, receipt.receiptNo), "Receipt", receipt.id);
         return { ok: true, id: receipt.id, href: `/receipts/${receipt.id}` };
       }
@@ -255,6 +257,7 @@ export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<
       },
     });
     await tx.renewalItem.update({ where: { id: item.id }, data: { status: "Paid", paidOn: today } });
+    await audit(tx, user, { entity: "OwnerPaidSlip", entityId: slip.id, action: "Create", summary: `${slip.slipNo} · owner paid ${item.policy.policyNumber} (${poReceiptNo}) · ${fmtINR(item.premiumAmount)}` });
     if (item.policy.productType === "PoRd") {
       await tx.commission.create({
         data: { tenantId: user.tenantId, sourceType: "RdReceipt", sourceNo: poReceiptNo, policyId: item.policyId, earnedOn: today, ...poCommission("PoRd", item.premiumAmount) },
@@ -287,6 +290,7 @@ async function returnToOwnerUnguarded(_: ActionResult, form: FormData): Promise<
       where: { id: slip.id },
       data: { status: "Settled", returnedEntryId: entry.id, confirmedById: user.id, confirmedOn: new Date() },
     });
+    await audit(tx, user, { entity: "OwnerPaidSlip", entityId: slip.id, action: "Settle", summary: `${slip.slipNo} ${fmtINR(slip.amount)} returned to the owner (${mode})` });
     return { ok: true };
   });
   if (result.ok) revalidatePath("/", "layout");

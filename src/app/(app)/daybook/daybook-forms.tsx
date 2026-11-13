@@ -375,7 +375,7 @@ export function PoDepositForm({ date, closed, receipts, atmToday, isAdmin }: { d
           </div>
         )}
         {selected.length > 0 && <CashDenominationGrid amount={deposited} idPrefix="po" />}
-        <Input name="note" />
+        <Input name="note" aria-label="Note (optional)" placeholder="Note (optional)" />
         {state.error && <p className="text-xs text-destructive">{state.error}</p>}
         <Button type="submit" disabled={pending || selected.length === 0} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save deposit"}</Button>
       </form>
