@@ -1,7 +1,5 @@
 # IPower Investments – Clickable Demo
 
-## What is this project? (in plain language)
-
 **IPower Investments** is a small financial advisory agency. It helps families buy and look after
 **insurance, mutual funds and post office savings schemes** (RD, TD, PPF, SSA and others), and it also
 runs **ESEVAI & CSC** counter services (electricity bill payments, PAN and certificate applications).
