@@ -41,8 +41,8 @@
   "tests": [
    "PERF-01"
   ],
-  "status": "Improved – not yet under 3 s on the dev server",
-  "fix": "List pages 50 at a time: 16–19 s → 4.4 s. Re-measure on a production build."
+  "status": "Fixed – verified",
+  "fix": "Paged 50 per page + Policy indexes. Customer list 16–19 s → 2.1 s at 2,000 customers (dev server); PERF-01 passes."
  },
  {
   "id": "D-04",
@@ -58,8 +58,8 @@
    "PERF-05",
    "PERF-02"
   ],
-  "status": "Improved – not yet under 3 s on the dev server",
-  "fix": "Renewals 5.4–8.7 s → 3.8 s (paged, counted in SQL); dashboard now passes; customer search still 7 s (text search over 10,000 policies). Needs an index or a production-build measurement."
+  "status": "Fixed – verified",
+  "fix": "Paging, dashboard cap, trigram + Policy / MessageLog indexes (migration 20261113180000). Search query 560 ms → 2 ms. Renewals 1.6 s, search 1.8 s, dashboard 1.0 s, receipts 1.0 s, customer Excel 1.0 s; PERF-02/03/05/06 pass."
  },
  {
   "id": "D-05",

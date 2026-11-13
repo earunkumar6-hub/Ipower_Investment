@@ -501,6 +501,8 @@ model Policy {
   billGroup      BillGroupMember? // at most one bill group per policy
 
   @@unique([tenantId, policyNumber])
+  @@index([customerId]) // QA D-03/D-04: a customer's holdings without scanning every policy
+  @@index([tenantId, status])
 }
 
 enum RenewalStatus {
@@ -1185,6 +1187,7 @@ model MessageLog {
   status      String         @default("Sent (mock)")
   createdById String?
   createdAt   DateTime       @default(now())
+  @@index([tenantId, relatedType, relatedId]) // reminders sent per bill / policy (Renewals)
 }
 
 // ── Attachments ──
