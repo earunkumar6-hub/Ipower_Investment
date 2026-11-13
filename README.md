@@ -1,4 +1,4 @@
-# IPower Investments – Clickable Demo
+# IPower Investments 
 
 **IPower Investments** is a small financial advisory agency. It helps families buy and look after
 **insurance, mutual funds and post office savings schemes** (RD, TD, PPF, SSA and others), and it also
