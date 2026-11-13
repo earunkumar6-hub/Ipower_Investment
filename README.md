@@ -2,7 +2,7 @@
 
 **IPower Investments** is a small financial advisory agency. It helps families buy and look after
 **insurance, mutual funds and post office savings schemes** (RD, TD, PPF, SSA and others), and it also
-runs **ESEVAI & CSC** counter services (electricity bill payments, PAN and certificate applications).
+runs **e-seavi & CSC** counter services (electricity bill payments, PAN and certificate applications).
 
 This software is the agency's **office system**. It replaces notebooks and spreadsheets with one place
 where everything is written down once and every staff member sees the same, up-to-date picture.
