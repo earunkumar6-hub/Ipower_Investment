@@ -12,8 +12,12 @@ export const PROPOSAL_STATUS: Record<ProposalStatus, [string, Tone]> = {
 
 type NextInput = { status: ProposalStatus; frequency: unknown; startDate: unknown; productType?: string | null };
 
-/** Mutual funds call the policy number the "Folio number" (owner, 6 Nov 2026). */
-export const policyNumberLabel = (productType?: string | null) => (productType === "MutualFund" ? "Folio number" : "Policy number");
+/**
+ * Mutual funds call the policy number the "Folio number" (owner, 6 Nov 2026); every post office scheme (Po*: RD, TD,
+ * MIS, SCSS, SSA, PPF, NSC, KVP) the "Account number" (owner, 13 Nov 2026). PLI is insurance and keeps "Policy number".
+ */
+export const policyNumberLabel = (productType?: string | null) =>
+  productType === "MutualFund" ? "Folio number" : productType?.startsWith("Po") ? "Account number" : "Policy number";
 
 /** What still has to happen before the policy number can be entered. */
 export function proposalNext(p: NextInput) {

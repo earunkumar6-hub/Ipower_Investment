@@ -73,10 +73,12 @@ function holderRows(form: FormData): SummaryRow[] {
  * (owner, 3 Nov 2026). Blank policy number: the details are saved and it stays in Proposals; with a number the
  * policy is issued as well.
  */
-export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, mf, insurance, amountLabel, children }: {
+export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, mf, insurance, amountLabel, numberLabel, children }: {
   proposalId: string; payModes: { value: string; label: string }[]; schemes: Option[]; showPpt: boolean;
   /** Money box label: Premium / Investment amount / Amount (post office schemes other than PLI). */
   amountLabel: string;
+  /** "Policy number", or "Account number" for post office schemes (`policyNumberLabel`). */
+  numberLabel: string;
   /** Shown between the details and the policy number: the account holders panel. */
   children?: React.ReactNode;
   /** Mutual fund: a monthly (SIP) one needs the SIP date. */
@@ -110,7 +112,7 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
     ...(form.get("aadhaar") || form.get("pan") || form.get("consent") === "on"
       ? [["Aadhaar / PAN", [form.get("consent") === "on" && "consent taken", aadhaarText(form.get("aadhaar")), panText(form.get("pan"))].filter(Boolean).join(" · ")] as SummaryRow] : []),
     // Mutual funds: the folio row above stands in for the policy number.
-    ...(mf ? [] : [["Policy number", String(form.get("policyNumber") ?? "").trim().toUpperCase() || "Blank – stays in Proposals"] as SummaryRow]),
+    ...(mf ? [] : [[numberLabel, String(form.get("policyNumber") ?? "").trim().toUpperCase() || "Blank – stays in Proposals"] as SummaryRow]),
   ]);
   return (
     <form id={PROPOSAL_FORM} onSubmit={confirm.onSubmit} className="space-y-4">
@@ -159,14 +161,14 @@ export function ProposalForm({ proposalId, payModes, schemes, initial, showPpt, 
           {/* Mutual funds have no policy number box: the folio number under Account holders issues them (owner, 6 Nov 2026). */}
           {!mf && (
             <div className="space-y-1.5">
-              <Label htmlFor="policyNumber">Policy number (leave blank until issued)</Label>
+              <Label htmlFor="policyNumber">{numberLabel} (leave blank until issued)</Label>
               <Input id="policyNumber" name="policyNumber" className="w-64 not-placeholder-shown:uppercase" />
             </div>
           )}
           <Button type="submit" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save proposal"}</Button>
         </div>
         {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-        <p className="text-xs text-muted-foreground">Saves the policy details, account holders and Aadhaar / PAN. {mf ? "Folio number" : "Policy number"} blank: the record stays in Proposals and no bills are made. With the number it moves to Partners / Customers and the renewal schedule is created from pay mode and term.</p>
+        <p className="text-xs text-muted-foreground">Saves the policy details, account holders and Aadhaar / PAN. {mf ? "Folio number" : numberLabel} blank: the record stays in Proposals and no bills are made. With the number it moves to Partners / Customers and the renewal schedule is created from pay mode and term.</p>
       </div>
       {confirm.dialog}
       <DuplicateCustomerDialog duplicate={dup} onClose={() => setDup(undefined)} />

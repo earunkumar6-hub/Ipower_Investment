@@ -174,7 +174,11 @@ describe("Proposal", () => {
 
     const rd = await make("Post Office RD", "PoRd", "Post Office", "Monthly");
     expect((await save(rd.id, "Monthly", "")).ok).toBe(true);
-    expect((await issuePolicy({ ok: false }, form({ proposalId: rd.id, policyNumber: `RD-P-${stamp}` }))).error).toBe("Fill in before the policy number: amount (the monthly RD instalment)");
+    // Post office schemes call it the account number (owner, 13 Nov 2026); PLI and other insurance keep "policy number".
+    expect((await issuePolicy({ ok: false }, form({ proposalId: rd.id, policyNumber: `RD-P-${stamp}` }))).error).toBe("Fill in before the account number: amount (the monthly RD instalment)");
+    const { policyNumberLabel } = await import("@/app/(app)/proposals/labels");
+    expect(["PoRd", "PoTd", "PoKvp", "PoSsa", "Insurance", "MutualFund"].map(policyNumberLabel))
+      .toEqual(["Account number", "Account number", "Account number", "Account number", "Policy number", "Folio number"]);
     expect((await save(rd.id, "Monthly", "700")).ok).toBe(true);
     expect((await issuePolicy({ ok: false }, form({ proposalId: rd.id, policyNumber: `RD-P-${stamp}` }))).ok).toBe(true);
   });

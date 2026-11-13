@@ -13,6 +13,7 @@ import { EncryptionKeyMissing } from "@/lib/crypto";
 import { AADHAAR_RE, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { authorize, type SessionUser } from "@/lib/session";
+import { policyNumberLabel } from "./labels";
 
 /** Refuses an issue inside its transaction, rolling back everything written so far. */
 class IssueRefused extends Error {
@@ -140,7 +141,7 @@ export async function savePolicyDetails(_: ActionResult, form: FormData): Promis
 
 const issueSchema = z.object({
   proposalId: z.string(),
-  policyNumber: z.string().trim().toUpperCase().min(4, "Enter the policy number").max(40),
+  policyNumber: z.string().trim().toUpperCase().min(4, "Enter the full policy / account number (at least 4 characters)").max(40),
 });
 
 /**
@@ -153,18 +154,20 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
   const parsed = issueSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const { proposalId, policyNumber } = parsed.data;
+  let numberLabel = "Policy number"; // "Account number" for post office schemes, once the proposal is loaded
 
   try {
     const res = await db.$transaction(async (tx) => {
       const r = await loadProposal(tx, user, proposalId);
       if ("error" in r) return { ok: false, error: r.error };
       const { p } = r;
+      numberLabel = policyNumberLabel(p.productType);
       if (p.status === "Issued") return { ok: false, error: "Policy already issued" };
       if (!p.frequency || !p.startDate) return { ok: false, error: "Save the pay mode and start date first" };
       if (needsSipDay(p.productType, p.frequency) && !p.sipDay) return { ok: false, error: "Save the SIP date first" };
       // RD, SSA and PPF bills are made from the premium, so it can't be left blank once the policy number is entered.
       const billedFrom = BILLED_FROM_AMOUNT[p.productType];
-      if (billedFrom && !p.premium.gt(0)) return { ok: false, error: `Fill in before the policy number: amount (${billedFrom})` };
+      if (billedFrom && !p.premium.gt(0)) return { ok: false, error: `Fill in before the ${policyNumberLabel(p.productType).toLowerCase()}: amount (${billedFrom})` };
       if (p.productType === "Insurance") {
         // Insurance: DOC, sum assured, plan, premium (+ term and premium paying term for life cover) before the number.
         const plan = p.productId ? await tx.product.findUnique({ where: { id: p.productId }, include: { schemes: { where: { active: true }, select: { id: true } } } }) : null;
@@ -249,7 +252,7 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
   } catch (e) {
     if (e instanceof IssueRefused) return { ok: false, error: e.message, duplicate: e.duplicate };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: `Policy number ${policyNumber} already exists` };
+      return { ok: false, error: `${numberLabel} ${policyNumber} already exists` };
     }
     throw e;
   }
@@ -313,7 +316,10 @@ export async function saveProposal(prev: ActionResult, form: FormData): Promise<
     saved.push("Aadhaar / PAN");
   }
   if (!issuing) {
-    const number = form.has("folioNo") ? "folio number" : "policy number"; // the folio box is on mutual fund proposals only
+    // Folio number (mutual funds), account number (post office schemes) or policy number.
+    const user = await authorize("Proposal.Create");
+    const kind = await db.proposal.findFirst({ where: { id: text("proposalId"), tenantId: user.tenantId }, select: { productType: true } });
+    const number = policyNumberLabel(kind?.productType).toLowerCase();
     const where = text("startDate") ? `it stays in Proposals until the ${number} is entered` : `add the start date before the ${number}`;
     return { ok: true, message: [`Proposal saved – ${where}`, ...notes].join(". ") };
   }

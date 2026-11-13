@@ -149,7 +149,7 @@ export function JointAccountPanel({ issued, first, joint, second, newSecond, cif
         </>
       )}
       <p className="text-xs text-muted-foreground">
-        {postal && "CIF: optional until the policy is issued; enter it like the policy number. "}
+        {postal && "CIF: optional until issued; enter it like the account / policy number. "}
         {kind === "mf" && "Folio number: leave blank until the AMC gives it; with it, Save proposal issues the investment. Several SIPs can share one folio. "}
         Saved with &ldquo;Save proposal&rdquo;.
       </p>

@@ -13,7 +13,7 @@ import { fmtINR } from "@/lib/money";
 import { AMOUNT_WORD, amountKindOfType, fmtTenure, isHealthCover, isPostal, MF_PAY_MODES, PAY_MODES, payModeLabel, sipDateLabel } from "@/lib/products";
 import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
-import { proposalStatusLabel } from "../labels";
+import { policyNumberLabel, proposalStatusLabel } from "../labels";
 import { maskMobile } from "@/lib/lead-labels";
 import { JointAccountPanel } from "./joint-account";
 import { KycForm, ProposalForm } from "./proposal-forms";
@@ -99,7 +99,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
           ) : (
             // One form, Save proposal last: details → account holders → policy number (owner, 3 Nov 2026).
             <ProposalForm proposalId={p.id} payModes={payModes} schemes={p.product?.schemes.map((s) => ({ id: s.id, name: s.name, tenureMonths: s.tenureMonths })) ?? []} showPpt={showPpt}
-              initial={{ frequency: p.frequency ?? "", term: yearsText(p.termMonths), ppt: yearsText(p.premiumPayingTermMonths), startDate: p.startDate ? isoDate(p.startDate) : "", schemeId: p.schemeId ?? "", sipDay: p.sipDay ? String(p.sipDay) : "", premium: p.premium.gt(0) ? p.premium.toString() : "", sumInsured: p.sumInsured?.toString() ?? "" }} mf={mf} insurance={insurance} amountLabel={amountLabel}>
+              initial={{ frequency: p.frequency ?? "", term: yearsText(p.termMonths), ppt: yearsText(p.premiumPayingTermMonths), startDate: p.startDate ? isoDate(p.startDate) : "", schemeId: p.schemeId ?? "", sipDay: p.sipDay ? String(p.sipDay) : "", premium: p.premium.gt(0) ? p.premium.toString() : "", sumInsured: p.sumInsured?.toString() ?? "" }} mf={mf} insurance={insurance} amountLabel={amountLabel} numberLabel={policyNumberLabel(p.productType)}>
               {holders}
             </ProposalForm>
           )}
