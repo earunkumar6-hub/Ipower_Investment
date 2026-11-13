@@ -535,11 +535,11 @@ test.describe("CRM Changes 20-10 – acceptance", () => {
     await expect(owner.getByText(/Oldest 1 month \d+ days? overdue/)).toBeVisible();
   });
 
-  test("#26 Save at top and bottom – customer edit and add product, with check before saving", async () => {
+  test("#26 customer edit pop-up has one Save (bottom; owner, 13 Nov 2026), with check before saving", async () => {
     await openCustomer(owner, "Gayathri V");
     await owner.getByRole("button", { name: "Edit details" }).click();
-    await expect(owner.getByRole("dialog").getByRole("button", { name: "Save changes" })).toHaveCount(2);
-    await owner.getByRole("dialog").getByRole("button", { name: "Save changes" }).first().click();
+    await expect(owner.getByRole("dialog").getByRole("button", { name: "Save changes" })).toHaveCount(1);
+    await owner.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
     await expect(owner.getByText("Check before saving")).toBeVisible();
     await shot(owner, "26");
     await owner.keyboard.press("Escape");

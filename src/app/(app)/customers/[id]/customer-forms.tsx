@@ -53,10 +53,7 @@ export function EditCustomerButton({ customer, startOpen = false }: { customer: 
           <DialogTitle className="text-lg font-semibold">Edit customer</DialogTitle>
           <form onSubmit={confirm.onSubmit} className="space-y-3">
             <input type="hidden" name="customerId" value={customer.id} />
-            {/* Save at the top and the bottom: both run the same check-before-saving pop-up. */}
-            <div className="flex justify-end">
-              <Button type="submit" size="sm" disabled={pending} className="bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save changes"}</Button>
-            </div>
+            {/* One Save, at the bottom (owner, 13 Nov 2026: the top one in this pop-up removed). */}
             <div className="space-y-1.5"><Label htmlFor="c-name">Name</Label><Input id="c-name" name="name" defaultValue={customer.name} aria-invalid={!!err.name} /></div>
             <MobilesField initial={customer.mobiles.length ? customer.mobiles : [{ number: "", isWhatsApp: true }]} error={err.mobile} />
             <div className="space-y-1.5"><Label htmlFor="c-email">Email</Label><Input id="c-email" name="email" type="email" defaultValue={customer.email} aria-invalid={!!err.email} /></div>
