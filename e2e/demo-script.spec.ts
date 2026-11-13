@@ -54,12 +54,15 @@ test.describe.serial("Demo script – three roles on the same data", () => {
   test("2. Quotation for Meena R: two products (no GST), export PDF, customer accepts one product", async () => {
     await arun.goto("/quotations/new?q=Meena");
     await arun.getByRole("link", { name: /Meena R/ }).click();
-    const [insurer, plan, premium] = [arun.getByLabel("Insurer"), arun.getByLabel("Plan"), arun.getByLabel("Premium")];
-    await insurer.nth(0).fill("Star Health");
-    await plan.nth(0).fill("Family Health Optima");
+    // Product → company → plan are picked from Settings → Products and schemes (#12, 13 Nov 2026).
+    const [product, company, plan, premium] = [arun.getByLabel("Product"), arun.getByLabel("Company"), arun.getByLabel("Plan"), arun.getByLabel("Premium")];
+    await product.nth(0).selectOption("Health insurance");
+    await company.nth(0).selectOption("Star Health");
+    await plan.nth(0).selectOption("Family Health Optima");
     await premium.nth(0).fill("18983");
-    await insurer.nth(1).fill("SBI Life");
-    await plan.nth(1).fill("eShield Next");
+    await product.nth(1).selectOption("Life insurance");
+    await company.nth(1).selectOption("SBI Life");
+    await plan.nth(1).selectOption("eShield Next");
     await premium.nth(1).fill("10500");
     await expect(arun.getByText("Total payable ₹29,483")).toBeVisible(); // live total, no GST
     await arun.getByRole("button", { name: "Save quotation" }).click();

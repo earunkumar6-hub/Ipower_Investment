@@ -34,7 +34,7 @@ const quote = (items: object[]) => {
     return { result: null, url: e.url };
   });
 };
-const sip = { category: "Mutual fund", categoryOther: "", insurer: "HDFC MF", productName: "Flexi Cap SIP", sumInsured: "500000", premium: "5000", payMode: "Monthly" };
+const sip = { category: "Mutual fund", insurer: "HDFC MF", productName: "Flexi Cap SIP", sumInsured: "500000", premium: "5000", payMode: "Monthly" };
 
 beforeAll(async () => {
   const u = await prisma.user.findFirstOrThrow({ where: { username: "arun" } });
@@ -71,29 +71,31 @@ describe("Mutual fund in quotations", () => {
   });
 
   it("saves without cover, and the proposal made from it is a mutual fund", async () => {
-    const { url } = await quote([sip, { ...sip, insurer: "Some AMC", productName: "Not in catalogue", payMode: "OneTime" }]);
+    // Plans come from Settings only (#12): one not in the catalogue is refused.
+    expect((await quote([{ ...sip, insurer: "Some AMC", productName: "Not in catalogue" }])).result?.error).toBe("Product 1: pick a plan from Settings → Products and schemes");
+    const { url } = await quote([sip, { ...sip, insurer: "SBI MF", productName: "ELSS SIP", premium: "6000", payMode: "OneTime" }]);
     expect(url).toMatch(/^\/quotations\//);
     const q = await prisma.quotation.findFirstOrThrow({ where: { createdAt: { gte: started } }, include: { items: { orderBy: { premium: "asc" } } } });
     expect(q.items.map((i) => [i.sumInsured, i.payMode])).toEqual([[null, "Monthly"], [null, "OneTime"]]);
     expect((await createProposalsFromSelected(q.id, q.items.map((i) => i.id))).ok).toBe(true);
     const proposals = await prisma.proposal.findMany({ where: { quotationId: q.id }, include: { product: true }, orderBy: { productName: "asc" } });
-    // catalogue match ("Flexi Cap SIP") and a plan typed by hand are both mutual funds
     expect(proposals.map((p) => [p.productName, p.productType, p.product?.productType ?? null])).toEqual([
-      ["Flexi Cap SIP", "MutualFund", "MutualFund"], ["Not in catalogue", "MutualFund", null],
+      ["ELSS SIP", "MutualFund", "MutualFund"], ["Flexi Cap SIP", "MutualFund", "MutualFund"],
     ]);
   });
 
   // Last on purpose: the test above reads "the" quotation made during this run.
-  it("'Post office': a sum insured is kept only for PLI; every other plan (incl. one not in the catalogue) drops it", async () => {
-    const post = (productName: string) => ({ category: "Post office", categoryOther: "", insurer: "Post Office", productName, sumInsured: "250000", premium: "1000", payMode: "Yearly" });
+  it("'Post office': a sum insured is kept only for PLI; every other scheme drops it", async () => {
+    const mode = (n: string) => (n === "Post Office RD" ? "Monthly" : ["Post Office TD", "KVP", "NSC", "SCSS", "Post Office MIS"].includes(n) ? "OneTime" : "Yearly");
+    const post = (productName: string) => ({ category: "Post office", insurer: "Post Office", productName, sumInsured: "250000", premium: "1000", payMode: mode(productName) });
     // At most 5 products per quotation.
     const { url } = await quote([post("Post Office RD"), post("Post Office TD"), post("KVP"), post("NSC"), post("SCSS")]);
     expect(url).toMatch(/^\/quotations\//);
-    const { url: second } = await quote([post("Post Office MIS"), post("Postal Life Insurance"), post("Some new scheme")]);
+    const { url: second } = await quote([post("Post Office MIS"), post("Postal Life Insurance"), post("SSA")]);
     expect(second).toMatch(/^\/quotations\//);
     const items = await prisma.quotationItem.findMany({ where: { quotation: { createdAt: { gte: started } }, category: "Post office" } });
     expect(items).toHaveLength(8);
-    const noCover = ["Post Office RD", "Post Office TD", "KVP", "NSC", "SCSS", "Post Office MIS", "Some new scheme"];
+    const noCover = ["Post Office RD", "Post Office TD", "KVP", "NSC", "SCSS", "Post Office MIS", "SSA"];
     expect(items.filter((i) => noCover.includes(i.productName))).toHaveLength(7);
     expect(items.filter((i) => noCover.includes(i.productName)).every((i) => i.sumInsured === null)).toBe(true);
     expect(items.find((i) => i.productName === "Postal Life Insurance")?.sumInsured?.toString()).toBe("250000");

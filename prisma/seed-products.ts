@@ -2,6 +2,7 @@
 // insurers and AMCs the demo policies use. Rates are dummy values – check before going live.
 import type { CustomFieldType, Frequency, InvoiceRule, ProductType } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { defaultQuoteGroup } from "@/lib/products";
 
 type SchemeSeed = { name: string; tenure: number | null; rates?: [string, string, "admin" | "owner"][] };
 type ProductSeed = {
@@ -67,7 +68,7 @@ export async function seedProducts(tenantId: string, users: { admin: string; own
   for (const p of CATALOGUE) {
     const product = await prisma.product.create({
       data: {
-        tenantId, name: p.name, productType: p.productType, partner: p.partner, invoiceRule: p.invoiceRule, payModes: p.payModes, lockInMonths: p.lockIn ?? null,
+        tenantId, name: p.name, productType: p.productType, partner: p.partner, category: defaultQuoteGroup(p), invoiceRule: p.invoiceRule, payModes: p.payModes, lockInMonths: p.lockIn ?? null,
         bankDetailsRequired: !!p.bank, bankFields: p.bank ? BANK : [], prematureClosure: p.productType === "MutualFund" ? false : p.premature ?? true,
         fields: p.fields ?? PO_FIELDS, requiredFields: p.required ?? ["policyNumber"],
       },

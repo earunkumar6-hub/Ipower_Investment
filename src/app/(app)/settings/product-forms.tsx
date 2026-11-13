@@ -37,12 +37,13 @@ function Check({ name, value, label, defaultChecked }: { name: string; value?: s
 }
 
 export type ProductValues = {
-  id?: string; name: string; productType: ProductType; partner: string; invoiceRule: InvoiceRule; payModes: Frequency[];
+  id?: string; name: string; productType: ProductType; partner: string; category: string; invoiceRule: InvoiceRule; payModes: Frequency[];
   lockInMonths: number | null; bankDetailsRequired: boolean; bankFields: string[]; prematureClosure: boolean; closeDuringLockIn: boolean;
   fields: string[]; requiredFields: string[]; active: boolean;
 };
 
-export function ProductForm({ product }: { product: ProductValues }) {
+/** `categories`: the categories already used, offered in the Category box (a new one can be typed). */
+export function ProductForm({ product, categories }: { product: ProductValues; categories: string[] }) {
   const router = useRouter();
   const isNew = !product.id;
   const [state, action, pending] = useSettingsAction(saveProduct, isNew ? "Product added" : "Product saved", (r) => {
@@ -57,12 +58,18 @@ export function ProductForm({ product }: { product: ProductValues }) {
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5"><Label htmlFor="name">Product name</Label><Input id="name" name="name" defaultValue={product.name} /></div>
         <div className="space-y-1.5">
-          <Label htmlFor="productType">Category</Label>
+          <Label htmlFor="productType">Type</Label>
           <NativeSelect id="productType" name="productType" value={type} onChange={(e) => setType(e.target.value as ProductType)} className="w-full">
             {Object.entries(PRODUCT_TYPE_LABEL).map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </div>
         <div className="space-y-1.5"><Label htmlFor="partner">Partner</Label><Input id="partner" name="partner" defaultValue={product.partner} /></div>
+        <div className="space-y-1.5">
+          {/* The quotation "Product" list (#12): pick one, or type a new category to add a new group. Blank = set from the type. */}
+          <Label htmlFor="category">Category (quotation product list)</Label>
+          <Input id="category" name="category" list="product-categories" defaultValue={product.category} placeholder="Blank: set from the type" />
+          <datalist id="product-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="invoiceRule">Bills (invoice rule)</Label>
           <NativeSelect id="invoiceRule" name="invoiceRule" defaultValue={product.invoiceRule} className="w-full">

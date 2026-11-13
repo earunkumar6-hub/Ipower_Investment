@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
-import { isPostalInvestmentType, isPostOfficeInsurance } from "@/lib/products";
+import { isPostalInvestmentType, isPostOfficeInsurance, orderGroups, quoteGroup } from "@/lib/products";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
 const session = vi.hoisted(() => ({ user: null as null | U }));
@@ -44,7 +44,10 @@ const quote = (items: object[]) => {
     return { result: null, url: e.url };
   });
 };
-const item = (category: string, premium: string, insurer = "Post Office", productName = "Post Office RD") => ({ category, categoryOther: "", insurer, productName, sumInsured: "", premium, payMode: "Yearly" });
+// Product (category) → company → plan come from Settings → Products and schemes (#12); the pay mode must be one the plan allows.
+const ONE_TIME = ["Post Office TD", "KVP", "NSC", "SCSS", "Post Office MIS"];
+const item = (category: string, premium: string, insurer = "Post Office", productName = "Post Office RD") =>
+  ({ category, insurer, productName, sumInsured: "", premium, payMode: productName === "Post Office RD" ? "Monthly" : ONE_TIME.includes(productName) ? "OneTime" : "Yearly" });
 
 beforeAll(async () => {
   const u = await prisma.user.findFirstOrThrow({ where: { username: "arun" } });
@@ -90,8 +93,8 @@ describe("Quotation – 'Post office' follows the plan chosen", () => {
     expect(q.total.toNumber()).toBe(0);
   });
 
-  it("SSA, PPF and a plan not in the catalogue save without a premium or cover", async () => {
-    for (const name of ["SSA", "PPF", "A scheme not in the catalogue"]) {
+  it("SSA and PPF save without a premium or cover", async () => {
+    for (const name of ["SSA", "PPF"]) {
       const { url } = await quote([{ ...item("Post office", "", "Post Office", name), sumInsured: "500000" }]);
       expect(url, name).toMatch(/^\/quotations\//);
       const q = await prisma.quotation.findUniqueOrThrow({ where: { id: url!.split("/").pop() }, include: { items: true } });
@@ -102,13 +105,38 @@ describe("Quotation – 'Post office' follows the plan chosen", () => {
   it("PLI and other products still need a premium above 0", async () => {
     expect((await quote([item("Post office", "", "Post Office", "Postal Life Insurance")])).result?.error).toBe("Product 1: Enter an amount");
     expect((await quote([item("Post office", "0", "Post Office", "Postal Life Insurance")])).result?.error).toBe("Product 1: Premium must be more than 0");
-    expect((await quote([item("Health", "0", "Care Health", "Care Supreme")])).result?.error).toBe("Product 1: Premium must be more than 0");
+    expect((await quote([item("Health insurance", "0", "Care Health", "Care Supreme")])).result?.error).toBe("Product 1: Premium must be more than 0");
     expect((await quote([{ ...item("Mutual fund", "", "HDFC MF", "Flexi Cap SIP"), payMode: "Monthly" }])).result?.error).toBe("Product 1: Enter an amount");
     expect((await quote([item("Post office", "12x")])).result?.error).toBe("Product 1: Enter an amount");
   });
 
-  it("the old per-scheme names are no longer on the list", async () => {
-    expect((await quote([item("RD", "")])).result?.error).toBe("Product 1: Pick a value from the list");
+  it("only plans from Settings → Products and schemes, under their own category, with a pay mode they allow (#12)", async () => {
+    const pick = "Product 1: pick a plan from Settings → Products and schemes";
+    expect((await quote([item("RD", "")])).result?.error).toBe(pick); // not a category
+    expect((await quote([item("Post office", "", "Post Office", "A scheme not in the catalogue")])).result?.error).toBe(pick);
+    expect((await quote([item("Life insurance", "", "Post Office", "Post Office RD")])).result?.error).toBe(pick); // wrong category
+    expect((await quote([{ ...item("Post office", ""), payMode: "Yearly" }])).result?.error).toBe("Product 1: pick a pay mode this plan allows");
+  });
+
+  it("a new category typed on a product becomes a new group (owner: more groups later)", async () => {
+    expect(orderGroups(["Vitest motor", "Post office", "Mutual fund", "Accident", "Life insurance", "Health insurance"]))
+      .toEqual(["Life insurance", "Health insurance", "Mutual fund", "Post office", "Accident", "Vitest motor"]);
+    expect(quoteGroup({ productType: "Insurance", partner: "LIC", invoiceRule: "UntilPremiumTerm", category: null })).toBe("Life insurance");
+    expect(quoteGroup({ productType: "Insurance", partner: "Post Office", invoiceRule: "UntilPremiumTerm", category: "" })).toBe("Post office"); // PLI
+    expect(quoteGroup({ productType: "Insurance", partner: "Star Health", invoiceRule: "UntilClosed", category: " Vitest motor " })).toBe("Vitest motor");
+
+    const p = await prisma.product.findFirstOrThrow({ where: { partner: "SBI Life", name: "eShield Next" } });
+    await prisma.product.update({ where: { id: p.id }, data: { category: "Vitest term cover" } });
+    try {
+      const { url } = await quote([{ ...item("Vitest term cover", "9000", "SBI Life", "eShield Next"), sumInsured: "5000000" }]);
+      expect(url).toMatch(/^\/quotations\//);
+      const q = await prisma.quotation.findUniqueOrThrow({ where: { id: url!.split("/").pop() }, include: { items: true } });
+      expect([q.items[0].category, q.items[0].sumInsured?.toString()]).toEqual(["Vitest term cover", "5000000"]);
+      // Its old group no longer offers it.
+      expect((await quote([item("Life insurance", "9000", "SBI Life", "eShield Next")])).result?.error).toBe("Product 1: pick a plan from Settings → Products and schemes");
+    } finally {
+      await prisma.product.update({ where: { id: p.id }, data: { category: p.category } });
+    }
   });
 });
 

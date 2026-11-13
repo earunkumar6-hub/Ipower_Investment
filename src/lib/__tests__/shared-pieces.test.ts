@@ -115,17 +115,17 @@ describe("'Other' rule", () => {
 
   it("picked values must be in the list; Other needs text; typed values are added once, tagged added by staff", async () => {
     const u = users.arun;
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Health", ""))).toEqual({ value: "Health" });
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Made up", ""))).toMatchObject({ error: expect.any(String), other: false });
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Other", "   "))).toMatchObject({ other: true });
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Other", "other"))).toMatchObject({ other: true });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Screenshot", ""))).toEqual({ value: "Screenshot" });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Made up", ""))).toMatchObject({ error: expect.any(String), other: false });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Other", "   "))).toMatchObject({ other: true });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Other", "other"))).toMatchObject({ other: true });
 
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Other", "Vitest  Travel  cover"))).toEqual({ value: "Vitest Travel cover" });
-    expect(await tx((t) => resolveDropdown(t, u, "quotationCategory", "Other", "vitest travel COVER"))).toEqual({ value: "Vitest Travel cover" });
-    const rows = await prisma.dropdownOption.findMany({ where: { tenantId: u.tenantId, list: "quotationCategory", value: { equals: "vitest travel cover", mode: "insensitive" } } });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Other", "Vitest  Travel  cover"))).toEqual({ value: "Vitest Travel cover" });
+    expect(await tx((t) => resolveDropdown(t, u, "attachmentTicket", "Other", "vitest travel COVER"))).toEqual({ value: "Vitest Travel cover" });
+    const rows = await prisma.dropdownOption.findMany({ where: { tenantId: u.tenantId, list: "attachmentTicket", value: { equals: "vitest travel cover", mode: "insensitive" } } });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ addedByStaff: true, createdById: u.id, active: true });
-    expect(await dropdownValues(db, u.tenantId, "quotationCategory")).toContain("Vitest Travel cover");
+    expect(await dropdownValues(db, u.tenantId, "attachmentTicket")).toContain("Vitest Travel cover");
   });
 
   it("expense with Other: saved with the typed purpose; a removed value stays off the list but can still be typed", async () => {

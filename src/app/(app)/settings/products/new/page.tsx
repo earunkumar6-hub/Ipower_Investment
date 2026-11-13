@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { productCategories } from "@/lib/products-db";
 import { requirePermission } from "@/lib/session";
 import { ProductForm } from "../../product-forms";
 import { SettingsTabs } from "../../settings-tabs";
@@ -11,8 +12,8 @@ export default async function NewProductPage() {
       <SettingsTabs active="products" />
       <div className="rounded-xl border bg-white p-4">
         <h2 className="mb-3 font-semibold">Add product</h2>
-        <ProductForm product={{
-          name: "", productType: "Insurance", partner: "", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly"], lockInMonths: null,
+        <ProductForm categories={await productCategories(user.tenantId)} product={{
+          name: "", productType: "Insurance", partner: "", category: "", invoiceRule: "UntilPremiumTerm", payModes: ["Yearly"], lockInMonths: null,
           bankDetailsRequired: false, bankFields: [], prematureClosure: true, closeDuringLockIn: false, fields: ["policyNumber", "commencement", "maturity", "nominee"],
           requiredFields: ["policyNumber", "commencement"], active: true,
         }} />

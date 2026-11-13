@@ -1,7 +1,6 @@
 "use server";
 
 import { Frequency, type Prisma } from "@prisma/client";
-import { resolveDropdown } from "@/lib/dropdowns";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -11,7 +10,7 @@ import { istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { advanceStage, canActOn } from "@/lib/leads";
 import { nextNumber } from "@/lib/numbering";
-import { isMfCategory, isPostOfficeCategory, isPostOfficeInsurance, MF_PAY_MODES } from "@/lib/products";
+import { isMfCategory, isPostalInvestmentType, MF_PAY_MODES, quoteGroup } from "@/lib/products";
 import { priceQuotation } from "@/lib/quotation";
 import { authorize, type SessionUser } from "@/lib/session";
 
@@ -19,9 +18,8 @@ const money = z.string().trim().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount");
 
 const itemSchema = z.object({
   category: z.string().trim().min(1, "Pick a product"),
-  categoryOther: z.string().default(""),
-  insurer: z.string().trim().min(2, "Enter the insurer"),
-  productName: z.string().trim().min(2, "Enter the plan"),
+  insurer: z.string().trim().min(1, "Pick the company"),
+  productName: z.string().trim().min(1, "Pick the plan"),
   sumInsured: z.union([z.literal(""), money]),
   premium: z.union([z.literal(""), money]), // may be blank for the post office schemes; checked per product below
   payMode: z.enum(Frequency).default("Yearly"),
@@ -70,27 +68,27 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
   let quotation;
   try {
     quotation = await db.$transaction(async (tx) => {
-      // Product type from Settings → Dropdown values; "Other" adds the typed one to the list.
-      // Throw (not return) on a bad product so values typed for earlier products are rolled back too.
+      // Product (category), company and plan must be an active product in Settings → Products and schemes (#12, 13 Nov 2026).
+      // Throw (not return) so nothing written for earlier products is kept.
       const categories: string[] = [];
-      const noCover: boolean[] = []; // mutual fund, or a post office investment: no sum insured is saved
+      const noCover: boolean[] = []; // mutual fund, or a post office scheme other than PLI: no sum insured is saved
       for (const [n, i] of v.items.entries()) {
-        const r = await resolveDropdown(tx, user, "quotationCategory", i.category, i.categoryOther);
-        if ("error" in r) throw new QuoteRefused(`Product ${n + 1}: ${r.error}`);
-        if (isMfCategory(r.value) && !MF_PAY_MODES.includes(i.payMode)) throw new QuoteRefused(`Product ${n + 1}: pick SIP or Lumpsum`);
-        // "Post office": only PLI is insurance; every other plan has no sum insured and the premium may be left blank
-        // (owner, 11 Nov 2026).
-        let investment = false;
-        if (isPostOfficeCategory(r.value)) {
-          const plan = await tx.product.findFirst({ where: { tenantId: user.tenantId, partner: i.insurer, name: i.productName }, select: { productType: true } });
-          investment = !isPostOfficeInsurance(plan?.productType, i.productName);
-        }
+        const plan = await tx.product.findFirst({
+          where: { tenantId: user.tenantId, active: true, partner: i.insurer, name: i.productName },
+          select: { productType: true, partner: true, invoiceRule: true, category: true, payModes: true },
+        });
+        if (!plan || quoteGroup(plan) !== i.category) throw new QuoteRefused(`Product ${n + 1}: pick a plan from Settings → Products and schemes`);
+        const mf = plan.productType === "MutualFund";
+        if (mf && !MF_PAY_MODES.includes(i.payMode)) throw new QuoteRefused(`Product ${n + 1}: pick SIP or Lumpsum`);
+        if (plan.payModes.length && !plan.payModes.includes(i.payMode)) throw new QuoteRefused(`Product ${n + 1}: pick a pay mode this plan allows`);
+        // Post office schemes other than PLI: no sum insured and the amount may be left blank (owner, 11 Nov 2026).
+        const investment = isPostalInvestmentType(plan.productType);
         if (!investment) {
           if (!i.premium) throw new QuoteRefused(`Product ${n + 1}: Enter an amount`);
           if (Number(i.premium) <= 0) throw new QuoteRefused(`Product ${n + 1}: Premium must be more than 0`);
         }
-        categories.push(r.value);
-        noCover.push(isMfCategory(r.value) || investment);
+        categories.push(i.category);
+        noCover.push(mf || investment);
       }
       const q = await tx.quotation.create({
         data: {

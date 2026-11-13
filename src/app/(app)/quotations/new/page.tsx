@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { dropdownValues } from "@/lib/dropdowns";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,8 +22,12 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
       : null;
 
   if (party && canActOn(user, party.ownerId)) {
-    // Plan suggestions: every active product from Settings → Products and schemes (insurance, mutual funds and the post office schemes).
-    const plans = await db.product.findMany({ where: { tenantId: user.tenantId, active: true }, select: { partner: true, name: true, payModes: true, productType: true }, orderBy: [{ partner: "asc" }, { name: "asc" }] });
+    // Product (category) → company → plan: every active product from Settings → Products and schemes (#12).
+    const plans = await db.product.findMany({
+      where: { tenantId: user.tenantId, active: true },
+      select: { partner: true, name: true, payModes: true, productType: true, invoiceRule: true, category: true },
+      orderBy: [{ partner: "asc" }, { name: "asc" }],
+    });
     return (
       <>
         <PageHeader title="New quotation" user={user} />
@@ -35,7 +38,6 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
           mobile={party.mobile}
           defaultValidUpto={isoDate(addDays(istToday(), 15))}
           plans={plans}
-          categories={await dropdownValues(db, user.tenantId, "quotationCategory")}
         />
       </>
     );

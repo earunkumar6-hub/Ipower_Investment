@@ -7,7 +7,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { audit, changedOnly } from "@/lib/audit";
 import { fmtDate } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { ACCOUNT_FIELDS, BANK_FIELDS, fmtTenure, PAY_MODE_LABEL, PRODUCT_TYPE_LABEL, rateOn } from "@/lib/products";
+import { ACCOUNT_FIELDS, BANK_FIELDS, defaultQuoteGroup, fmtTenure, PAY_MODE_LABEL, PRODUCT_TYPE_LABEL, quoteGroup, rateOn } from "@/lib/products";
 import { authorize } from "@/lib/session";
 
 // Settings → Products and schemes (Admin and Super Admin). Every change is written to the change log.
@@ -29,6 +29,7 @@ const productSchema = z.object({
   name: z.string().trim().min(2, "Enter the product name").max(80),
   productType: z.enum(ProductType),
   partner: z.string().trim().min(2, "Enter the partner (insurer, AMC or Post Office)").max(60),
+  category: z.string().trim().max(40, "Category: at most 40 characters").transform((s) => s.replace(/\s+/g, " ")),
   invoiceRule: z.enum(InvoiceRule),
   payModes: z.array(z.enum(Frequency)).min(1, "Tick at least one pay mode"),
   lockInMonths: months,
@@ -42,10 +43,11 @@ const productSchema = z.object({
 });
 
 /** What the change log shows for a product: readable values only. */
-const productSnapshot = (p: Pick<Product, "name" | "productType" | "partner" | "invoiceRule" | "payModes" | "lockInMonths" | "bankDetailsRequired" | "bankFields" | "prematureClosure" | "closeDuringLockIn" | "fields" | "requiredFields" | "active">) => ({
+const productSnapshot = (p: Pick<Product, "name" | "productType" | "partner" | "category" | "invoiceRule" | "payModes" | "lockInMonths" | "bankDetailsRequired" | "bankFields" | "prematureClosure" | "closeDuringLockIn" | "fields" | "requiredFields" | "active">) => ({
   name: p.name,
   type: PRODUCT_TYPE_LABEL[p.productType],
   partner: p.partner,
+  category: quoteGroup(p),
   bills: p.invoiceRule,
   payModes: p.payModes.map((m) => PAY_MODE_LABEL[m]).join(", "),
   lockIn: p.lockInMonths ? fmtTenure(p.lockInMonths) : "none",
@@ -62,6 +64,7 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     name: form.get("name"),
     productType: form.get("productType"),
     partner: form.get("partner"),
+    category: form.get("category") ?? "",
     invoiceRule: form.get("invoiceRule"),
     payModes: form.getAll("payModes"),
     lockInMonths: form.get("lockInMonths") ?? "",
@@ -82,7 +85,8 @@ export async function saveProduct(_: ActionResult, form: FormData): Promise<Acti
     return fail("Products with no bills are one-time deposits; pick One-time only, or choose a bill rule");
   }
   // Mutual funds are never closed early: they are withdrawn (withdraw date).
-  const data = { ...v, id: undefined, bankFields: v.bankDetailsRequired ? v.bankFields : [], prematureClosure: v.productType === "MutualFund" ? false : v.prematureClosure,
+  // Category: as typed (a new one adds a quotation group, #12), or the starting one for this type when left blank.
+  const data = { ...v, id: undefined, category: v.category || defaultQuoteGroup(v), bankFields: v.bankDetailsRequired ? v.bankFields : [], prematureClosure: v.productType === "MutualFund" ? false : v.prematureClosure,
     closeDuringLockIn: v.productType !== "MutualFund" && v.prematureClosure && v.closeDuringLockIn };
 
   try {

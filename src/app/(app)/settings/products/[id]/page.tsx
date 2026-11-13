@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fmtDate, isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { nameLookup } from "@/lib/deposit-status";
-import { CUSTOM_FIELD_TYPE_LABEL, fmtTenure, rateHistory, rateOn } from "@/lib/products";
+import { CUSTOM_FIELD_TYPE_LABEL, fmtTenure, quoteGroup, rateHistory, rateOn } from "@/lib/products";
+import { productCategories } from "@/lib/products-db";
 import { requirePermission } from "@/lib/session";
 import { AddCustomFieldForm, AddSchemeForm, DeleteProductButton, DeleteSchemeButton, ProductForm, RateForm, RemoveFieldButton, SchemeEditToggle } from "../../product-forms";
 import { SettingsTabs } from "../../settings-tabs";
@@ -37,8 +38,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <DeleteProductButton productId={product.id} name={product.name} />
         </div>
         <p className="mb-3 text-xs text-muted-foreground">{product._count.policies} account(s) linked. Changes apply from now on; every change is in the change log.</p>
-        <ProductForm product={{
-          id: product.id, name: product.name, productType: product.productType, partner: product.partner, invoiceRule: product.invoiceRule,
+        <ProductForm categories={await productCategories(user.tenantId)} product={{
+          id: product.id, name: product.name, productType: product.productType, partner: product.partner, category: quoteGroup(product), invoiceRule: product.invoiceRule,
           payModes: product.payModes, lockInMonths: product.lockInMonths, bankDetailsRequired: product.bankDetailsRequired, bankFields: product.bankFields,
           prematureClosure: product.prematureClosure, closeDuringLockIn: product.closeDuringLockIn, fields: product.fields, requiredFields: product.requiredFields, active: product.active,
         }} />

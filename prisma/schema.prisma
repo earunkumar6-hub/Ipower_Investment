@@ -525,6 +525,7 @@ model Product {
   name                String
   productType         ProductType // posting category and post office scheme
   partner             String // insurer / AMC / "Post Office"
+  category            String? // quotation "Product" list, e.g. Life insurance / Health insurance / Mutual fund / Post office – owner can add more (#12)
   invoiceRule         InvoiceRule
   payModes            Frequency[]
   lockInMonths        Int?

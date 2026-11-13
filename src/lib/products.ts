@@ -55,7 +55,27 @@ export function missingInsuranceDetails(p: {
   ].filter((x): x is string => !!x);
 }
 
-/** Quotation product "Mutual fund" (any case, also typed under Other): SIP / Lumpsum wording, no cover. */
+/**
+ * Quotation "Product" list (owner change list #12, 13 Nov 2026): the categories of the active products in Settings →
+ * Products and schemes (`Product.category`), no longer a Dropdown values list. Typing a new category on a product adds
+ * a new group. The starting four, also used when a product's category is left blank: Mutual fund; Post office = every
+ * Po* scheme and anything from the company "Post Office" (PLI); Health insurance = insurance billed until closed;
+ * Life insurance = other insurance.
+ */
+export const QUOTE_GROUPS = ["Life insurance", "Health insurance", "Mutual fund", "Post office"] as const;
+type GroupInput = { productType: ProductType; partner: string; invoiceRule: InvoiceRule; category?: string | null };
+export const defaultQuoteGroup = (p: GroupInput): string =>
+  p.productType === "MutualFund" ? "Mutual fund" : isPostal(p) ? "Post office" : p.invoiceRule === "UntilClosed" ? "Health insurance" : "Life insurance";
+/** The product's category, or the starting one for its kind when none is set. */
+export const quoteGroup = (p: GroupInput): string => p.category?.trim() || defaultQuoteGroup(p);
+/** Categories in list order: the starting four first, then any added later (A–Z). */
+export const orderGroups = (names: Iterable<string>) => {
+  const set = [...new Set(names)];
+  const rank = (g: string) => { const i = (QUOTE_GROUPS as readonly string[]).indexOf(g); return i < 0 ? QUOTE_GROUPS.length : i; };
+  return set.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+};
+
+/** Quotation product "Mutual fund" (any case): SIP / Lumpsum wording, no cover. */
 export const isMfCategory = (category: string) => category.trim().toLowerCase() === "mutual fund";
 export const MF_PAY_MODES: Frequency[] = ["Monthly", "OneTime"];
 /**
