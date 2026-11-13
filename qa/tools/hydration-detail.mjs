@@ -1,0 +1,10 @@
+import { chromium } from "@playwright/test";
+const BASE = "http://localhost:3100";
+const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1366, height: 768 } });
+const msgs = [];
+p.on("console", (m) => { if (m.type() === "error") msgs.push(m.text()); });
+await p.goto(`${BASE}/login`); await p.getByLabel("Username").fill("superadmin"); await p.getByLabel("Password").fill("demo1234");
+await p.getByRole("button", { name: /sign in/i }).click(); await p.waitForURL((u) => !u.pathname.startsWith("/login"));
+await p.goto(`${BASE}/renewals`, { waitUntil: "networkidle" }); await p.waitForTimeout(1500);
+console.log(msgs.join("\n=====\n").slice(0, 2600));
+await b.close();

@@ -20,10 +20,11 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
   const pathname = usePathname();
   const custom = range?.pick === "custom";
   // "Custom dates" (spec #19): picking it shows the From / To boxes; they are not shown for the quick picks.
-  const [showCustom, setShowCustom] = useState(custom);
+  // Derived, not synced with an effect: an effect here made React report a hydration mismatch on this page (QA, 13 Nov 2026).
+  const [chosen, setChosen] = useState(false);
+  const showCustom = custom || chosen;
   const fromBox = useRef<HTMLDivElement>(null);
-  useEffect(() => setShowCustom(custom), [custom, range?.pick]);
-  useEffect(() => { if (showCustom && !custom) fromBox.current?.querySelector("input")?.focus(); }, [showCustom, custom]);
+  useEffect(() => { if (chosen && !custom) fromBox.current?.querySelector("input")?.focus(); }, [chosen, custom]);
 
   function go(next: { product?: string; company?: string; scheme?: string; paidto?: string; range?: string; from?: string; to?: string }) {
     const base = { product, company, scheme, paidto: paidTo, ...(range && (custom ? { from: range.from, to: range.to } : range.pick !== "within" ? { range: range.pick } : {})) };
@@ -68,8 +69,8 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
           <div className="space-y-1">
             <Label htmlFor="range" className="text-xs">View</Label>
             <NativeSelect id="range" size="sm" value={showCustom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => {
-              if (e.target.value === "custom") return setShowCustom(true); // wait for From / To, then "Show renewals"
-              setShowCustom(false);
+              if (e.target.value === "custom") return setChosen(true); // wait for From / To, then "Show renewals"
+              setChosen(false);
               go({ range: e.target.value || undefined });
             }}>
               <NativeSelectOption value="">{tab === "overdue" ? "Any date" : "Default"}</NativeSelectOption>

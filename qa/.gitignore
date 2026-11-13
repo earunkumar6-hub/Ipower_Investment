@@ -10,3 +10,4 @@ report/results-rerun*.json
 report/artifacts-rerun*/
 report/artifacts-vol/
 report/results-rerun*.json
+report/artifacts-ren/

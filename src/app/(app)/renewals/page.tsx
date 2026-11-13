@@ -78,7 +78,7 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
               </Link>
             ))}
           </div>
-          <RenewalFilters tab={tab} product={product} company={company} scheme={scheme} paidTo={paidTo}
+          <RenewalFilters key={tab} tab={tab} product={product} company={company} scheme={scheme} paidTo={paidTo}
             range={range && { pick: range.pick, from: isoDate(range.from), to: isoDate(range.to) }} showRange={tab !== "customers" && !(tab === "paid" && paidTo === "pending")}
             products={RENEWAL_PRODUCTS} paidToOptions={PAID_TO} rangePicks={RANGE_PICKS} companies={options.companies} schemes={options.schemes} />
         </div>
