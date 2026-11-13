@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dmyToIso, fmtDmy, isoToDmy } from "@/lib/dates";
+import { dmyToIso, fmtDayMon, fmtDmy, istDate, isoToDmy } from "@/lib/dates";
+
+describe("25 Oct 2026 dates (Renewals download)", () => {
+  it("prints day, short month and year", () => {
+    expect(fmtDayMon(new Date("2026-10-25T00:00:00Z"))).toBe("25 Oct 2026");
+    expect(fmtDayMon(new Date("2026-01-05T00:00:00Z"))).toBe("05 Jan 2026");
+    // A reminder sent at 11 pm IST on 25 Oct is 25 Oct, not the UTC day.
+    expect(fmtDayMon(istDate(new Date("2026-10-25T17:45:00Z")))).toBe("25 Oct 2026");
+  });
+});
 
 describe("dd/mm/yyyy dates (lead date of birth)", () => {
   it("converts both ways", () => {

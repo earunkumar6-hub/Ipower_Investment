@@ -3,7 +3,7 @@ import { holdersLabel, proposalNext, proposalStatusLabel } from "@/app/(app)/pro
 import { accountLabel } from "@/lib/accounts";
 import { HOLDING_KIND, loadCustomer360 } from "@/lib/customer-360";
 import { actionItems, adminDashboard, collectionsByStaff, ownerExtras, ownerPies } from "@/lib/dashboard";
-import { fmtDate, istToday } from "@/lib/dates";
+import { fmtDate, istDate, istToday } from "@/lib/dates";
 import { db, prisma } from "@/lib/db";
 import { loadDayBook } from "@/lib/daybook-view";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
@@ -319,10 +319,11 @@ export const REPORTS: Record<string, Report> = {
           name,
           totals: true,
           // Columns as in the owner's "Renewal Excel format" sheet (#18): Phone (masked, like every export) after Customer.
-          columns: [{ header: "Customer", width: 24 }, { header: "Phone", width: 14 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "date" },
-            { header: "Amount", type: "money" }, { header: "Status", width: 22 },
-            ...(paid ? [{ header: "Paid on", type: "date" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }]
-              : [{ header: "Reminders sent" }, { header: "Last reminder", type: "datetime" as const, width: 20 }])],
+          // Dates and amounts as in that sheet, "25 Oct 2026" and ₹11,500 (owner, 13 Nov 2026); Last reminder is the IST date only.
+          columns: [{ header: "Customer", width: 24 }, { header: "Phone", width: 14 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "day" },
+            { header: "Amount", type: "money", fmt: '"₹"#,##0' }, { header: "Status", width: 22 },
+            ...(paid ? [{ header: "Paid on", type: "day" as const }, { header: "Receipt" }, { header: "Collected by" }, { header: "Paid to Post office / Insurer", width: 48 }]
+              : [{ header: "Reminders sent" }, { header: "Last reminder", type: "day" as const }])],
           rows: items.map((i) => {
             const p = i.policy;
             const [status] = renewalStatus(i, today);
@@ -330,7 +331,7 @@ export const REPORTS: Record<string, Report> = {
             const base: Cell[] = [p.customer.name, p.customer.mobile ? maskMobile(p.customer.mobile) : null, p.productType === "PoRd" ? "Post office RD" : `${p.partner} ${p.productName}`, p.policyNumber, i.date,
               i.kind === "maturity" ? null : i.amount, i.kind === "maturity" ? `${status} (${fmtINR(i.amount)})` : status];
             return paid ? [...base, i.paidOn, i.paidReceiptNo ?? "owner paid", i.collectedBy, i.companyStatus?.text ?? ""]
-              : [...base, i.reminderCount || null, i.lastReminderAt];
+              : [...base, i.reminderCount || null, i.lastReminderAt ? istDate(i.lastReminderAt) : null];
           }),
         }],
       };

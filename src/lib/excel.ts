@@ -5,9 +5,10 @@ import { ADVISOR, logoPng, TAGLINE } from "@/lib/brand";
 // Excel downloads for Admin and Super Admin. Amounts go in as numbers (so totals and
 // formulas work in Excel), business dates as dates, timestamps as IST wall-clock time.
 
-/** `dmy`: a date shown as dd/mm/yyyy (date of birth). */
-export type ColType = "text" | "money" | "date" | "dmy" | "datetime";
-export type Col = { header: string; type?: ColType; width?: number };
+/** `dmy`: a date shown as dd/mm/yyyy (date of birth). `day`: a date shown as "25 Oct 2026" (Renewals download). */
+export type ColType = "text" | "money" | "date" | "dmy" | "day" | "datetime";
+/** `fmt`: an Excel number format that replaces the type's default (e.g. ₹ amounts on the Renewals download). */
+export type Col = { header: string; type?: ColType; width?: number; fmt?: string };
 export type Cell = string | number | Date | Prisma.Decimal | null | undefined;
 /** `totals`: add a SUM row under every money column. */
 export type Sheet = { name: string; columns: Col[]; rows: Cell[][]; totals?: boolean };
@@ -17,6 +18,7 @@ const FORMAT: Record<ColType, string | undefined> = {
   money: "#,##0.00",
   date: "dd/mm/yyyy",
   dmy: "dd/mm/yyyy",
+  day: "dd mmm yyyy",
   datetime: "dd/mm/yyyy h:mm AM/PM",
 };
 const IST_OFFSET_MS = 5.5 * 3_600_000;
@@ -69,7 +71,8 @@ export async function xlsxResponse(filename: string, company: string, title: str
     sheet.columns.forEach((c, i) => {
       header.getCell(i + 1).value = c.header;
       ws.getColumn(i + 1).width = c.width ?? (types[i] === "text" ? 18 : 14);
-      if (FORMAT[types[i]]) ws.getColumn(i + 1).numFmt = FORMAT[types[i]]!;
+      const fmt = c.fmt ?? FORMAT[types[i]];
+      if (fmt) ws.getColumn(i + 1).numFmt = fmt;
       if (types[i] === "money") header.getCell(i + 1).alignment = { horizontal: "right" };
     });
     header.font = { bold: true };

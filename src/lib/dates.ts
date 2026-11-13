@@ -25,6 +25,10 @@ export function financialYear(date: Date): string {
 /** "12/10/2026" (dd/mm/yyyy everywhere) for business dates (already IST). */
 export const fmtDate = (date: Date) => isoToDmy(isoDate(date));
 
+/** "25 Oct 2026" for a DATE value (Renewals download, owner's "Renewal Excel format" sheet). */
+export const fmtDayMon = (date: Date) =>
+  `${String(date.getUTCDate()).padStart(2, "0")} ${date.toLocaleString("en-GB", { month: "short", timeZone: "UTC" })} ${date.getUTCFullYear()}`;
+
 /** "12/03/1985" (dd/mm/yyyy) for a DATE value, e.g. date of birth. */
 export const fmtDmy = (date: Date) => isoToDmy(date.toISOString().slice(0, 10));
 
