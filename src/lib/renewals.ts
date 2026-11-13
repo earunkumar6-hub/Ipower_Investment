@@ -5,7 +5,7 @@ import type { Tone } from "@/components/status-badge";
 import { addMonths } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { companyStatus, depositStatusSelect, nameLookup, type CompanyStatus } from "@/lib/deposit-status";
-import { ownerScope, userNames } from "@/lib/leads";
+import { recordScope, userNames } from "@/lib/leads";
 import { maturityShown, PO_SCHEMES, PRODUCT_SHORT, renewalFilter, type Params } from "@/lib/lists";
 import { sum, ZERO } from "@/lib/money";
 import type { SessionUser } from "@/lib/session";
@@ -177,7 +177,7 @@ export async function renewalFilterOptions(user: SessionUser, product: string, c
   if (product === "po") return { companies: [], schemes: PO_SCHEMES.map((s) => [s, PRODUCT_SHORT[s]] as [string, string]) };
   if (product !== "insurance" && product !== "mf") return { companies: [], schemes: [] };
   const plans = await db.policy.findMany({
-    where: { tenantId: user.tenantId, ...ownerScope(user), productType: product === "insurance" ? "Insurance" : "MutualFund" },
+    where: { tenantId: user.tenantId, ...recordScope(user), productType: product === "insurance" ? "Insurance" : "MutualFund" },
     distinct: ["partner", "productName"],
     select: { partner: true, productName: true },
     orderBy: [{ partner: "asc" }, { productName: "asc" }],

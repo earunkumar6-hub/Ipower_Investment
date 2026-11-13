@@ -5,7 +5,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { audit } from "@/lib/audit";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { authorize } from "@/lib/session";
 
 // Deactivate / switch back on / delete a customer's product (owner change list, #25).
@@ -30,7 +30,7 @@ export async function deactivatePolicy(policyId: string, reason: string): Promis
   if (why.length < 3) return fail("Enter why it is being deactivated");
   const policy = await findPolicy(user.tenantId, policyId);
   if (!policy) return fail("This product no longer exists");
-  if (!canActOn(user, policy.ownerId)) return fail("This product belongs to another user's customer");
+  if (!canWorkOn(user, policy.ownerId)) return fail("This product belongs to another user's customer");
   if (policy.status !== "Active") return fail("Only an active product can be deactivated");
   const today = istToday();
   await db.$transaction(async (tx) => {
@@ -52,7 +52,7 @@ export async function reactivatePolicy(policyId: string): Promise<ActionResult> 
   const user = await authorize("Policy.Deactivate");
   const policy = await findPolicy(user.tenantId, policyId);
   if (!policy) return fail("This product no longer exists");
-  if (!canActOn(user, policy.ownerId)) return fail("This product belongs to another user's customer");
+  if (!canWorkOn(user, policy.ownerId)) return fail("This product belongs to another user's customer");
   if (policy.status !== "Deactivated") return fail("Only a deactivated product can be switched back on");
   const today = istToday();
   await db.$transaction(async (tx) => {

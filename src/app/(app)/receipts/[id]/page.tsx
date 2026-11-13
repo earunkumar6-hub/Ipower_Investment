@@ -7,10 +7,10 @@ import { fmtDate, fmtDateTime, isoDate, istToday } from "@/lib/dates";
 import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { companyStatus, nameLookup, rdDepositable } from "@/lib/deposit-status";
-import { canActOn, userNames } from "@/lib/leads";
+import { canWorkOn, userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { denominationText, modeText } from "@/lib/payment-options";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { CancelReceiptForm } from "./cancel-form";
@@ -24,7 +24,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     where: { id, tenantId: user.tenantId },
     include: { customer: true, policy: true, closedSlips: true, poDepositLine: { include: { poDeposit: true } }, payment: { select: { id: true, paymentNo: true } }, companyPayment: true, renewalItems: { select: { billNo: true, dueDate: true } } },
   });
-  if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) notFound();
+  if (!r || !(seesAllRecords(user.role) || r.createdById === user.id || canWorkOn(user, r.customer.ownerId))) notFound();
   const [account, users] = await Promise.all([
     db.account.findUnique({ where: { id: r.accountId }, select: { type: true, name: true, bankName: true, last4: true } }),
     userNames(user.tenantId),

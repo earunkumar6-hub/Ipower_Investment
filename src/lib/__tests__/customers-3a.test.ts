@@ -3,6 +3,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { closureButton } from "@/lib/closure";
 import { loadCustomer360 } from "@/lib/customer-360";
 import { prisma } from "@/lib/db";
@@ -138,7 +139,9 @@ describe("Customer photo", () => {
     expect((await changeCustomerPhoto({ ok: false }, form({ customerId, photo: new File(["x"], "a.gif", { type: "image/gif" }) }))).error).toMatch(/JPG or PNG/);
     expect((await changeCustomerPhoto({ ok: false }, form({ customerId, photo: new File([new Uint8Array(2 * 1024 * 1024 + 1)], "big.png", { type: "image/png" }) }))).error).toMatch(/2 MB/);
     as("divya");
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10: only when 'work on every customer' is off
     expect((await changeCustomerPhoto({ ok: false }, form({ customerId, photo: png() }))).ok).toBe(false);
+    setAccessOverrides({});
     as("arun");
     expect(await changeCustomerPhoto({ ok: false }, form({ customerId, photo: png() }))).toEqual({ ok: true });
     expect((await prisma.customer.findUniqueOrThrow({ where: { id: customerId } })).photoPath).toBe(`${customerId}.png`);

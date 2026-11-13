@@ -7,7 +7,7 @@ import { istToday } from "@/lib/dates";
 import { bankAccountOptions } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { maskMobile } from "@/lib/lead-labels";
-import { canActOn, ownerScope } from "@/lib/leads";
+import { canWorkOn, recordScope } from "@/lib/leads";
 import { payOptions } from "@/lib/payment-options";
 import { requirePermission } from "@/lib/session";
 import { POLICY_BILLS_INCLUDE, policyOptions } from "@/lib/receipt-options";
@@ -28,7 +28,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
     });
     if (!group) notFound();
     const active = group.members.map((m) => m.policy).filter((p) => p.status === "Active");
-    const mine = active.filter((p) => canActOn(user, p.customer.ownerId));
+    const mine = active.filter((p) => canWorkOn(user, p.customer.ownerId));
     const [opts, accounts] = await Promise.all([payOptions(db, user.tenantId), bankAccountOptions(db, user.tenantId)]);
     return (
       <>
@@ -55,7 +55,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
       })
     : null;
 
-  if (customer && canActOn(user, customer.ownerId)) {
+  if (customer && canWorkOn(user, customer.ownerId)) {
     const policies = policyOptions(customer.policies, istToday());
     const [opts, accounts] = await Promise.all([payOptions(db, user.tenantId), bankAccountOptions(db, user.tenantId)]);
     return (
@@ -77,7 +77,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
   const customers = await db.customer.findMany({
     where: {
       tenantId: user.tenantId,
-      ...ownerScope(user),
+      ...recordScope(user),
       ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }] }),
     },
     orderBy: { name: "asc" },

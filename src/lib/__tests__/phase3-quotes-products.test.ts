@@ -1,6 +1,7 @@
 // Phase 3 (Oct 2026 round 2): per-product decision on quotations, not accepted / delete, proposal policy details,
 // "Add product directly" (catalogue rules, encrypted bank details, rate at opening), attachments.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 
@@ -183,7 +184,9 @@ describe("Add product directly", () => {
     const branch = p.customFields.find((f) => f.label === "Post office branch")!;
     const base = { customerId: rajesh.id, productId: p.id, schemeId: five.id, amount: "100000", startDate: today, frequency: "OneTime" };
     as(users.divya);
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10: only when 'work on every customer' is off
     expect((await addProductDirect({ ok: false }, form(base))).error).toMatch(/another user/);
+    setAccessOverrides({});
     as(users.arun);
     expect((await addProductDirect({ ok: false }, form({ ...base, schemeId: "" }))).fieldErrors).toHaveProperty("schemeId");
     expect((await addProductDirect({ ok: false }, form({ ...base, frequency: "Monthly" }))).error).toMatch(/one-time/i);
@@ -239,7 +242,9 @@ describe("Attachments", () => {
   it("only people who can see the record attach files; uploader or Admin removes; removal is logged", async () => {
     const png = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "pan.png", { type: "image/png" });
     as(users.divya);
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10: only when 'work on every customer' is off
     expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: png }))).error).toMatch(/another user/);
+    setAccessOverrides({});
     as(users.arun);
     expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "Payslip", file: png }))).error).toMatch(/what the file is/);
     expect((await uploadAttachment({ ok: false }, form({ ownerType: "Customer", ownerId: rajesh.id, kind: "PAN", file: new File(["x"], "a.exe", { type: "application/x-msdownload" }) }))).error).toMatch(/PDF, JPG/);

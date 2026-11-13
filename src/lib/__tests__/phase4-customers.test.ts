@@ -1,6 +1,7 @@
 // Phase 4 (Oct 2026 round 2): customer details and mobiles, Customer 360 holdings / cards / linked entries,
 // and customers matched or created from proposals with all their numbers.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { addMonths, isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/session";
@@ -66,7 +67,9 @@ describe("Customer details", () => {
   it("owner corrects name and numbers; the change log keeps the old values; others can't", async () => {
     const edit = (o: Record<string, string | string[]>) => editCustomer({ ok: false }, form({ customerId: rajesh.id, name: "Rajesh Kumar S", email: "rk@example.com", address: "Adyar", mobile: [rajesh.mobile, "9445099999"], whatsApp: ["1"], ...o }));
     as(users.divya);
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10: only when 'work on every customer' is off
     expect((await edit({})).error).toMatch(/another user/);
+    setAccessOverrides({});
     as(users.arun);
     expect((await edit({ mobile: ["123"] })).error).toMatch(/10-digit/);
     expect((await edit({ email: "not-an-email" })).fieldErrors).toHaveProperty("email");
@@ -150,7 +153,10 @@ describe("Customers list holdings filter", () => {
     const td = await find({ product: "po", scheme: "PoTd" });
     expect(td.length).toBeGreaterThan(0);
     expect(td.every((c) => c.policies.some((p) => p.productType === "PoTd"))).toBe(true);
-    expect(td.every((c) => c.ownerId === users.arun.id)).toBe(true); // staff see only their own customers
+    // #10: staff see every customer; only their own once 'work on every customer' is switched off.
+    setAccessOverrides({ User: { "Records.SeeAll": false } });
+    expect((await find({ product: "po", scheme: "PoTd" })).every((c) => c.ownerId === users.arun.id)).toBe(true);
+    setAccessOverrides({});
     const star = await find({ product: "insurance", company: "Star Health" });
     expect(star.every((c) => c.policies.some((p) => p.partner === "Star Health"))).toBe(true);
     // a scheme only applies under its product: RD isn't a company plan

@@ -4,7 +4,7 @@ import { decryptJson, maskAccount } from "@/lib/crypto";
 import { addDays, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { OUTCOME_LABEL } from "@/lib/lead-labels";
-import { callInclude, callParty, canActOn, userNames, type CallKind } from "@/lib/leads";
+import { callInclude, type CallKind, callParty, canWorkOn, userNames } from "@/lib/leads";
 import { sum, ZERO } from "@/lib/money";
 import { maturityOf } from "@/lib/policies";
 import { isPostal, lockInUntil, sipDateLabel } from "@/lib/products";
@@ -54,7 +54,7 @@ export async function loadCustomer360(user: SessionUser, id: string) {
       ownerPaidSlips: { orderBy: { createdAt: "desc" }, include: { policy: { select: { policyNumber: true } }, closedByReceipt: { select: { receiptNo: true } } } },
     },
   });
-  if (!c || !canActOn(user, c.ownerId)) return null;
+  if (!c || !canWorkOn(user, c.ownerId)) return null;
 
   const owner = await db.user.findUnique({ where: { id: c.ownerId }, select: { name: true } });
   // Renewals: everything unpaid, plus what was paid in the last 12 months.

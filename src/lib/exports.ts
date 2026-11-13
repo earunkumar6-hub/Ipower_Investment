@@ -12,14 +12,14 @@ import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
 import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, maskMobile, OUTCOME_LABEL } from "@/lib/lead-labels";
-import { ownerScope, userNames } from "@/lib/leads";
+import { ownerScope, recordScope, userNames } from "@/lib/leads";
 import {
   customerFilter, dayBookDate, rangeLabel, expenseFilter, EXPENSE_TABS, leadFilter, MESSAGE_TEMPLATE, monthLabel, type Params,
   pnlMonth, PRODUCT_SHORT, receiptFilter, RENEWAL_TABS, SLIP_STATUS,
 } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
 import { modeLabel } from "@/lib/payment-modes";
-import { seesAll, type Permission } from "@/lib/permissions";
+import { type Permission, seesAll } from "@/lib/permissions";
 import { commissionSummary, fyOfMonth, monthName } from "@/lib/commission-received";
 import { monthKey, monthRange, ownerStatement, previousMonthKey, profitAndLoss } from "@/lib/pnl";
 import { fmtTenure, PAY_MODE_LABEL } from "@/lib/products";
@@ -347,7 +347,7 @@ export const REPORTS: Record<string, Report> = {
       const lastMonth = await loadRenewals(user, { tab: "due", range: "lastmonth" }, today);
       const [last, now] = await Promise.all([
         prisma.renewalItem.findMany({
-          where: { tenantId: user.tenantId, policy: ownerScope(user), dueDate: { gte: lastMonth.range!.from, lte: lastMonth.range!.to }, status: { in: ["Due", "Overdue", "Paid", "Lapsed"] } },
+          where: { tenantId: user.tenantId, policy: recordScope(user), dueDate: { gte: lastMonth.range!.from, lte: lastMonth.range!.to }, status: { in: ["Due", "Overdue", "Paid", "Lapsed"] } },
           include: { policy: { include: { customer: { select: { name: true } } } }, paidReceipt: { select: { receiptNo: true, payment: { select: { paymentNo: true } } } } }, orderBy: { dueDate: "asc" },
         }),
         loadRenewals(user, { tab: "due", range: "month" }, today).then(async (r) => {

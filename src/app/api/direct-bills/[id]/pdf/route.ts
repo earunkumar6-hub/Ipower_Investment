@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { fmtINR } from "@/lib/money";
 import { denominationText, modeText } from "@/lib/payment-options";
 import { esc, htmlToPdf, PDF_STYLE, pdfHeader } from "@/lib/pdf";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session";
 
 // Payer copy of a direct bill.
@@ -12,7 +12,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!user || !hasPermission(user.role, "Receipt.View")) return new Response("Not allowed", { status: 403 });
   const { id } = await params;
   const b = await db.directBill.findFirst({ where: { id, tenantId: user.tenantId } });
-  if (!b || !(seesAll(user.role) || b.createdById === user.id)) return new Response("Not found", { status: 404 });
+  if (!b || !(seesAllRecords(user.role) || b.createdById === user.id)) return new Response("Not found", { status: 404 });
   const [tenant, receivedBy] = await Promise.all([
     db.tenant.findUniqueOrThrow({ where: { id: user.tenantId } }),
     db.user.findUnique({ where: { id: b.createdById }, select: { name: true } }),

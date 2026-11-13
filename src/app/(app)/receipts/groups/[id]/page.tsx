@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fmtDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { fmtINR } from "@/lib/money";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { PAY_MODE_LABEL } from "@/lib/products";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ export default async function BillGroupPage({ params }: { params: Promise<{ id: 
     where: { id, tenantId: user.tenantId },
     include: {
       members: { include: { policy: { include: { customer: { select: { id: true, name: true, cifNo: true } } } } }, orderBy: { addedAt: "asc" } },
-      payments: { where: seesAll(user.role) ? {} : { createdById: user.id }, orderBy: { createdAt: "desc" }, take: 20 },
+      payments: { where: seesAllRecords(user.role) ? {} : { createdById: user.id }, orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
   if (!g) notFound();

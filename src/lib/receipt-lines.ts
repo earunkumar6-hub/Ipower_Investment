@@ -3,7 +3,7 @@ import type { ActionResult } from "@/app/(app)/leads/actions";
 import { poCommission } from "@/lib/commission";
 import type { Tx } from "@/lib/db";
 import { ADVANCE_MONTHS, lockPolicyDues, payableDues, type Due } from "@/lib/dues";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { lineNumber, nextNumber } from "@/lib/numbering";
 import { billEnd } from "@/lib/policies";
 import { postReceipt } from "@/lib/posting";
@@ -85,7 +85,7 @@ export async function pickDues(
       include: { product: { select: { invoiceRule: true } }, customer: { select: { name: true, ownerId: true } } },
     });
     if (!policy) return { error: "A policy picked is not active for this customer; reload and try again" };
-    if (!canActOn(user, policy.customer.ownerId)) return { error: `${policy.policyNumber} belongs to another user's customer` };
+    if (!canWorkOn(user, policy.customer.ownerId)) return { error: `${policy.policyNumber} belongs to another user's customer` };
     if (opts.members && !opts.members.has(policy.id)) return { error: `${policy.policyNumber} is not in this bill group` };
     await lockPolicyDues(tx, policy.id);
     const stored = await tx.renewalItem.findMany({ where: { policyId: policy.id } });

@@ -5,7 +5,7 @@ import type { AttachmentOwner } from "@prisma/client";
 import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-rules";
 import { fmtDate, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn, userNames } from "@/lib/leads";
+import { canActOn, canWorkOn, userNames } from "@/lib/leads";
 import { seesAll } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { ticketScope } from "@/lib/tickets";
@@ -48,7 +48,7 @@ export async function attachmentOwner(user: SessionUser, ownerType: AttachmentOw
   const rec = ownerType === "Quotation" ? await db.quotation.findFirst({ where, select: { ownerId: true, quoteNo: true, deletedAt: true } }).then((r) => r && { ownerId: r.ownerId, label: r.quoteNo, closed: !!r.deletedAt })
     : ownerType === "Proposal" ? await db.proposal.findFirst({ where, select: { ownerId: true, proposalNo: true } }).then((r) => r && { ownerId: r.ownerId, label: r.proposalNo, closed: false })
     : await db.customer.findFirst({ where, select: { ownerId: true, name: true } }).then((r) => r && { ownerId: r.ownerId, label: r.name, closed: false });
-  if (!rec || !canActOn(user, rec.ownerId)) return null;
+  if (!rec || !(ownerType === "Customer" ? canWorkOn : canActOn)(user, rec.ownerId)) return null;
   return rec;
 }
 

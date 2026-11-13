@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 import { financialYear, fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { lockPolicyDues, payableDues } from "@/lib/dues";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { checkPayment, modeLabel, payFields } from "@/lib/payment-options";
@@ -275,7 +275,7 @@ export async function generateAdvanceBills(_: ActionResult, form: FormData): Pro
     });
     let raised = 0;
     for (const policy of policies) {
-      if (!canActOn(user, policy.customer.ownerId)) return { ok: false, error: `${policy.policyNumber} belongs to another user's customer` };
+      if (!canWorkOn(user, policy.customer.ownerId)) return { ok: false, error: `${policy.policyNumber} belongs to another user's customer` };
       await lockPolicyDues(tx, policy.id);
       const stored = await tx.renewalItem.findMany({ where: { policyId: policy.id } });
       const advance = payableDues({ ...policy, billUntil: billEnd(policy, policy.product?.invoiceRule) }, stored, today).filter((d) => !d.itemId && d.dueDate <= to);

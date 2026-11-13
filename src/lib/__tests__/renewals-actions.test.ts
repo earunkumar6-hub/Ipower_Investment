@@ -1,5 +1,6 @@
 // "Send reminder" (mocked WhatsApp) through the real server action; created rows are removed.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
@@ -38,9 +39,11 @@ afterAll(async () => {
 });
 
 describe("Renewal reminders", () => {
-  it("staff remind only their own customers; the message is logged, not sent", async () => {
+  it("with 'work on every customer' switched off staff remind only their own customers; the message is logged, not sent", async () => {
     session.user = users.arun;
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10
     expect((await sendRenewalReminder(itemId)).ok).toBe(false);
+    setAccessOverrides({});
     session.user = users.divya;
     expect(await sendRenewalReminder(itemId)).toEqual({ ok: true });
     const msg = await prisma.messageLog.findFirstOrThrow({ where: { relatedId: itemId, createdAt: { gte: started } } });

@@ -1,7 +1,7 @@
 import type { Frequency, RenewalItem } from "@prisma/client";
 import { fmtDate } from "@/lib/dates";
-import { canActOn } from "@/lib/leads";
-import { seesAll } from "@/lib/permissions";
+import { canWorkOn } from "@/lib/leads";
+import { seesAllRecords } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 
 const monthLabel = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -19,7 +19,7 @@ export const receiptRef = (r: { id: string; receiptNo: string; payment?: { id: s
 
 /** Who may open a payment: Admin / Super Admin, whoever entered it, or the owner of a customer on one of its lines. */
 export const canSeePayment = (user: SessionUser, p: { createdById: string; receipts: { customer: { ownerId: string } }[] }) =>
-  seesAll(user.role) || p.createdById === user.id || p.receipts.some((r) => canActOn(user, r.customer.ownerId));
+  seesAllRecords(user.role) || p.createdById === user.id || p.receipts.some((r) => canWorkOn(user, r.customer.ownerId));
 
 /** Who the payment receipt is made out to: the customer, or the "Paid by" person on combined / bill-group receipts. */
 export const payerOf = (p: { payerName: string | null; payerMobile: string | null; customer: { name: string; mobile: string } | null }) =>

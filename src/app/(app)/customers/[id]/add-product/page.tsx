@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { requirePermission } from "@/lib/session";
 import { AddProductForm } from "./add-product-form";
 
@@ -11,7 +11,7 @@ import { AddProductForm } from "./add-product-form";
 export default async function AddProductPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("Policy.Create");
   const customer = await db.customer.findFirst({ where: { id: (await params).id, tenantId: user.tenantId } });
-  if (!customer || !canActOn(user, customer.ownerId)) notFound();
+  if (!customer || !canWorkOn(user, customer.ownerId)) notFound();
   const products = await db.product.findMany({
     where: { tenantId: user.tenantId, active: true },
     include: { schemes: { where: { active: true }, include: { rates: true }, orderBy: [{ tenureMonths: "asc" }, { name: "asc" }] }, customFields: { orderBy: { sort: "asc" } } },

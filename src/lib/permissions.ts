@@ -25,7 +25,8 @@ export const PERMISSIONS = [
   "Settings.Edit", "Audit.View",
   "Ticket.Create", // raise tickets, follow and close one's own
   "Ticket.Manage", // see every ticket, change status / priority, close any (Admin, Super Admin)
-  "Data.SeeAll", // see every customer / record, not only one's own
+  "Data.SeeAll", // see every staff member's leads, follow-ups, quotations, proposals, messages and bank balances
+  "Records.SeeAll", // see and work on every customer, bill, receipt and expense – all roles by default (owner change list #10)
   "Access.Manage", // Settings → Roles and access, Users (Super Admin only, can't be given away)
 ] as const;
 
@@ -80,13 +81,18 @@ export function defineAbilityFor(role: Role): AppAbility {
 /** Admin and Super Admin see the whole agency by default; Users see records they own. */
 export const seesAll = (role: Role) => hasPermission(role, "Data.SeeAll");
 
+/** Customers, bills (renewals, direct bills), receipts and expenses: every role sees and works on all of them by default (#10, 13 Nov 2026). */
+export const seesAllRecords = (role: Role) => seesAll(role) || hasPermission(role, "Records.SeeAll");
+
 export const ROLE_LABEL: Record<Role, string> = { SuperAdmin: "Super Admin", Admin: "Admin", User: "User" };
 
 /** Roles and access screen: every permission in plain words, grouped by area. */
 export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[] = [
   { area: "Leads and follow-ups", items: [["Lead.View", "See leads and follow-ups"], ["Lead.Create", "Add leads, schedule calls"], ["Lead.Edit", "Edit leads"]] },
   { area: "Quotations and proposals", items: [["Quote.View", "See quotations"], ["Quote.Create", "Make quotations"], ["Proposal.View", "See proposals"], ["Proposal.Create", "Make / edit proposals"], ["PII.Edit", "Enter Aadhaar / PAN"]] },
-  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Policy.Deactivate", "Deactivate / switch back on a product"], ["Policy.Delete", "Delete a product entered by mistake"], ["Renewal.View", "See renewals"], ["Data.SeeAll", "See every staff member's customers and records"]] },
+  { area: "Customers and renewals", items: [["Policy.View", "See customers and holdings"], ["Policy.Create", "Issue policies, add products, edit customers"], ["Customer.Delete", "Delete customers that have no records"], ["Policy.Deactivate", "Deactivate / switch back on a product"], ["Policy.Delete", "Delete a product entered by mistake"], ["Renewal.View", "See renewals"],
+    ["Records.SeeAll", "See and work on every staff member's customers, bills, receipts and expenses"],
+    ["Data.SeeAll", "See every staff member's leads, follow-ups, quotations, proposals and messages, and bank balances"]] },
   { area: "Receipts", items: [["Receipt.View", "See receipts"], ["Receipt.Create", "Take receipts, direct bills"], ["Receipt.Cancel", "Cancel receipts"], ["BillGroup.Manage", "Create / change bill groups"]] },
   { area: "ESEVAI & CSC", items: [["Service.Record", "Record ESEVAI & CSC entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
   { area: "Expenses", items: [["Expense.View", "See expenses"], ["Expense.Create", "Add expenses"], ["Expense.Approve", "Approve expenses"]] },

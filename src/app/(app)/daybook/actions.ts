@@ -15,9 +15,9 @@ import { CASH_SOURCES, UPI_ADJUSTMENT_REASONS } from "@/lib/daybook-labels";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { D, fmtINR, sum, ZERO } from "@/lib/money";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { maskMobile } from "@/lib/lead-labels";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { postPoDeposit } from "@/lib/posting";
 import { authorize } from "@/lib/session";
 
@@ -348,7 +348,7 @@ export async function depositOneRdReceipt(_: ActionResult, form: FormData): Prom
         include: { policy: { select: { ownerId: true } } },
       });
       if (!r) return fail("This receipt is no longer waiting for deposit; reload and try again");
-      if (!seesAll(user.role) && r.createdById !== user.id && !canActOn(user, r.policy!.ownerId)) return fail("This receipt belongs to another user");
+      if (!seesAllRecords(user.role) && r.createdById !== user.id && !canWorkOn(user, r.policy!.ownerId)) return fail("This receipt belongs to another user");
       if (r.receiptDate > v.paidOn) return fail(`${r.receiptNo} was collected on ${fmtDate(r.receiptDate)}, after the deposit date`);
       const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });
       if (!account) return fail("Pick the cash or bank account it was paid from");

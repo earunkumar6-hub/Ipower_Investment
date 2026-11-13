@@ -5,7 +5,7 @@ import { StatusBadge, type Tone } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { billEnd, fullSchedule, maturityOf } from "@/lib/policies";
 import { fmtTenure, INVOICE_RULE_LABEL, payModeLabel, sipDateLabel } from "@/lib/products";
@@ -24,7 +24,7 @@ export default async function SchedulePage({ params }: { params: Promise<{ id: s
     where: { id: policyId, customerId: id, tenantId: user.tenantId },
     include: { customer: { select: { id: true, name: true } }, product: { select: { invoiceRule: true } }, scheme: { select: { name: true } }, renewals: true },
   });
-  if (!p || !canActOn(user, p.ownerId)) notFound();
+  if (!p || !canWorkOn(user, p.ownerId)) notFound();
   const rule = p.product?.invoiceRule;
   const rows = fullSchedule(p, rule, p.renewals, today);
   const end = billEnd(p, rule);

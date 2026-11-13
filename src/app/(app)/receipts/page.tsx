@@ -11,7 +11,7 @@ import { addMonths, fmtDate, isoDate, istToday } from "@/lib/dates";
 import { accountLabel } from "@/lib/accounts";
 import { db } from "@/lib/db";
 import { companyStatus, depositStatusSelect, nameLookup } from "@/lib/deposit-status";
-import { ownerScope, userNames } from "@/lib/leads";
+import { recordScope, userNames } from "@/lib/leads";
 import { OWNER_PAYABLE } from "@/lib/dues";
 import { modeLabel } from "@/lib/payment-modes";
 import { monthLabel, RECEIPT_TABS, receiptFilter, receiptTab, type ReceiptTab, SLIP_STATUS, type Params } from "@/lib/lists";
@@ -165,7 +165,7 @@ async function CustomerReceipts({ tenantId, f, total, canPay }: { tenantId: stri
 }
 
 async function OwnerPaid({ user, f }: { user: SessionUser; f: Filter }) {
-  const scope = ownerScope(user);
+  const scope = recordScope(user);
   const [slips, openItems] = await Promise.all([
     db.ownerPaidSlip.findMany({
       where: f.slipWhere,

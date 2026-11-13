@@ -10,8 +10,8 @@ import { poCommission } from "@/lib/commission";
 import { reverseSource } from "@/lib/daybook";
 import { financialYear, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
-import { seesAll } from "@/lib/permissions";
+import { canWorkOn } from "@/lib/leads";
+import { seesAllRecords } from "@/lib/permissions";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { postOwnerReturn } from "@/lib/posting";
@@ -53,7 +53,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
     const result = await db.$transaction(async (tx): Promise<ActionResult> => {
       const customer = await tx.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId } });
       if (!customer) return { ok: false, error: "Customer not found" };
-      if (!canActOn(user, customer.ownerId)) return { ok: false, error: "This customer belongs to another user" };
+      if (!canWorkOn(user, customer.ownerId)) return { ok: false, error: "This customer belongs to another user" };
       const closed = await closedDayError(tx, user.tenantId, billDate);
       if (closed) return { ok: false, error: closed, fieldErrors: { receiptDate: closed } };
       const pay = await checkPayment(tx, user.tenantId, v, amount);
@@ -242,7 +242,7 @@ export async function recordOwnerPaid(_: ActionResult, form: FormData): Promise<
       include: { policy: true },
     });
     if (!item) return { ok: false, error: "That bill is not open" };
-    if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
+    if (!canWorkOn(user, item.policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
     const slip = await tx.ownerPaidSlip.create({
       data: {
         tenantId: user.tenantId, slipNo: await nextNumber(tx, user.tenantId, "slip"), policyId: item.policyId,
@@ -301,7 +301,7 @@ export async function shareOnWhatsApp(kind: "Receipt" | "Payment" | "DirectBill"
       // Checked here (lines can belong to several customers); passes the check below as the user's own.
       .then((p) => p && canSeePayment(user, p) && { no: p.paymentNo, amount: p.amount, name: payerOf(p).name, mobile: payerOf(p).mobile, ownerId: null, createdById: user.id, path: "payments" })
     : await db.directBill.findFirst({ where: { id, tenantId: user.tenantId } }).then((b) => b && { no: b.billNo, amount: b.amount, name: b.payerName, mobile: b.payerMobile, ownerId: null, createdById: b.createdById, path: "direct-bills" });
-  if (!found || !(seesAll(user.role) || found.createdById === user.id || (found.ownerId && canActOn(user, found.ownerId)))) return { ok: false, error: "Not found" };
+  if (!found || !(seesAllRecords(user.role) || found.createdById === user.id || (found.ownerId && canWorkOn(user, found.ownerId)))) return { ok: false, error: "Not found" };
   await db.messageLog.create({
     data: {
       tenantId: user.tenantId, channel: "WhatsApp", to: found.mobile, template: "receipt_share", relatedType: kind, relatedId: id, createdById: user.id,

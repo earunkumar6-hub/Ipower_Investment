@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 import { assertDayOpen, balanceAt } from "@/lib/daybook";
 import { fmtDate, fmtDateTime, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { MATURITY_SCHEMES } from "@/lib/lists";
 import { fmtINR, sum } from "@/lib/money";
 import { postCompanyPayment, PRODUCT_CATEGORY } from "@/lib/posting";
@@ -48,7 +48,7 @@ export async function payToCompany(_: ActionResult, form: FormData): Promise<Act
         include: { policy: true },
       });
       if (receipts.length !== v.receiptIds.length) return fail("Some receipts are no longer waiting to be paid to the company; reload and try again");
-      if (receipts.some((x) => !canActOn(user, x.policy!.ownerId))) return fail("Some receipts belong to another user's customers");
+      if (receipts.some((x) => !canWorkOn(user, x.policy!.ownerId))) return fail("Some receipts belong to another user's customers");
       const companies = [...new Set(receipts.map((x) => x.policy!.partner))];
       if (companies.length > 1) return fail(`Tick receipts for one company at a time (${companies.join(", ")})`);
       const late = receipts.find((x) => x.receiptDate > v.paidOn);
@@ -82,7 +82,7 @@ export async function markMatured(policyId: string): Promise<ActionResult> {
   const user = await authorize("Renewal.View");
   const policy = await db.policy.findFirst({ where: { id: policyId, tenantId: user.tenantId, status: "Active", productType: { in: MATURITY_SCHEMES } } });
   if (!policy) return { ok: false, error: "This deposit is no longer active" };
-  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
+  if (!canWorkOn(user, policy.ownerId)) return { ok: false, error: "This account belongs to another user" };
   const matures = maturityDate(policy);
   if (!matures || matures > istToday()) return { ok: false, error: "This deposit has not matured yet" };
   await db.policy.update({ where: { id: policy.id }, data: { status: "Matured", closedOn: matures } });
@@ -100,7 +100,7 @@ export async function sendRenewalReminder(renewalItemId: string): Promise<Action
   if (!item) return { ok: false, error: "This renewal is no longer due" };
   // Reminders stop once a policy is closed early, withdrawn, matured or not renewed.
   if (item.policy.status !== "Active") return { ok: false, error: "This policy is no longer active; no reminder is sent" };
-  if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  if (!canWorkOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
   const { policy } = item;
   const what = policy.productType === "PoRd" ? `RD ${policy.policyNumber} instalment` : `${policy.partner} ${policy.productName} (${policy.policyNumber}) renewal`;
   await db.$transaction([
@@ -127,7 +127,7 @@ export async function markNotRenewed(renewalItemId: string, reason: string): Pro
   if (why.length < 3) return { ok: false, error: "Enter why it was not renewed" };
   const item = await db.renewalItem.findFirst({ where: { id: renewalItemId, tenantId: user.tenantId, status: "Overdue" }, include: { policy: { include: { customer: { select: { name: true } } } } } });
   if (!item) return { ok: false, error: "Only an overdue renewal can be marked not renewed" };
-  if (!canActOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  if (!canWorkOn(user, item.policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
   if (item.policy.status !== "Active") return { ok: false, error: "This policy is no longer active" };
   const today = istToday();
   await db.$transaction(async (tx) => {
@@ -148,7 +148,7 @@ export async function sendMaturityReminder(policyId: string): Promise<ActionResu
   const user = await authorize("Renewal.View");
   const policy = await db.policy.findFirst({ where: { id: policyId, tenantId: user.tenantId, status: "Active" }, include: { customer: true } });
   if (!policy) return { ok: false, error: "This policy is no longer active" };
-  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  if (!canWorkOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
   const matures = maturityDate(policy);
   if (!matures) return { ok: false, error: "This policy has no maturity date" };
   const what = policy.productType === "Insurance" || policy.productType === "MutualFund" ? `${policy.partner} ${policy.productName} (${policy.policyNumber})` : `${policy.productName} ${policy.policyNumber}`;
@@ -175,7 +175,7 @@ export async function reminderHistory(kind: "bill" | "maturity", id: string): Pr
     ? (await db.renewalItem.findFirst({ where: { id, tenantId: user.tenantId }, select: { policy: { select: { ownerId: true } } } }))?.policy
     : await db.policy.findFirst({ where: { id, tenantId: user.tenantId }, select: { ownerId: true } });
   if (!policy) return { ok: false, error: "Not found" };
-  if (!canActOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
+  if (!canWorkOn(user, policy.ownerId)) return { ok: false, error: "This policy belongs to another user" };
   const logs = await db.messageLog.findMany({
     where: { tenantId: user.tenantId, relatedId: id, ...(kind === "bill" ? { relatedType: "RenewalItem" } : { relatedType: "Policy", template: "maturity_reminder" }) },
     orderBy: { createdAt: "desc" },

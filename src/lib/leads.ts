@@ -1,12 +1,17 @@
 import type { LeadStage, Prisma } from "@prisma/client";
 import { db, type Tx } from "@/lib/db";
-import { seesAll } from "@/lib/permissions";
+import { seesAll, seesAllRecords } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 
-/** Users act on their own leads and calls; Admin and Super Admin on the whole agency. */
+/** Users act on their own leads, calls, quotations and proposals; Admin and Super Admin on the whole agency. */
 export const canActOn = (user: SessionUser, ownerId: string) => seesAll(user.role) || ownerId === user.id;
 
 export const ownerScope = (user: SessionUser) => (seesAll(user.role) ? {} : { ownerId: user.id });
+
+/** Customers and their holdings, bills and receipts: every role by default (`Records.SeeAll`, #10). */
+export const canWorkOn = (user: SessionUser, ownerId: string) => seesAllRecords(user.role) || ownerId === user.id;
+
+export const recordScope = (user: SessionUser) => (seesAllRecords(user.role) ? {} : { ownerId: user.id });
 
 export async function userNames(tenantId: string) {
   const users = await db.user.findMany({ where: { tenantId }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });

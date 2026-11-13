@@ -10,7 +10,7 @@ import { maskMobile } from "@/lib/lead-labels";
 import { userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { modeLabel } from "@/lib/payment-modes";
-import { seesAll } from "@/lib/permissions";
+import { seesAllRecords } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ export default async function DirectBillsPage() {
   const user = await requirePermission("Receipt.View");
   const [bills, users] = await Promise.all([
     db.directBill.findMany({
-      where: { tenantId: user.tenantId, ...(!seesAll(user.role) && { createdById: user.id }) },
+      where: { tenantId: user.tenantId, ...(!seesAllRecords(user.role) && { createdById: user.id }) },
       include: { customer: { select: { id: true, name: true } } },
       orderBy: [{ billDate: "desc" }, { createdAt: "desc" }],
       take: 100,

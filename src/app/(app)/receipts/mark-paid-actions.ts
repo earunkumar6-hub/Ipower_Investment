@@ -8,10 +8,10 @@ import { refuseOnClosedDay } from "@/lib/action-guard";
 import { assertDayOpen, balanceAt } from "@/lib/daybook";
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { fmtINR, sum } from "@/lib/money";
 import { checkDenominations, denominationsField } from "@/lib/payment-options";
-import { seesAll } from "@/lib/permissions";
+import { seesAllRecords } from "@/lib/permissions";
 import { postCompanyPayment, postPoDeposit, PRODUCT_CATEGORY } from "@/lib/posting";
 import { authorize } from "@/lib/session";
 
@@ -54,7 +54,7 @@ export async function markReceiptsPaid(_: ActionResult, form: FormData): Promise
         orderBy: { receiptNo: "asc" },
       });
       if (receipts.length !== v.receiptIds.length) return fail("Some receipts are no longer waiting to be paid to the company; reload and try again");
-      if (receipts.some((x) => !seesAll(user.role) && x.createdById !== user.id && !canActOn(user, x.policy!.ownerId))) return fail("Some receipts belong to another user's customers");
+      if (receipts.some((x) => !seesAllRecords(user.role) && x.createdById !== user.id && !canWorkOn(user, x.policy!.ownerId))) return fail("Some receipts belong to another user's customers");
       const late = receipts.find((x) => x.receiptDate > v.paidOn);
       if (late) return fail(`${late.receiptNo} was collected on ${fmtDate(late.receiptDate)}, after the paid date`);
       const account = await tx.account.findFirst({ where: { id: v.accountId, tenantId: user.tenantId, type: { in: ["Cash", "Bank"] }, active: true } });

@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { bankAccountOptions } from "@/lib/accounts";
 import { istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { ownerScope } from "@/lib/leads";
+import { recordScope } from "@/lib/leads";
 import { payOptions } from "@/lib/payment-options";
 import { POLICY_BILLS_INCLUDE, policyOptions, presetCounts } from "@/lib/receipt-options";
 import { requirePermission } from "@/lib/session";
@@ -13,7 +13,7 @@ export default async function NewCombinedReceiptPage({ searchParams }: { searchP
   const user = await requirePermission("Receipt.Create");
   const billIds = ((await searchParams).bills ?? "").split(",").filter(Boolean);
   const policies = await db.policy.findMany({
-    where: { tenantId: user.tenantId, status: "Active", customer: ownerScope(user), renewals: { some: { status: { in: ["Due", "Overdue"] } } } },
+    where: { tenantId: user.tenantId, status: "Active", customer: recordScope(user), renewals: { some: { status: { in: ["Due", "Overdue"] } } } },
     include: POLICY_BILLS_INCLUDE,
   });
   const [opts, accounts] = await Promise.all([payOptions(db, user.tenantId), bankAccountOptions(db, user.tenantId)]);

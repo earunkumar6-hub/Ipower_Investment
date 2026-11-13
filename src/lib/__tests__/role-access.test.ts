@@ -3,7 +3,9 @@ import { verifyPassword } from "better-auth/crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAccess, resetAccess } from "@/lib/access";
 import { prisma } from "@/lib/db";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { canActOn, canWorkOn } from "@/lib/leads";
+import { customerFilter, expenseFilter, receiptFilter } from "@/lib/lists";
+import { hasPermission, seesAll, seesAllRecords } from "@/lib/permissions";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
 const session = vi.hoisted(() => ({ user: null as null | U }));
@@ -57,6 +59,8 @@ afterAll(async () => {
 describe("Defaults", () => {
   it("are the same rules as before", () => {
     expect([seesAll("SuperAdmin"), seesAll("Admin"), seesAll("User")]).toEqual([true, true, false]);
+    // #10 (13 Nov 2026): every role sees and works on every customer, bill, receipt and expense.
+    expect([seesAllRecords("SuperAdmin"), seesAllRecords("Admin"), seesAllRecords("User")]).toEqual([true, true, true]);
     expect(hasPermission("Admin", "Receipt.Cancel")).toBe(true);
     expect(hasPermission("User", "Receipt.Cancel")).toBe(false);
     expect(hasPermission("Admin", "Access.Manage")).toBe(false);
@@ -103,6 +107,26 @@ describe("Roles and access (Super Admin only)", () => {
     await resetRoleAccess();
     await reload();
     expect(seesAll("User")).toBe(false);
+  });
+
+  it("Users see every customer, receipt and expense (#10) until 'work on every customer' is switched off", async () => {
+    const arun = { ...users.owner, id: "someone-else", role: "User" as const };
+    expect(customerFilter(arun, {}).where).not.toHaveProperty("ownerId");
+    expect(receiptFilter(arun, {}).receiptWhere).not.toHaveProperty("createdById");
+    expect(expenseFilter(arun, {}).where).not.toHaveProperty("createdById");
+    expect(canWorkOn(arun, users.owner.id)).toBe(true);
+    expect(canActOn(arun, users.owner.id)).toBe(false); // leads, calls, quotations, proposals stay own-only
+
+    as("owner");
+    await saveRoleAccess({ ok: false }, grid([{ role: "User", permission: "Records.SeeAll", allowed: false }]));
+    await reload();
+    expect(customerFilter(arun, {}).where).toMatchObject({ ownerId: "someone-else" });
+    expect(receiptFilter(arun, {}).receiptWhere).toMatchObject({ createdById: "someone-else" });
+    expect(expenseFilter(arun, {}).where).toMatchObject({ createdById: "someone-else" });
+    expect(canWorkOn(arun, users.owner.id)).toBe(false);
+    await resetRoleAccess();
+    await reload();
+    expect(seesAllRecords("User")).toBe(true);
   });
 });
 

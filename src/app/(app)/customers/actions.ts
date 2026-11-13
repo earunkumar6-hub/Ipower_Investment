@@ -9,7 +9,7 @@ import { EncryptionKeyMissing, encryptJson } from "@/lib/crypto";
 import { addMonths, fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { AADHAAR_RE, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { mobilesText, readMobiles } from "@/lib/mobiles";
 import { nextNumber } from "@/lib/numbering";
 import { deleteStoredFile } from "@/lib/attachments";
@@ -41,7 +41,7 @@ export async function closePolicy(_: ActionResult, form: FormData): Promise<Acti
 
   const policy = await db.policy.findFirst({ where: { id: v.policyId, tenantId: user.tenantId }, include: { product: true, customer: { select: { id: true, name: true } } } });
   if (!policy) return fail("This policy no longer exists");
-  if (!canActOn(user, policy.ownerId)) return fail("This policy belongs to another user's customer");
+  if (!canWorkOn(user, policy.ownerId)) return fail("This policy belongs to another user's customer");
   if (policy.status !== "Active") return fail(`This policy is already ${policy.status === "PrematureClosed" ? "closed early" : policy.status.toLowerCase()}`);
   const isMf = policy.productType === "MutualFund";
   if (isMf && v.kind === "close") return fail("Mutual funds are withdrawn, not closed early – enter the withdraw date");
@@ -111,7 +111,7 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
 
   const customer = await db.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId } });
   if (!customer) return fail("Customer not found");
-  if (!canActOn(user, customer.ownerId)) return fail("This customer belongs to another user");
+  if (!canWorkOn(user, customer.ownerId)) return fail("This customer belongs to another user");
   const product = await db.product.findFirst({
     where: { id: v.productId, tenantId: user.tenantId, active: true },
     include: { schemes: { where: { active: true }, include: { rates: true } }, customFields: { orderBy: { sort: "asc" } } },
@@ -247,7 +247,7 @@ export async function editCustomer(_: ActionResult, form: FormData): Promise<Act
   if ("error" in m) return fail(m.error, { mobile: m.error });
   const c = await db.customer.findFirst({ where: { id: v.customerId, tenantId: user.tenantId }, include: { mobiles: { orderBy: { sort: "asc" } } } });
   if (!c) return fail("Customer not found");
-  if (!canActOn(user, c.ownerId)) return fail("This customer belongs to another user");
+  if (!canWorkOn(user, c.ownerId)) return fail("This customer belongs to another user");
 
   await db.$transaction(async (tx) => {
     await tx.customer.update({ where: { id: c.id }, data: { name: v.name, email: v.email || null, address: v.address || null, mobile: m.numbers[0].number } });
@@ -272,7 +272,7 @@ export async function changeCustomerPhoto(_: ActionResult, form: FormData): Prom
   if (problem) return fail(problem, { photo: problem });
   const c = await db.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } });
   if (!c) return fail("Customer not found");
-  if (!canActOn(user, c.ownerId)) return fail("This customer belongs to another user");
+  if (!canWorkOn(user, c.ownerId)) return fail("This customer belongs to another user");
   const name = await savePhoto(photo!, c.id, c.photoPath);
   await db.$transaction(async (tx) => {
     await tx.customer.update({ where: { id: c.id }, data: { photoPath: name } });
@@ -305,7 +305,7 @@ export async function saveCustomerIdentity(_: ActionResult, form: FormData): Pro
     const res = await db.$transaction(async (tx): Promise<ActionResult> => {
       const c = await tx.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId } });
       if (!c) return { ok: false, error: "Customer not found" };
-      if (!canActOn(user, c.ownerId)) return { ok: false, error: "This customer belongs to another user" };
+      if (!canWorkOn(user, c.ownerId)) return { ok: false, error: "This customer belongs to another user" };
       const consentNow = !c.consentAt && parsed.data.consent === "on";
       if (!c.consentAt && !consentNow) return { ok: false, error: "Tick “Customer consent taken” first", fieldErrors: { consent: "Required" } };
       const consent = consentNow ? { consentAt: new Date(), consentById: user.id } : {};
@@ -348,7 +348,7 @@ export async function deleteCustomer(customerId: string, confirmText: string): P
   const res = await db.$transaction(async (tx) => {
     const c = await tx.customer.findFirst({ where: { id: customerId, tenantId: user.tenantId }, include: { _count: { select: CUSTOMER_IN_USE } } });
     if (!c) return { ok: false as const, error: "Customer not found" };
-    if (!canActOn(user, c.ownerId)) return { ok: false as const, error: "This customer belongs to another user" };
+    if (!canWorkOn(user, c.ownerId)) return { ok: false as const, error: "This customer belongs to another user" };
     const reason = inUseReason(c._count);
     if (reason) return { ok: false as const, error: reason };
     const where = { tenantId: user.tenantId, ownerType: "Customer" as const, ownerId: c.id };

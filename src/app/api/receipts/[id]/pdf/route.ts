@@ -1,10 +1,10 @@
 import { fmtDate, fmtTime, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { denominationText, modeText } from "@/lib/payment-options";
 import { esc, htmlToPdf, PDF_STYLE, pdfHeader } from "@/lib/pdf";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session";
 
 // Customer copy: never shows commission.
@@ -13,7 +13,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!user || !hasPermission(user.role, "Receipt.View")) return new Response("Not allowed", { status: 403 });
   const { id } = await params;
   const r = await db.receipt.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: true, policy: true, renewalItems: { select: { billNo: true } } } });
-  if (!r || !(seesAll(user.role) || r.createdById === user.id || canActOn(user, r.customer.ownerId))) {
+  if (!r || !(seesAllRecords(user.role) || r.createdById === user.id || canWorkOn(user, r.customer.ownerId))) {
     return new Response("Not found", { status: 404 });
   }
   // A bill paid inside one receipt for several bills: the customer's copy is that one receipt (#45).

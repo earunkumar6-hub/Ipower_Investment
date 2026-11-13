@@ -1,6 +1,7 @@
 // Phase 1 (Oct 2026 change round 2): Settings → Products and schemes, premature closure / MF withdrawal,
 // Other income in the Day Book and P&L, and the change log behind all of them.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { addMonths, isoDate, istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/session";
@@ -149,7 +150,9 @@ describe("Premature closure and withdrawal", () => {
     const other = owner.id === users.arun.id ? users.divya : users.arun;
 
     as(other);
+    setAccessOverrides({ User: { "Records.SeeAll": false } }); // #10: only when 'work on every customer' is off
     expect((await closePolicy({ ok: false }, form({ policyId: policy.id, kind: "close", closedOn: isoDate(today), reason: "Customer request" }))).error).toMatch(/another user/);
+    setAccessOverrides({});
     as(owner);
     expect((await closePolicy({ ok: false }, form({ policyId: policy.id, kind: "close", closedOn: isoDate(today), reason: "" }))).error).toMatch(/reason/);
     expect((await closePolicy({ ok: false }, form({ policyId: policy.id, kind: "withdraw", closedOn: isoDate(today) }))).error).toMatch(/Only mutual funds/);

@@ -5,6 +5,7 @@ import { istToday, isoDate } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { payableDues } from "@/lib/dues";
 import { receiptFilter } from "@/lib/lists";
+import { setAccessOverrides } from "@/lib/permissions";
 import { billEnd } from "@/lib/policies";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
@@ -164,9 +165,14 @@ describe("Combined receipt (#5)", () => {
     expect((await createGroupReceipt({ ok: false }, await receipt("Combined", { "RD 3109-263": open + 1 }))).error).toMatch(/open bill/);
   });
 
-  it("a User can't tick another user's customer's bill; an unknown policy is refused", async () => {
+  it("with 'work on every customer' switched off a User can't tick another user's customer's bill; an unknown policy is refused", async () => {
     as("arun");
-    expect((await createGroupReceipt({ ok: false }, await receipt("Combined", { "RD 3109-263": 1, "POL-480137": 1 }))).error).toMatch(/another user's customer/);
+    setAccessOverrides({ User: { "Records.SeeAll": false } });
+    try {
+      expect((await createGroupReceipt({ ok: false }, await receipt("Combined", { "RD 3109-263": 1, "POL-480137": 1 }))).error).toMatch(/another user's customer/);
+    } finally {
+      setAccessOverrides({});
+    }
     const fake = form({ ...Object.fromEntries(await receipt("Combined", { "RD 3109-263": 1 })), dues: JSON.stringify([{ policyId: "not-a-policy", count: 1 }]) } as Record<string, string>);
     expect((await createGroupReceipt({ ok: false }, fake)).ok).toBe(false);
   });
@@ -184,7 +190,11 @@ describe("Combined receipt (#5)", () => {
     expect(await prisma.payment.count({ where: { id: p.id, ...f.paymentWhere("BillGroup") } })).toBe(0);
     const all = receiptFilter(users.arun, {});
     expect(await prisma.receipt.count({ where: { AND: [all.receiptWhere, { paymentId: p.id }] } })).toBe(0);
+    // Every role sees every receipt by default (#10); not once 'work on every customer' is switched off for Users.
+    expect(await prisma.payment.count({ where: { id: p.id, ...receiptFilter(users.divya, {}).paymentWhere("Combined") } })).toBe(1);
+    setAccessOverrides({ User: { "Records.SeeAll": false } });
     expect(await prisma.payment.count({ where: { id: p.id, ...receiptFilter(users.divya, {}).paymentWhere("Combined") } })).toBe(0);
+    setAccessOverrides({});
 
     as("admin");
     expect(await cancelPayment({ ok: false }, form({ paymentId: p.id, reason: "Vitest undo" }))).toEqual({ ok: true });
@@ -214,9 +224,14 @@ describe("Instalments by date (#23): advance bills", () => {
     expect(await prisma.renewalItem.count({ where: { policyId: p.id } })).toBe(p.renewals.length + raised.length);
   });
 
-  it("a User can't raise bills on another user's customer", async () => {
+  it("with 'work on every customer' switched off a User can't raise bills on another user's customer", async () => {
     as("divya");
     const { p } = await payable("RD 3115-305");
-    expect((await generateAdvanceBills({ ok: false }, form({ customerId: p.customerId, to: isoDate(today) }))).error).toMatch(/another user's customer/);
+    setAccessOverrides({ User: { "Records.SeeAll": false } });
+    try {
+      expect((await generateAdvanceBills({ ok: false }, form({ customerId: p.customerId, to: isoDate(today) }))).error).toMatch(/another user's customer/);
+    } finally {
+      setAccessOverrides({});
+    }
   });
 });

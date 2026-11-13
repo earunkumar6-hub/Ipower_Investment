@@ -1,6 +1,7 @@
 // Change set phase 4a – receipts: "Received into" bank account, the customer's receipt number on paid bills,
 // and the Receipts filters. Runs against the seeded database; every row it creates is removed afterwards.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { setAccessOverrides } from "@/lib/permissions";
 import { loadCustomer360 } from "@/lib/customer-360";
 import { istToday } from "@/lib/dates";
 import { prisma } from "@/lib/db";
@@ -178,10 +179,15 @@ describe("Receipts filters (#22)", () => {
     expect(receiptFilter(admin, { rd: "Collected" }).active).toBe(true);
   });
 
-  it("a User only ever sees receipts they entered, whatever the filters", async () => {
-    const mine = await find(users.arun, {});
-    expect(mine.every((r) => r.createdById === users.arun.id)).toBe(true);
-    expect(await find(users.arun, { account: second })).toHaveLength(0);
+  it("with 'work on every customer' switched off a User only sees receipts they entered, whatever the filters (#10)", async () => {
+    setAccessOverrides({ User: { "Records.SeeAll": false } });
+    try {
+      const mine = await find(users.arun, {});
+      expect(mine.every((r) => r.createdById === users.arun.id)).toBe(true);
+      expect(await find(users.arun, { account: second })).toHaveLength(0);
+    } finally {
+      setAccessOverrides({});
+    }
   });
 
   it("owner-paid slips take the customer / product / policy filters", async () => {

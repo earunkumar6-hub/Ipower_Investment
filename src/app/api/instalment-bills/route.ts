@@ -1,6 +1,6 @@
 import { fmtDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { canActOn } from "@/lib/leads";
+import { canWorkOn } from "@/lib/leads";
 import { fmtINR, sum, ZERO } from "@/lib/money";
 import { esc, htmlToPdf, PDF_STYLE, pdfHeader } from "@/lib/pdf";
 import { hasPermission } from "@/lib/permissions";
@@ -41,7 +41,7 @@ export async function GET(req: Request) {
     include: { policy: { include: { customer: { select: { name: true, ownerId: true } } } } },
     orderBy: [{ policy: { customer: { name: "asc" } } }, { dueDate: "asc" }],
   });
-  if (items.some((i) => !canActOn(user, i.policy.customer.ownerId))) return new Response("Some bills belong to another user's customers", { status: 403 });
+  if (items.some((i) => !canWorkOn(user, i.policy.customer.ownerId))) return new Response("Some bills belong to another user's customers", { status: 403 });
 
   const total = items.length ? sum(items.map((i) => i.premiumAmount)) : ZERO;
   const rows = items.map((i) => `<tr>

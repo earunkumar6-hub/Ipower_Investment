@@ -10,7 +10,7 @@ import { nameLookup } from "@/lib/deposit-status";
 import { userNames } from "@/lib/leads";
 import { fmtINR } from "@/lib/money";
 import { denominationText, modeText } from "@/lib/payment-options";
-import { hasPermission, seesAll } from "@/lib/permissions";
+import { hasPermission, seesAllRecords } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { ShareButton } from "../../receipts/share-button";
 import { CancelDirectBillForm } from "./cancel-form";
@@ -19,7 +19,7 @@ export default async function DirectBillPage({ params }: { params: Promise<{ id:
   const user = await requirePermission("Receipt.View");
   const { id } = await params;
   const b = await db.directBill.findFirst({ where: { id, tenantId: user.tenantId }, include: { customer: { select: { id: true, name: true } } } });
-  if (!b || !(seesAll(user.role) || b.createdById === user.id)) notFound();
+  if (!b || !(seesAllRecords(user.role) || b.createdById === user.id)) notFound();
   const [account, users] = await Promise.all([
     db.account.findUnique({ where: { id: b.accountId }, select: { type: true, name: true, bankName: true, last4: true } }),
     userNames(user.tenantId),

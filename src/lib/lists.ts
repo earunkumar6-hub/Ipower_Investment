@@ -4,8 +4,8 @@ import { addDays, fmtDate } from "@/lib/dates";
 import { DEPOSIT_WHERE } from "@/lib/deposit-status";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
 import { MODE_LABEL } from "@/lib/payment-modes";
-import { ownerScope } from "@/lib/leads";
-import { seesAll } from "@/lib/permissions";
+import { ownerScope, recordScope } from "@/lib/leads";
+import { seesAllRecords } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 
 // Search-param parsing, query filters and labels shared by each list screen and its Excel
@@ -80,7 +80,7 @@ export function customerFilter(user: SessionUser, sp: Params) {
   const filtered = Object.keys(holdingWhere).length > 0;
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
-    ...ownerScope(user),
+    ...recordScope(user),
     ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }] }),
     ...(filtered && { policies: { some: holdingWhere } }),
   };
@@ -167,7 +167,7 @@ export function renewalFilter(user: SessionUser, sp: Params, today: Date) {
   const range = renewalRange(tab, sp, today);
   const paidTo = tab === "paid" ? (PAID_TO.find(([k]) => k === sp.paidto)?.[0] ?? "all") : "all";
   const policyWhere: Prisma.PolicyWhereInput = {
-    ...ownerScope(user),
+    ...recordScope(user),
     ...(product === "insurance" && { productType: "Insurance" }),
     ...(product === "mf" && { productType: "MutualFund" }),
     ...(product === "po" && { productType: poScheme ?? { in: [...PO_SCHEMES] } }),
@@ -215,7 +215,7 @@ export function expenseFilter(user: SessionUser, sp: Params) {
   const tab = EXPENSE_TABS.find(([k]) => k === sp.tab)?.[0] ?? "all";
   const where: Prisma.ExpenseWhereInput = {
     tenantId: user.tenantId,
-    ...(seesAll(user.role) ? {} : { createdById: user.id }),
+    ...(seesAllRecords(user.role) ? {} : { createdById: user.id }),
     ...(tab === "approve" && { status: "Waiting" as const }),
     ...(tab === "repay" && { repaymentStatus: "ToBeRepaid" as const, status: { in: ["Saved" as const, "Approved" as const] } }),
   };
@@ -270,7 +270,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
 
   const receiptWhere: Prisma.ReceiptWhereInput = {
     tenantId: user.tenantId,
-    ...(!seesAll(user.role) && { createdById: user.id }),
+    ...(!seesAllRecords(user.role) && { createdById: user.id }),
     ...(byCustomer && { customer }),
     ...(byPolicy && { policy }),
     ...(mode && { mode }),
@@ -283,7 +283,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
   };
   const slipWhere: Prisma.OwnerPaidSlipWhereInput = {
     tenantId: user.tenantId,
-    policy: { ...ownerScope(user), ...policy },
+    policy: { ...recordScope(user), ...policy },
     ...(byCustomer && { customer }),
     ...(status === "Cancelled" ? { status: "Cancelled" } : status === "Saved" ? { status: { not: "Cancelled" } } : {}),
     ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: addDays(to, 1) }) } }),
@@ -299,7 +299,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
   };
   const paymentWhere = (kind: "Combined" | "BillGroup"): Prisma.PaymentWhereInput => ({
     tenantId: user.tenantId, kind,
-    ...(!seesAll(user.role) && { createdById: user.id }),
+    ...(!seesAllRecords(user.role) && { createdById: user.id }),
     ...(mode && { mode }),
     ...(status && { status }),
     ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
