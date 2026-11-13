@@ -36,7 +36,7 @@ A web application: staff open it in a browser, the server and the database run o
 | Language | **TypeScript 5** | Catches mistakes before the app runs |
 | Database | **PostgreSQL 16** (in Docker) | Stores all customers, money and the change log |
 | Database access | **Prisma 6.19** | Tables, migrations, safe queries |
-| Sign-in | **better-auth** (username + password) | Logins; sessions end after 1 hour without activity |
+| Sign-in | **better-auth** (username + password) | Logins; sessions|
 | Permissions | **CASL**, plus a Roles screen | What each role (Super Admin, Admin, User) may see and do |
 | Screens and look | **Tailwind CSS 4**, **Base UI**, shadcn-style components, **lucide** icons, **sonner** pop-ups | Layout and controls; colours follow the IPower logo |
 | Tables and charts | **TanStack Table 8**, **Recharts** | Lists and the dashboard charts |
