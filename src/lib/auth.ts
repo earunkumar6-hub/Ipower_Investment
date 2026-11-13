@@ -15,9 +15,9 @@ export const auth = betterAuth({
       tenantId: { type: "string", input: false },
     },
   },
-  // Signed out after 10 minutes without activity (every role). A login is renewed at most once a minute,
-  // by SessionKeepAlive (clicks, typing, page changes) and by saves; plain page loads can't renew the cookie.
-  session: { expiresIn: 600, updateAge: 60 },
+  // Signed out after 1 hour without activity (every role; was 10 minutes until 13 Nov 2026, owner). A login is renewed
+  // at most once a minute, by SessionKeepAlive (clicks, typing, page changes) and by saves; plain page loads can't renew the cookie.
+  session: { expiresIn: 60 * 60, updateAge: 60 },
   // HTTP on localhost/LAN until HTTPS is set up (see fl_crm_demo.json → lan_later)
   advanced: { useSecureCookies: false },
   // Same-origin requests are trusted whichever address the app is opened on (localhost or the LAN IP),
