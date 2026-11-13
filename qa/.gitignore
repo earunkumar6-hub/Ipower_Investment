@@ -1,0 +1,10 @@
+# Run outputs (rebuilt by every run)
+report/html/
+report/artifacts/
+report/.resets/
+report/results.json
+report/run.log
+report/vitest-results.json
+report/vitest-summary.json
+report/results-rerun*.json
+report/artifacts-rerun*/

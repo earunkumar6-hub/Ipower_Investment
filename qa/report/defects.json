@@ -1,0 +1,156 @@
+[
+ {
+  "id": "D-01",
+  "module": "RCPT",
+  "severity": "Critical",
+  "requirement": "CL-44",
+  "title": "Two staff can take a receipt for the same bill at the same time – the bill is collected twice",
+  "steps": "1. Arun (PC 1) and Divya (PC 2) open Receipts → New receipt for Indira G.\n2. Both tick the same due bill (SBI MF Flexi Cap SIP · FOLIO-2202733, Nov 2026), Cash, notes = ₹2,000.\n3. Both press Save receipt at the same moment.",
+  "expected": "Only one receipt is saved; the second gets 'this bill is already paid' and nothing is recorded.",
+  "actual": "Two receipts are saved for the same bill (e.g. AA-01 and AA-02, ₹2,000 each, for the Nov 2026 SIP instalment); both post to the Day Book, so the cash is counted twice. Race condition: reproduced in the full run and in 2 of 3 repeated attempts (AA-05 / AA-06 the second time).",
+  "tests": [
+   "CONC-02"
+  ],
+  "status": "Fixed – verified",
+  "fix": "Second receipt for the same bill is refused ('the bill you ticked was just paid by someone else'); CONC-02 passes."
+ },
+ {
+  "id": "D-02",
+  "module": "CUST",
+  "severity": "High",
+  "requirement": "Brief (LAN)",
+  "title": "Editing the same customer on two PCs: the later save silently overwrites the earlier one",
+  "steps": "1. Admin and Arun open the same customer (Hari Prasad) → Edit details.\n2. Admin sets Email = first.save@example.com → Save changes → Yes, save.\n3. Arun (form opened before step 2) changes only Address → Save changes → Yes, save.",
+  "expected": "Arun is warned that the record changed (or only his changed field is saved); Admin's email is kept.",
+  "actual": "Arun's stale form is saved whole: the email Admin just entered is wiped (email = empty), with no warning. Reproduced 3 times once the test waits for the second save (an earlier pass was a test timing gap).",
+  "tests": [
+   "CONC-01"
+  ],
+  "status": "Fixed – verified",
+  "fix": "Stale 'Edit details' save is refused ('This customer was just changed by …'); CONC-01 passes."
+ },
+ {
+  "id": "D-03",
+  "module": "CUST",
+  "severity": "High",
+  "requirement": "Brief (volume)",
+  "title": "Customer list takes ~18 s with 2,000 customers",
+  "steps": "1. Load 2,000 customers / 10,000 policies (qa/specs/volume.spec.ts).\n2. Open Partners / Customers (second load, route already compiled).",
+  "expected": "Page ready in under 3 s.",
+  "actual": "16.4–19.2 s over four runs. The list renders every customer (no paging). Measured on the dev server – confirm on a production build, but the gap is far beyond dev-mode overhead.",
+  "tests": [
+   "PERF-01"
+  ],
+  "status": "Improved – not yet under 3 s on the dev server",
+  "fix": "List pages 50 at a time: 16–19 s → 4.4 s. Re-measure on a production build."
+ },
+ {
+  "id": "D-04",
+  "module": "PERF",
+  "severity": "Medium",
+  "requirement": "Brief (volume)",
+  "title": "Renewals, dashboard and customer search exceed 3 s at volume",
+  "steps": "With 2,000 customers / 10,000 policies: open /renewals (next 30 days), /dashboard, /customers?q=Vol Customer 19 (second load each).",
+  "expected": "Each under 3 s.",
+  "actual": "Renewals 5.4–8.7 s, dashboard 4.3–6.4 s, search 3.4–6.1 s over the runs (dev server). Receipts (0.9–2.3 s) and the customers Excel (1.2–3.3 s) are within or near the target. Re-measure on a production build.",
+  "tests": [
+   "PERF-03",
+   "PERF-05",
+   "PERF-02"
+  ],
+  "status": "Improved – not yet under 3 s on the dev server",
+  "fix": "Renewals 5.4–8.7 s → 3.8 s (paged, counted in SQL); dashboard now passes; customer search still 7 s (text search over 10,000 policies). Needs an index or a production-build measurement."
+ },
+ {
+  "id": "D-05",
+  "module": "INT",
+  "severity": "Medium",
+  "requirement": "Brief (audit)",
+  "title": "Core money and sales actions are not in the change log",
+  "steps": "Run journey J1 (lead → quotation → proposal → issue policy → receipt), then open Settings → Change log or query AuditLog.",
+  "expected": "Each record created (lead, quotation, proposal, policy, receipt) has a change-log entry with who and when.",
+  "actual": "No AuditLog rows for any of them. receipts/actions.ts and expenses/actions.ts make no audit() calls; creating a lead and issuing a policy are not logged either (only settings, tickets, consent etc. are).",
+  "tests": [
+   "INT-03"
+  ],
+  "screenshot": "n/a – database check (SQL in qa/support/integrity.ts)",
+  "status": "Fixed – verified",
+  "fix": "Leads, quotations, proposals, policies, receipts/payments and expenses are logged; INT-03 passes."
+ },
+ {
+  "id": "D-06",
+  "module": "INT",
+  "severity": "Low",
+  "requirement": "Brief (integrity)",
+  "title": "User references are not foreign keys in the database",
+  "steps": "Query information_schema for FK constraints on Customer.ownerId, Lead.ownerId, Policy.ownerId, Receipt.createdById, Ticket.raisedById, AuditLog.userId, Expense.createdById.",
+  "expected": "Each references User with a foreign key (or is documented as intentionally soft).",
+  "actual": "None of them has an FK; only the app keeps them consistent (no orphans found today – INT-01 passes).",
+  "tests": [
+   "INT-06"
+  ],
+  "screenshot": "n/a – database check (SQL in qa/support/integrity.ts)",
+  "status": "Fixed – verified",
+  "fix": "Foreign keys to User added (migration 20261113150000_user_foreign_keys), applied to the dev database; INT-06 passes."
+ },
+ {
+  "id": "D-07",
+  "module": "VAL",
+  "severity": "Low",
+  "requirement": "CL-03",
+  "title": "An Aadhaar number starting with 0 or 1 is accepted",
+  "steps": "Customer → Add Aadhaar / PAN → tick consent → Aadhaar 012345678901 → Save.",
+  "expected": "Refused – UIDAI numbers never start with 0 or 1 (and carry a Verhoeff check digit).",
+  "actual": "Saved (only '12 digits' is checked).",
+  "tests": [
+   "VAL-04"
+  ],
+  "status": "Fixed – verified",
+  "fix": "Aadhaar must start with 2–9; VAL-04 passes."
+ },
+ {
+  "id": "D-08",
+  "module": "REN",
+  "severity": "Low",
+  "requirement": "CL-19",
+  "title": "Renewals View dropdown has no 'Custom dates' option",
+  "steps": "Renewals → open View.",
+  "expected": "Today, This week, This month, Next 30 days, Next 3 months, Last month, Custom dates (spec #19).",
+  "actual": "'Custom dates' is missing (From / To boxes are always shown instead) and there is an extra 'Default' option.",
+  "tests": [
+   "REN-01"
+  ],
+  "status": "Fixed – verified",
+  "fix": "'Custom dates' added to the View dropdown; REN-01 passes."
+ },
+ {
+  "id": "D-09",
+  "module": "A11Y",
+  "severity": "Low",
+  "requirement": "—",
+  "title": "Form fields without labels; duplicate element ids in the New lead dialog",
+  "steps": "Inspect Raise ticket, Add expense and the New lead dialog with a screen reader / accessibility tree.",
+  "expected": "Every field has an accessible name.",
+  "actual": "Raise ticket: title, screen, type, priority, details unlabeled. Add expense: description, amount, vendor, bill no., paid by, mode, from account, notes unlabeled. New lead: 'Business type' and 'Lead status' reuse the page filters' ids, so their labels point at the filters.",
+  "tests": [
+   "A11Y-01"
+  ],
+  "status": "Fixed – verified",
+  "fix": "Labels tied to fields; New lead filter ids renamed; A11Y-01 passes."
+ },
+ {
+  "id": "D-10",
+  "module": "EXP",
+  "severity": "Low",
+  "requirement": "CL-42",
+  "title": "Expenses help text still says the bill number is required",
+  "steps": "Open Expenses → read the note under Add expense.",
+  "expected": "Text says the bill number is optional (unique per vendor when entered) – spec #42.",
+  "actual": "'Bill number is required and unique per vendor' (saving without it works).",
+  "tests": [
+   "EXP-05"
+  ],
+  "status": "Fixed – verified",
+  "fix": "Help text now says the bill number is optional; EXP-05 passes."
+ }
+]

@@ -16,7 +16,9 @@
     "test": "vitest run",
     "demo:up": "docker compose up -d --build",
     "demo:reseed": "docker compose exec app pnpm db:seed",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "qa": "playwright test -c qa/playwright.config.ts",
+    "qa:report": "python qa/report/build_report.py"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
