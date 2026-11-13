@@ -75,6 +75,7 @@ CASES = [
     # ── REN ─────────────────────────────────────────────────────────────────────────────────────────────────
     ("REN-01", "REN", "CL-19", H, "P2", "View dropdown options", "Open Renewals → View", "Today, This week, This month, Next 30 days, Next 3 months, Last month, Custom dates", A, "renewals"),
     ("REN-02", "REN", "CL-19", B, "P2", "Custom date range", "From/To one day", "Only bills due that day", A, "renewals"),
+    ("REN-03", "REN", "CL-19", H, "P2", "Custom dates shows From / To and stays selected", "Pick Custom dates; fill dates; Show renewals; then pick This month", "From / To boxes appear only for Custom dates; the dropdown does not snap back; no duplicate option", A, "renewals"),
     ("REN-05", "REN", "CL-20", H, "P1", "Maturity tab separate", "Open Maturity tab", "Maturity rows only; none of them on Due", A, "renewals"),
     ("REN-10", "REN", "CL-24", H, "P1", "Send reminder is logged", "Send reminder on a Due row", "Reminders sent +1; MessageLog row 'Sent (mock)'", A, "renewals"),
     ("REN-11", "REN", "CL-24", H, "P2", "Reminder history", "Click the reminders count", "History lists date, channel, who", A, "renewals"),
@@ -144,7 +145,9 @@ CASES = [
     ("J2", "JRN", "Brief", J, "P1", "Ticket raised → admin updates → user sees", "See journeys/j2", "Status and comment visible to raiser", A, "journeys"),
     ("J3", "JRN", "Brief", J, "P2", "Customer → scheme advisor → suggestion saved", "—", "No scheme advisor (Q14)", BL, "journeys"),
     ("ADV-01", "ADV", "Brief", BL, "P2", "Scheme advisor rule table", "—", "Not in the app (Q14)", BL, "journeys"),
-    ("CONC-01", "CONC", "Brief", C, "P1", "Two users edit the same customer", "Admin and Arun open Edit; both save different values", "Second save is refused or warned – no silent overwrite", A, "concurrency"),
+    ("CONC-01", "CONC", "Brief", C, "P1", "Two users edit the same customer", "Admin opens Edit details; Arun opens the same customer; Admin saves; Arun reopens and saves", "Arun is told Admin is editing and cannot save; after Admin saves, Arun's later save keeps Admin's change", A, "concurrency"),
+    ("CONC-05", "CONC", "Brief", C, "P2", "Leaving the page frees the editing ticket", "Open Edit details, then go to another page without Cancel or Save", "The ticket is released at once (not after 5 minutes)", A, "concurrency"),
+    ("CONC-04", "CONC", "Brief", C, "P1", "Expired editing ticket + stale form", "Arun opens Edit; ticket expires; Admin opens and saves; Arun saves his old form", "Arun's save is refused ('was just changed by'); Admin's change kept", A, "concurrency"),
     ("CONC-02", "CONC", "CL-44", C, "P1", "Two receipts for the same bill at once", "Two users submit receipt for the same due", "Exactly one succeeds; bill paid once", A, "concurrency"),
     ("CONC-03", "CONC", "CL-36, CL-44", C, "P1", "Numbers unique under parallel saves", "4 leads created in parallel", "All RR numbers distinct", A, "concurrency"),
     ("PERF-01", "PERF", "Brief", P, "P1", "Customers list with 2,000 customers", "Volume seed; open /customers", "< 3 s", A, "volume"),

@@ -55,6 +55,9 @@ test.describe("Edit details", () => {
     await cp.goto(c.id, c.name);
     const d = await cp.openEdit();
     await expect(d.getByRole("button", { name: "Save changes" })).toHaveCount(1);
+    await d.getByRole("button", { name: "Cancel" }).click(); // gives the editing ticket back, even if it arrives a moment late
+    await expect(d).toBeHidden();
+    await expect.poll(() => db.customerEditLock.count({ where: { customerId: c.id } })).toBe(0);
   });
 
   test("[CUST-05] edit email and address; the change log keeps old and new values", async ({ page, loginAs, db }) => {
@@ -85,6 +88,7 @@ test.describe("Edit details", () => {
     await cp.confirmSave();
     await expect(d.getByText(/10-digit/).first()).toBeVisible();
     expect((await db.customer.findUniqueOrThrow({ where: { id: c.id } })).mobile).toBe(c.mobile);
+    await d.getByRole("button", { name: "Cancel" }).click(); // gives the editing ticket back
   });
 });
 
@@ -130,10 +134,10 @@ test.describe("Aadhaar / PAN (#3, #8)", () => {
     await loginAs("admin");
     const cp = new CustomerPage(page);
     await cp.goto(a.id, a.name);
-    await cp.saveIdentity({ aadhaar: "234567890123" });
-    await expect.poll(async () => (await db.customer.findUniqueOrThrow({ where: { id: a.id } })).aadhaarLast4).toBe("0123");
+    await cp.saveIdentity({ aadhaar: "234567890124" });
+    await expect.poll(async () => (await db.customer.findUniqueOrThrow({ where: { id: a.id } })).aadhaarLast4).toBe("0124");
     await cp.goto(b.id, b.name);
-    await cp.saveIdentity({ aadhaar: "234567890123" });
+    await cp.saveIdentity({ aadhaar: "234567890124" });
     await expect(cp.duplicateDialog()).toBeVisible();
     expect((await db.customer.findUniqueOrThrow({ where: { id: b.id } })).aadhaarHash).toBeNull();
   });
@@ -148,22 +152,28 @@ test.describe("Aadhaar / PAN (#3, #8)", () => {
     expect((await db.customer.findUniqueOrThrow({ where: { id: c.id } })).panHash).toBeNull();
   });
 
-  test("[VAL-04] Aadhaar must be 12 digits and cannot start with 0 or 1", async ({ page, loginAs, db }) => {
+  test("[VAL-04] Aadhaar: 12 digits, not starting with 0 or 1, correct check digit (D-07)", async ({ page, loginAs, db }) => {
     const c = await db.customer.findFirstOrThrow({ where: { name: "Naveen K" } });
     await loginAs("admin");
     const cp = new CustomerPage(page);
-    await cp.goto(c.id, c.name);
-    const d = await cp.saveIdentity({ aadhaar: "23456789012" }); // 11 digits
-    await expect(d.getByText(/12 digits|aadhaar/i).filter({ hasNotText: "Optional" }).first()).toBeVisible();
-    await page.waitForLoadState("networkidle");
-    expect((await db.customer.findUniqueOrThrow({ where: { id: c.id } })).aadhaarHash).toBeNull();
-    // UIDAI numbers never start with 0 or 1 – such a number should be refused.
-    await cp.goto(c.id, c.name);
-    // Wait for the save (server action POST) to finish before reading the database.
-    const saved = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/customers/${c.id}`));
-    await cp.saveIdentity({ aadhaar: "012345678901" });
-    await saved;
-    expect((await db.customer.findUniqueOrThrow({ where: { id: c.id } })).aadhaarHash, "Aadhaar starting with 0 was accepted").toBeNull();
+    // Each try waits for its own save request to finish before the database is read.
+    const tryAadhaar = async (aadhaar: string) => {
+      await cp.goto(c.id, c.name);
+      const answered = page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/customers/${c.id}`));
+      const d = await cp.saveIdentity({ aadhaar });
+      await answered;
+      return d;
+    };
+    const stored = async () => (await db.customer.findUniqueOrThrow({ where: { id: c.id } })).aadhaarHash;
+    const d = await tryAadhaar("23456789012"); // 11 digits
+    await expect(d.getByText(/not valid/i).first()).toBeVisible();
+    expect(await stored(), "11 digits accepted").toBeNull();
+    await tryAadhaar("012345678901"); // starts with 0
+    expect(await stored(), "Aadhaar starting with 0 was accepted").toBeNull();
+    await tryAadhaar("345678901239"); // right length and first digit, wrong check digit
+    expect(await stored(), "Aadhaar with a wrong check digit was accepted").toBeNull();
+    await tryAadhaar("345678901238"); // valid
+    await expect.poll(stored).not.toBeNull();
   });
 });
 

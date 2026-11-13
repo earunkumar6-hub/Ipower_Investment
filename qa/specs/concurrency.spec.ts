@@ -7,29 +7,73 @@ import { expect, stamp, test } from "../support/fixtures";
 // LAN simulation: several signed-in browsers (staff PCs) acting on the same records at the same time.
 test.beforeAll(async () => resetDb());
 
-test("[CONC-01] two users editing the same customer: the second save must not silently overwrite the first", async ({ page, loginAs, otherUser, db, shell }) => {
+test("[CONC-01] two users editing the same customer: the second is told who is editing and cannot save; nothing is overwritten", async ({ page, loginAs, otherUser, db, shell }) => {
   const c = await db.customer.findFirstOrThrow({ where: { name: "Hari Prasad" } });
   await loginAs("admin");
   const arun = await otherUser("arun");
   const a = new CustomerPage(page), b = new CustomerPage(arun);
   await a.goto(c.id, c.name);
   await b.goto(c.id, c.name);
-  const da = await a.openEdit(), db2 = await b.openEdit(); // both read the same version
+  const da = await a.openEdit(); // Admin takes the "editing" ticket
+  const db2 = await b.openEdit(); // Arun opens while Admin is editing
+  await expect(db2.getByRole("alert")).toContainText(/R\. Murali is editing this customer/);
+  await expect(db2.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  await expect(db2.getByLabel("Address")).toBeDisabled();
+  await expect(db2.getByRole("button", { name: "Take over editing" })).toHaveCount(0); // a User cannot take over
+
   await da.getByLabel("Email").fill("first.save@example.com");
   await da.getByRole("button", { name: "Save changes" }).click();
   await shell.confirmSave();
   await expect.poll(async () => (await db.customer.findUniqueOrThrow({ where: { id: c.id } })).email).toBe("first.save@example.com");
 
-  await db2.getByLabel("Address").fill("Second save, stale form");
-  await db2.getByRole("button", { name: "Save changes" }).click();
-  const secondSave = arun.waitForResponse((r) => r.request().method() === "POST" && r.url().includes(`/customers/${c.id}`));
+  // Arun reopens: now free, sees Admin's email, and his own change keeps it.
+  await arun.keyboard.press("Escape");
+  const db3 = await b.openEdit();
+  await expect(db3.getByRole("alert")).toHaveCount(0);
+  await expect(db3.getByLabel("Email")).toHaveValue("first.save@example.com");
+  await db3.getByLabel("Address").fill("Second save, fresh form");
+  await db3.getByRole("button", { name: "Save changes" }).click();
   await new CustomerPage(arun).confirmSave();
-  await secondSave; // the stale form really was submitted
+  await expect.poll(async () => (await db.customer.findUniqueOrThrow({ where: { id: c.id } })).address).toBe("Second save, fresh form");
   const after = await db.customer.findUniqueOrThrow({ where: { id: c.id } });
-  test.info().annotations.push({ type: "result", description: `email=${after.email ?? "∅"} address=${after.address ?? "∅"}` });
-  const warned = await arun.getByText(/changed by|someone else|reload|out of date|was updated/i).count();
-  // Pass only if the stale save was refused / warned, or it kept the first user's email.
-  expect(warned > 0 || after.email === "first.save@example.com", `stale form overwrote email with "${after.email}"`).toBe(true);
+  expect(after.email, "first user's email must survive").toBe("first.save@example.com");
+});
+
+test("[CONC-04] an expired ticket: a stale form is still refused by the version check, nothing is lost", async ({ page, loginAs, otherUser, db, shell }) => {
+  const c = await db.customer.findFirstOrThrow({ where: { name: "Kavitha S" } });
+  await loginAs("admin");
+  const arun = await otherUser("arun");
+  const a = new CustomerPage(page), b = new CustomerPage(arun);
+  await a.goto(c.id, c.name);
+  await b.goto(c.id, c.name);
+  const db2 = await b.openEdit(); // Arun takes the ticket and keeps his form open …
+  await expect.poll(() => db.customerEditLock.count({ where: { customerId: c.id } })).toBe(1);
+  await db.customerEditLock.update({ where: { customerId: c.id }, data: { expiresAt: new Date(Date.now() - 1000) } }); // … until it runs out
+  const da = await a.openEdit(); // Admin can now take it
+  await expect(da.getByRole("alert")).toHaveCount(0);
+  await da.getByLabel("Email").fill("admin.wins@example.com");
+  await da.getByRole("button", { name: "Save changes" }).click();
+  await shell.confirmSave();
+  await expect.poll(async () => (await db.customer.findUniqueOrThrow({ where: { id: c.id } })).email).toBe("admin.wins@example.com");
+
+  await db2.getByLabel("Address").fill("Stale form address");
+  await db2.getByRole("button", { name: "Save changes" }).click();
+  await new CustomerPage(arun).confirmSave();
+  await expect(db2.getByText(/was just changed by/)).toBeVisible();
+  const after = await db.customer.findUniqueOrThrow({ where: { id: c.id } });
+  expect(after.email).toBe("admin.wins@example.com");
+  expect(after.address).not.toBe("Stale form address");
+});
+
+test("[CONC-05] leaving the page with Edit details open gives the editing ticket back at once", async ({ page, loginAs, db }) => {
+  const c = await db.customer.findFirstOrThrow({ where: { name: "Logesh P" } });
+  await loginAs("arun");
+  const cp = new CustomerPage(page);
+  await cp.goto(c.id, c.name);
+  await cp.openEdit();
+  await expect.poll(() => db.customerEditLock.count({ where: { customerId: c.id } })).toBe(1);
+  await page.goto("/dashboard"); // leave without Cancel or Save
+  await expect.poll(() => db.customerEditLock.count({ where: { customerId: c.id } }), { timeout: 10_000 }).toBe(0);
 });
 
 test("[CONC-02] two users take a receipt for the same bill at once: the bill is paid once", async ({ page, loginAs, otherUser, db }) => {

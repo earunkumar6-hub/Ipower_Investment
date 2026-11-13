@@ -15,6 +15,27 @@ test("[REN-01] View offers the agreed quick picks", async ({ page, loginAs }) =>
   for (const o of ["Today", "This week", "This month", "Next 30 days", "Next 3 months", "Last month", "Custom dates"]) expect(options).toContain(o);
 });
 
+test("[REN-03] Custom dates shows the From / To boxes and the dropdown stays on it; a quick pick hides them (D-08)", async ({ page, loginAs }) => {
+  await loginAs("admin");
+  const r = new RenewalsPage(page);
+  await r.goto();
+  await expect(page.getByLabel("From date")).toHaveCount(0);
+  const options = await r.view().locator("option").allInnerTexts();
+  expect(options.filter((o) => o.trim() === "Custom dates"), "no duplicate option").toHaveLength(1);
+  await r.view().selectOption({ label: "Custom dates" });
+  await expect(r.view().locator("option:checked")).toHaveText("Custom dates"); // does not snap back
+  await expect(page.getByLabel("From date")).toBeVisible();
+  await expect(page.getByLabel("To date")).toBeVisible();
+  await page.getByLabel("From date").fill("01/11/2026");
+  await page.getByLabel("To date").fill("30/11/2026");
+  await page.getByRole("button", { name: "Show renewals" }).click();
+  await page.waitForURL(/from=/);
+  await expect(r.view().locator("option:checked")).toHaveText("Custom dates");
+  expect((await r.view().locator("option").allInnerTexts()).filter((o) => o.trim() === "Custom dates")).toHaveLength(1);
+  await r.view().selectOption({ label: "This month" });
+  await expect(page.getByLabel("From date")).toHaveCount(0);
+});
+
 test("[REN-02] a custom one-day range shows only bills due that day", async ({ page, loginAs, db }) => {
   const item = await db.renewalItem.findFirstOrThrow({ where: { status: "Due", policy: { status: "Active" } }, orderBy: { dueDate: "asc" }, include: { policy: true } });
   const day = dmy(item.dueDate);

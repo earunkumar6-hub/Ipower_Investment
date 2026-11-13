@@ -12,7 +12,7 @@
    "CONC-02"
   ],
   "status": "Fixed – verified",
-  "fix": "Second receipt for the same bill is refused ('the bill you ticked was just paid by someone else'); CONC-02 passes."
+  "fix": "Re-checked every receipt path. Receipts for ticked bills refuse a bill that someone else just paid ('the bill you ticked was just paid by someone else'). Found and fixed the same race on the owner-paid-slip repayment path (a second repayment of the same slip is now refused and rolled back). CONC-02 and a new unit test pass."
  },
  {
   "id": "D-02",
@@ -27,7 +27,7 @@
    "CONC-01"
   ],
   "status": "Fixed – verified",
-  "fix": "Stale 'Edit details' save is refused ('This customer was just changed by …'); CONC-01 passes."
+  "fix": "Editing ticket (5 min, one per customer, taken atomically, no waiting – no deadlock): the second person sees who is editing and cannot save; Admin can take over; leaving the page releases it. The version check still refuses a stale save after an expired ticket. CONC-01, CONC-04, CONC-05 pass."
  },
  {
   "id": "D-03",
@@ -42,7 +42,7 @@
    "PERF-01"
   ],
   "status": "Fixed – verified",
-  "fix": "Paged 50 per page + Policy indexes. Customer list 16–19 s → 2.1 s at 2,000 customers (dev server); PERF-01 passes."
+  "fix": "Customer list is paged (50 per page); Policy indexes. Measured in the full run: see Performance sheet."
  },
  {
   "id": "D-04",
@@ -59,7 +59,7 @@
    "PERF-02"
   ],
   "status": "Fixed – verified",
-  "fix": "Paging, dashboard cap, trigram + Policy / MessageLog indexes (migration 20261113180000). Search query 560 ms → 2 ms. Renewals 1.6 s, search 1.8 s, dashboard 1.0 s, receipts 1.0 s, customer Excel 1.0 s; PERF-02/03/05/06 pass."
+  "fix": "Renewals paged and counted in SQL; dashboard lists 15 rows + 'and N more'; trigram search indexes and Policy / MessageLog indexes. Measured in the full run: see Performance sheet."
  },
  {
   "id": "D-05",
@@ -75,7 +75,7 @@
   ],
   "screenshot": "n/a – database check (SQL in qa/support/integrity.ts)",
   "status": "Fixed – verified",
-  "fix": "Leads, quotations, proposals, policies, receipts/payments and expenses are logged; INT-03 passes."
+  "fix": "First fix covered leads, quotations, proposals, policies, receipts / payments and expenses only. Re-audited every server action: now also logged – ESEVAI entries, Day Book (post office deposits, cash count, verification, day close), expense payments and repayments, owner-paid slips and returns, marking receipts paid to the company, company payments, maturity, quotation accepted / not accepted, proposal details, lead status, call outcome and scheduling, file uploads. A permanent unit test (audit-coverage) fails if a new data-changing action has no change-log entry; only the 'Sent messages' writers are exempt."
  },
  {
   "id": "D-06",
@@ -91,7 +91,7 @@
   ],
   "screenshot": "n/a – database check (SQL in qa/support/integrity.ts)",
   "status": "Fixed – verified",
-  "fix": "Foreign keys to User added (migration 20261113150000_user_foreign_keys), applied to the dev database; INT-06 passes."
+  "fix": "First fix covered 7 columns. Now every column that holds a user id has a foreign key to User – 42 in all (migrations 20261113150000 and 20261113220000, validated on the dev database). QA check INT-06 now scans every such column instead of a fixed list."
  },
  {
   "id": "D-07",
@@ -106,7 +106,7 @@
    "VAL-04"
   ],
   "status": "Fixed – verified",
-  "fix": "Aadhaar must start with 2–9; VAL-04 passes."
+  "fix": "First fix only blocked a leading 0 or 1. Now also checks the Verhoeff check digit that every real Aadhaar number carries (catches mistyped or swapped digits). Unit test aadhaar-rule and QA VAL-04 pass."
  },
  {
   "id": "D-08",
@@ -121,7 +121,7 @@
    "REN-01"
   ],
   "status": "Fixed – verified",
-  "fix": "'Custom dates' added to the View dropdown; REN-01 passes."
+  "fix": "First fix only moved the cursor and left a duplicate option. Now 'Custom dates' really selects: the From / To boxes appear only for it, the dropdown stays on it, no duplicate option; a quick pick hides the boxes. REN-01, REN-02 and new REN-03 pass."
  },
  {
   "id": "D-09",
@@ -136,7 +136,7 @@
    "A11Y-01"
   ],
   "status": "Fixed – verified",
-  "fix": "Labels tied to fields; New lead filter ids renamed; A11Y-01 passes."
+  "fix": "Ticket and expense labels were tied before; re-scanned all 30 pages and 12 dialogs / record pages: one more unlabelled field found (Day Book deposit note) and fixed; no duplicate ids anywhere."
  },
  {
   "id": "D-10",

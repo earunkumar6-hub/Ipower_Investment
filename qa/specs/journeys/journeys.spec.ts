@@ -4,7 +4,7 @@ import { ReceiptForm } from "../../pages/receipt-page";
 import { RenewalsPage } from "../../pages/renewals-page";
 import { TicketsPage } from "../../pages/tickets-page";
 import { resetDb, userId } from "../../support/db";
-import { duplicateNumbers, fkColumns, orphanCounts, REQUIRED_FKS, USER_REFS } from "../../support/integrity";
+import { duplicateNumbers, fkColumns, orphanCounts, REQUIRED_FKS, USER_REFS, userColumnsWithoutFk } from "../../support/integrity";
 import { expect, newSignedInPage, stamp, test } from "../../support/fixtures";
 
 // Cross-module journeys, then data-integrity checks on what they wrote.
@@ -152,10 +152,11 @@ test.describe("Data integrity after the journeys", () => {
     expect(REQUIRED_FKS.map(([t, c]) => `${t}.${c}`).filter((k) => !fks.has(k))).toEqual([]);
   });
 
-  test("[INT-06] user references (owner / created by / audit user) are foreign keys", async ({ db }) => {
-    const fks = await fkColumns(db);
-    const missing = USER_REFS.map(([t, c]) => `${t}.${c}`).filter((k) => !fks.has(k));
+  test("[INT-06] every column that holds a user id is a foreign key to User", async ({ db }) => {
+    const missing = await userColumnsWithoutFk(db);
     expect(missing, `no FK to User on: ${missing.join(", ")}`).toEqual([]);
+    const fks = await fkColumns(db);
+    expect(USER_REFS.map(([t, c]) => `${t}.${c}`).filter((k) => !fks.has(k))).toEqual([]);
   });
 
   test("[INT-03] audit fields are filled on journey rows", async ({ db }) => {

@@ -52,3 +52,17 @@ export async function duplicateNumbers(db: PrismaClient) {
   }
   return out;
 }
+
+/** Every column that holds a user id (owner / created by / decided by / …) but has no foreign key to "User". Attachment.ownerId is the record it belongs to, not a user. */
+export async function userColumnsWithoutFk(db: PrismaClient) {
+  const rows = await db.$queryRawUnsafe<{ ref: string }[]>(
+    `select c.table_name || '.' || c.column_name as ref
+       from information_schema.columns c
+      where c.table_schema = 'public' and c.table_name not in ('User', 'Session', 'AuthAccount', 'Verification', '_prisma_migrations', 'Attachment')
+        and (c.column_name ~ 'ById$' or c.column_name in ('userId', 'ownerId'))
+        and not exists (select 1 from information_schema.key_column_usage k join information_schema.table_constraints t
+                          on t.constraint_name = k.constraint_name and t.table_schema = k.table_schema
+                         where t.constraint_type = 'FOREIGN KEY' and k.table_name = c.table_name and k.column_name = c.column_name)
+      order by 1`);
+  return rows.map((r) => r.ref);
+}

@@ -164,10 +164,8 @@ lines = [
     ("  Critical", sev["Critical"]), ("  High", sev["High"]), ("  Medium", sev["Medium"]), ("  Low", sev["Low"]),
     ("", ""),
     ("Recommendation – client demo", ("CONDITIONAL GO" if sev["Critical"] else "GO")),
-    ("  Why", "All change-list requirements are built and 53 of 54 pass (GST #13 is not built). The journeys work end to end. The double-receipt (D-01) and "
-              "edit-clash (D-02) defects found in the first run are fixed and verified; the remaining open item is speed with 2,000 customers (D-03, D-04)." if not sev["Critical"] else "See Defects."),
-    ("  Conditions", "Fine for the demo and for 3-4 PCs on the LAN. With 2,000 customers on the dev server the customer list takes 4.4 s, renewals 3.8 s and customer search 7 s "
-                     "(target 3 s): measure on a production build before the live rollout, and add a search index if search is still slow."),
+    ("  Why", "All change-list requirements are built and 53 of 54 pass (GST #13 is not built). The journeys work end to end. All ten defects found in the first run are fixed and re-verified, including the two that were only partly fixed the first time (D-05 change log, D-06 foreign keys) and the double-receipt race on the owner-paid-slip path." if not sev["Critical"] else "See Defects."),
+    ("  Conditions", "Fine for the demo and for 3-4 PCs on the LAN. With 2,000 customers and 10,000 policies every page loaded in under 2.6 s even on the slower dev server (see Performance); a production build will be faster."),
     ("  Open questions", "GST (#13) not built; scheme advisor, PIN code, customer deactivate, follow-up reassignment and message failure/retry are not in the app (blocked tests) – see Phase 1 Questions."),
     ("", ""),
     ("Screenshots", "Paths in 'Defects' / 'Test results' are relative to D:\\Projects\\GRM\\app (failure screenshot, video and trace are in the same folder)."),

@@ -42,6 +42,7 @@ test("[VAL-06] dates are shown dd/mm/yyyy", async ({ page, loginAs }) => {
 test("[VAL-07] an impossible date is not accepted", async ({ page, loginAs }) => {
   await loginAs("admin");
   await page.goto("/renewals");
+  await page.getByLabel("View").selectOption({ label: "Custom dates" });
   const from = page.getByLabel("From date");
   await from.fill("31/02/2026");
   await page.getByRole("button", { name: "Show renewals" }).click();

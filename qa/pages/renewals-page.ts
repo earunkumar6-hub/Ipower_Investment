@@ -13,7 +13,7 @@ export class RenewalsPage extends AppShell {
   bodyRows = () => this.page.locator("main table").first().locator("tbody tr");
   rowFor = (policyNo: string) => this.bodyRows().filter({ hasText: policyNo });
   async setRange(fromDmy: string, toDmy: string) {
-    // The spec's "Custom dates" option does not exist (REN-01): the From / To boxes are always shown.
+    await this.view().selectOption({ label: "Custom dates" }); // shows the From / To boxes (spec #19)
     await this.page.getByLabel("From date").fill(fromDmy);
     await this.page.getByLabel("To date").fill(toDmy);
     await this.page.getByRole("button", { name: "Show renewals" }).click();
