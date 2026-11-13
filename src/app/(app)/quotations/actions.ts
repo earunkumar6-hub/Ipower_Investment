@@ -115,6 +115,7 @@ export async function createQuotation(_: ActionResult, form: FormData): Promise<
         },
       });
       if (lead) await advanceStage(tx, lead.id, "Quotation");
+      await audit(tx, user, { entity: "Quotation", entityId: q.id, action: "Create", summary: `Quotation ${q.quoteNo} for ${q.customerName} · ${v.items.length} product(s)` });
       return q;
     });
   } catch (e) {
@@ -143,7 +144,7 @@ async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: Quote
     include: { schemes: { where: { active: true }, orderBy: { tenureMonths: "asc" } } },
   });
   const onlyScheme = product?.schemes.length === 1 ? product.schemes[0] : null;
-  const p = await tx.proposal.create({
+  const p: Awaited<ReturnType<typeof tx.proposal.create>> = await tx.proposal.create({
     data: {
       tenantId: user.tenantId, proposalNo: await nextNumber(tx, user.tenantId, "proposal"), quotationId: q.id, quotationItemId: item.id,
       customerId: q.customerId, customerName: q.customerName, mobile: q.mobile, insurer: item.insurer, productName: item.productName,
@@ -151,6 +152,7 @@ async function proposalFor(tx: Tx, user: SessionUser, q: QuoteParty, item: Quote
       productType: product?.productType ?? (isMfCategory(item.category) ? "MutualFund" : "Insurance"), productId: product?.id, schemeId: onlyScheme?.id, frequency: item.payMode, termMonths: onlyScheme?.tenureMonths,
     },
   });
+  await audit(tx, user, { entity: "Proposal", entityId: p.id, action: "Create", summary: `Proposal ${p.proposalNo} from ${q.customerName}'s quotation · ${item.insurer} ${item.productName}` });
   return p;
 }
 

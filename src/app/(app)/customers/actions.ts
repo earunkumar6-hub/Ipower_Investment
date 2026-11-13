@@ -18,6 +18,7 @@ import { deletePhoto, photoProblem, savePhoto } from "@/lib/photos";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { BANK_FIELDS, BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, lockInUntil, missingInsuranceDetails, needsSipDay, PAY_MODE_LABEL, rateOn, type BankField } from "@/lib/products";
 import { authorize } from "@/lib/session";
+import { customerVersion } from "@/lib/customer-version";
 
 const fail = (error: string, fieldErrors?: Record<string, string>): ActionResult => ({ ok: false, error, fieldErrors });
 
@@ -206,10 +207,14 @@ export async function addProductDirect(_: ActionResult, form: FormData): Promise
 
   try {
     if (v.policyNumber) {
-      const policy = await db.$transaction((tx) => createPolicyWithSchedule(tx, {
-        tenantId: user.tenantId, customerId: customer.id, ownerId: customer.ownerId, policyNumber: v.policyNumber, premiumAmount: amount,
-        sumAssured: v.sumAssured || null, invoiceRule: product.invoiceRule, ...details,
-      }));
+      const policy = await db.$transaction(async (tx) => {
+        const created = await createPolicyWithSchedule(tx, {
+          tenantId: user.tenantId, customerId: customer.id, ownerId: customer.ownerId, policyNumber: v.policyNumber!, premiumAmount: amount,
+          sumAssured: v.sumAssured || null, invoiceRule: product.invoiceRule, ...details,
+        });
+        await audit(tx, user, { entity: "Policy", entityId: created.id, action: "Create", summary: `${v.policyNumber} added directly · ${customer.name} · ${details.partner} ${details.productName}` });
+        return created;
+      });
       revalidatePath("/", "layout");
       return { ok: true, id: policy.id, href: `/customers/${customer.id}`, message: `${details.productName} ${v.policyNumber} added as Active` };
     }
@@ -249,14 +254,30 @@ export async function editCustomer(_: ActionResult, form: FormData): Promise<Act
   if (!c) return fail("Customer not found");
   if (!canWorkOn(user, c.ownerId)) return fail("This customer belongs to another user");
 
-  await db.$transaction(async (tx) => {
+  // Someone else saved this customer after this form was opened (two PCs, D-02): refuse, don't overwrite.
+  const opened = String(form.get("version") ?? "");
+  const clash = async (tx: Pick<typeof db, "customer" | "auditLog" | "user">) => {
+    const now = await tx.customer.findUniqueOrThrow({ where: { id: c.id }, include: { mobiles: { orderBy: { sort: "asc" } } } });
+    if (!opened || customerVersion(now) === opened) return null;
+    const last = await tx.auditLog.findFirst({ where: { entityId: c.id, entity: "Customer" }, orderBy: { createdAt: "desc" }, select: { userId: true } });
+    const who = last ? (await tx.user.findUnique({ where: { id: last.userId }, select: { name: true } }))?.name : null;
+    return `This customer was just changed${who ? ` by ${who}` : " by someone else"}. Close and reopen Edit details to see the latest, then make your change again.`;
+  };
+
+  const refused = await db.$transaction(async (tx) => {
+    // Lock the customer row so two saves can't both pass the check.
+    await tx.$executeRaw`SELECT id FROM "Customer" WHERE id = ${c.id} FOR UPDATE`;
+    const why = await clash(tx);
+    if (why) return why;
     await tx.customer.update({ where: { id: c.id }, data: { name: v.name, email: v.email || null, address: v.address || null, mobile: m.numbers[0].number } });
     await tx.customerMobile.deleteMany({ where: { customerId: c.id } });
     await tx.customerMobile.createMany({ data: m.numbers.map((n, sort) => ({ tenantId: user.tenantId, customerId: c.id, number: n.number, isWhatsApp: n.isWhatsApp, sort })) });
     const snap = (x: { name: string; email: string | null; address: string | null }, ms: { number: string; isWhatsApp: boolean }[]) => ({ name: x.name, mobiles: mobilesText(ms), email: x.email, address: x.address });
     const diff = changedOnly(snap(c, c.mobiles), snap({ name: v.name, email: v.email || null, address: v.address || null }, m.numbers));
     if (Object.keys(diff.after).length) await audit(tx, user, { entity: "Customer", entityId: c.id, action: "Updated", summary: `Customer ${v.name} details corrected`, ...diff });
+    return null;
   });
+  if (refused) return fail(refused);
   revalidatePath(`/customers/${c.id}`);
   revalidatePath("/customers");
   return { ok: true };
@@ -286,7 +307,7 @@ const identitySchema = z.object({
   customerId: z.string().min(1),
   consent: z.string().default(""),
   pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(PAN_RE, "PAN looks like ABCDE1234F")])),
-  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits")])),
+  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits and does not start with 0 or 1")])),
 });
 
 /**

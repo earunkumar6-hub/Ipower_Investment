@@ -30,8 +30,15 @@ export function renewalDueDates(start: Date, frequency: Frequency, termMonths?: 
  * maturity has passed with nothing left unpaid become Matured (bills and reminders stop). One-time post office
  * deposits are not touched here – they stay as a maturity reminder until someone marks them matured.
  */
+/** Last maturity scan per agency (in memory – one server per install): the scan reads every active policy, so screens run it at most every 10 minutes (D-04). */
+const lastMaturityScan = new Map<string, number>();
+const MATURITY_SCAN_EVERY_MS = 10 * 60_000;
+
 export async function refreshOverdue(tenantId: string, today: Date) {
   await db.renewalItem.updateMany({ where: { tenantId, status: "Due", dueDate: { lt: today } }, data: { status: "Overdue" } });
+  const key = `${tenantId}:${today.toISOString().slice(0, 10)}`;
+  if (process.env.NODE_ENV !== "test" && Date.now() - (lastMaturityScan.get(key) ?? 0) < MATURITY_SCAN_EVERY_MS) return;
+  lastMaturityScan.set(key, Date.now());
   const due = await db.policy.findMany({
     where: {
       tenantId, status: "Active", frequency: { not: "OneTime" }, productType: { not: "MutualFund" }, termMonths: { not: null },
@@ -92,7 +99,8 @@ export async function renewalCards(tenantId: string, policyWhere: Prisma.PolicyW
 }
 
 /** The rows of one Renewals tab, shared by the screen and its export. */
-export async function loadRenewals(user: SessionUser, sp: Params, today: Date, take?: number) {
+/** `take` / `skip` page the instalment tabs; `count` and `total` always cover every matching bill (D-04). */
+export async function loadRenewals(user: SessionUser, sp: Params, today: Date, take?: number, skip = 0) {
   await refreshOverdue(user.tenantId, today);
   const f = renewalFilter(user, sp, today);
   const include = { customer: { select: { id: true, name: true, mobile: true } } };
@@ -119,11 +127,11 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
         ownerPaidOwed: owed.length ? sum(owed.map((x) => x.amount)) : ZERO,
       };
     }).sort((a, b) => b.overdue.plus(b.ownerPaidOwed).comparedTo(a.overdue.plus(a.ownerPaidOwed)) || a.customer.name.localeCompare(b.customer.name)).slice(0, take);
-    return { ...f, rows: [] as RenewalRow[], customers, total: customers.length ? sum(customers.map((c) => c.overdue)) : ZERO };
+    return { ...f, rows: [] as RenewalRow[], count: customers.length, customers, total: customers.length ? sum(customers.map((c) => c.overdue)) : ZERO };
   }
 
   const [items, deposits, users] = await Promise.all([
-    f.tab === "maturity" ? Promise.resolve([]) : db.renewalItem.findMany({ where: f.where, include: { policy: { include }, paidReceipt: { select: depositStatusSelect } }, orderBy: f.orderBy, take }),
+    f.tab === "maturity" ? Promise.resolve([]) : db.renewalItem.findMany({ where: f.where, include: { policy: { include }, paidReceipt: { select: depositStatusSelect } }, orderBy: f.orderBy, take, skip }),
     f.maturityWhere ? db.policy.findMany({ where: f.maturityWhere, include }) : Promise.resolve([]),
     userNames(user.tenantId),
   ]);
@@ -141,7 +149,9 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
     select: { relatedId: true, channel: true, createdAt: true },
     orderBy: { createdAt: "desc" },
   });
-  const sentFor = (id: string) => logs.filter((l) => l.relatedId === id);
+  const byRelated = new Map<string, typeof logs>();
+  for (const l of logs) byRelated.set(l.relatedId!, [...(byRelated.get(l.relatedId!) ?? []), l]);
+  const sentFor = (id: string) => byRelated.get(id) ?? [];
   const maturities: RenewalRow[] = shown.map(({ p, date }) => {
     const sent = sentFor(p.id);
     return {
@@ -159,9 +169,13 @@ export async function loadRenewals(user: SessionUser, sp: Params, today: Date, t
     lastReminderChannel: sentFor(i.id)[0]?.channel ?? null,
   }));
   // Maturities are only on the Maturity tab, oldest first (past one-time deposits waiting to be marked matured on top).
-  const rows = f.tab === "maturity" ? maturities.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, take) : instalments;
-  // Only instalments are money to collect; a maturity is paid out by the post office.
-  return { ...f, rows, customers: [] as CustomerRenewalRow[], total: instalments.length ? sum(instalments.map((i) => i.amount)) : ZERO };
+  const sortedMaturities = maturities.sort((a, b) => a.date.getTime() - b.date.getTime());
+  const rows = f.tab === "maturity" ? sortedMaturities.slice(skip, take === undefined ? undefined : skip + take) : instalments;
+  // Count and money over every matching bill, not just this page. Only instalments are money to collect.
+  const all = f.tab === "maturity" ? null : take === undefined ? null : await db.renewalItem.aggregate({ where: f.where, _count: true, _sum: { premiumAmount: true } });
+  const count = f.tab === "maturity" ? sortedMaturities.length : all ? all._count : instalments.length;
+  const amount = all ? (all._sum.premiumAmount ?? ZERO) : instalments.length ? sum(instalments.map((i) => i.amount)) : ZERO;
+  return { ...f, rows, count, customers: [] as CustomerRenewalRow[], total: amount };
 }
 
 export function renewalStatus(r: RenewalRow, today: Date): [string, Tone] {

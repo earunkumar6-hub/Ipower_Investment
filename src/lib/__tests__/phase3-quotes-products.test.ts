@@ -141,8 +141,8 @@ describe("Proposal policy details", () => {
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, schemeId: individual.id, sumInsured: "500000", premium: "20000" }))).ok).toBe(true);
     expect((await savePolicyDetails({ ok: false }, form({ proposalId: p.id, frequency: "Yearly", term: "3", premiumPayingTerm: "", startDate: today, premium: "0" }))).error).toBe("Premium must be more than 0");
     // Aadhaar / PAN: only after "Customer consent taken" (#1); then any time, one without the other
-    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "1234 5678 9012" }))).fieldErrors).toHaveProperty("consent");
-    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "1234 5678 9012" }))).ok).toBe(true);
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "2234 5678 9012" }))).fieldErrors).toHaveProperty("consent");
+    expect((await saveKyc({ ok: false }, form({ proposalId: p.id, consent: "on", pan: "", aadhaar: "2234 5678 9012" }))).ok).toBe(true);
     expect((await saveKyc({ ok: false }, form({ proposalId: p.id, pan: "", aadhaar: "" }))).error).toMatch(/both are optional/);
     // Yearly × 3 years → renewals in years 2 and 3 (the 12-month horizon stores the first); no PAN needed
     expect((await issuePolicy({ ok: false }, form({ proposalId: p.id, policyNumber: `CARE-T-${Date.now() % 100000}` }))).ok).toBe(true);
@@ -205,13 +205,13 @@ describe("Add product directly", () => {
     as(users.arun);
     const r = await addProductDirect({ ok: false }, form({
       customerId: rajesh.id, productId: p.id, schemeId: five.id, amount: "100000", startDate: today, frequency: "OneTime", nominee: "Priya Rajesh",
-      [`cf_${branch.id}`]: "Mylapore", bank_holder: "Rajesh Kumar", bank_bank: "SBI", bank_branch: "Mylapore", bank_ifsc: "sbin0001234", bank_accountNo: "123456789012",
+      [`cf_${branch.id}`]: "Mylapore", bank_holder: "Rajesh Kumar", bank_bank: "SBI", bank_branch: "Mylapore", bank_ifsc: "sbin0001234", bank_accountNo: "223456789012",
     }));
     expect(r.ok).toBe(true);
     const prop = await prisma.proposal.findUniqueOrThrow({ where: { id: r.id } });
     expect([prop.quotationId, prop.status, prop.productName, prop.termMonths, prop.rateAtOpen?.toFixed(2)]).toEqual([null, "Draft", "TD 5 years", 60, "7.50"]);
-    expect(prop.bankDetailsEnc).not.toContain("123456789012");
-    expect(decryptJson<Record<string, string>>(prop.bankDetailsEnc!)).toMatchObject({ ifsc: "SBIN0001234", accountNo: "123456789012" });
+    expect(prop.bankDetailsEnc).not.toContain("223456789012");
+    expect(decryptJson<Record<string, string>>(prop.bankDetailsEnc!)).toMatchObject({ ifsc: "SBIN0001234", accountNo: "223456789012" });
 
     const no = `TD-T-${Date.now() % 100000}`;
     expect((await issuePolicy({ ok: false }, form({ proposalId: prop.id, policyNumber: no }))).ok).toBe(true);

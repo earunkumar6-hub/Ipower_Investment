@@ -137,13 +137,16 @@ async function AdminView({ user }: { user: SessionUser }) {
   );
 }
 
+/** The dashboard lists the first 15 bills due this week; the rest are a link away (D-04: hundreds of rows at volume). */
+const PANEL_ROWS = 15;
+
 function RenewalsPanel({ title, renewals }: { title: string; renewals: Awaited<ReturnType<typeof userDashboard>>["renewals"] }) {
   return (
     <Panel title={title} more={{ href: "/renewals?tab=due&within=7", label: "All renewals" }}>
       <Table>
         <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Product</TableHead><TableHead>Due</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
         <TableBody>
-          {renewals.map((r) => (
+          {renewals.slice(0, PANEL_ROWS).map((r) => (
             <TableRow key={r.id}>
               <TableCell><Link href={`/customers/${r.policy.customer.id}`} className="text-brand-700 hover:underline">{r.policy.customer.name}</Link></TableCell>
               <TableCell>{r.policy.productType === "PoRd" ? `RD ${r.policy.policyNumber}` : `${r.policy.partner} ${r.policy.productName}`}</TableCell>
@@ -152,6 +155,11 @@ function RenewalsPanel({ title, renewals }: { title: string; renewals: Awaited<R
             </TableRow>
           ))}
           {renewals.length === 0 && <Empty cols={4} text="Nothing due this week." />}
+          {renewals.length > PANEL_ROWS && (
+            <TableRow><TableCell colSpan={4} className="text-sm text-muted-foreground">
+              …and {renewals.length - PANEL_ROWS} more due this week – <Link href="/renewals?tab=due&within=7" className="text-brand-700 hover:underline">see all on Renewals</Link>
+            </TableCell></TableRow>
+          )}
         </TableBody>
       </Table>
     </Panel>

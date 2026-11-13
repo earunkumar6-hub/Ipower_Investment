@@ -6,10 +6,11 @@ import { ADVANCE_MONTHS, lockPolicyDues, payableDues, type Due } from "@/lib/due
 import { canWorkOn } from "@/lib/leads";
 import { lineNumber, nextNumber } from "@/lib/numbering";
 import { billEnd } from "@/lib/policies";
+import { audit } from "@/lib/audit";
 import { postReceipt } from "@/lib/posting";
 import type { SessionUser } from "@/lib/session";
 import { z } from "zod";
-import { fmtDate, istToday } from "@/lib/dates";
+import { fmtDate, isoDate, istToday } from "@/lib/dates";
 
 // Receipt lines shared by every way of taking money for bills: one customer's receipt, a combined receipt
 // across customers, and a bill-group receipt. Each paid bill gets its own RCPT under its own customer.
@@ -22,7 +23,11 @@ export const pastOrTodayField = z.union([
 ]).optional();
 export const dateOrToday = (d: string | undefined) => (d ? new Date(`${d}T00:00:00Z`) : istToday());
 
-const duesSchema = z.array(z.object({ policyId: z.string().min(1), count: z.number().int().min(1).max(60) })).max(200);
+const duesSchema = z.array(z.object({
+  policyId: z.string().min(1), count: z.number().int().min(1).max(60),
+  /** yyyy-mm-dd of the oldest bill shown when the user ticked: a stale screen is refused, not shifted to later bills. */
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+})).max(200);
 const parseJson = (v: string): unknown => {
   try {
     return JSON.parse(v);
@@ -73,13 +78,13 @@ export type DueLine = { policy: Policy; customerId: string; customerName: string
  * can't deadlock.
  */
 export async function pickDues(
-  tx: Tx, user: SessionUser, picks: { policyId: string; count: number }[], today: Date,
+  tx: Tx, user: SessionUser, picks: { policyId: string; count: number; from?: string }[], today: Date,
   opts: { customerId?: string; members?: Set<string>; openOnly?: boolean } = {},
 ): Promise<{ lines: DueLine[] } | { error: string }> {
   const ids = picks.map((p) => p.policyId);
   if (new Set(ids).size !== ids.length) return { error: "Pick the dues again" };
   const lines: DueLine[] = [];
-  for (const { policyId, count } of [...picks].sort((a, b) => a.policyId.localeCompare(b.policyId))) {
+  for (const { policyId, count, from } of [...picks].sort((a, b) => a.policyId.localeCompare(b.policyId))) {
     const policy = await tx.policy.findFirst({
       where: { id: policyId, tenantId: user.tenantId, status: "Active", ...(opts.customerId && { customerId: opts.customerId }) },
       include: { product: { select: { invoiceRule: true } }, customer: { select: { name: true, ownerId: true } } },
@@ -91,6 +96,11 @@ export async function pickDues(
     const stored = await tx.renewalItem.findMany({ where: { policyId: policy.id } });
     const payable = payableDues({ ...policy, billUntil: billEnd(policy, policy.product?.invoiceRule) }, stored, today)
       .filter((d) => !opts.openOnly || d.itemId);
+    // Two staff paying the same bill at once (D-01): the second waits for the lock above, then finds the bill it saw
+    // already paid. Refuse instead of silently moving its payment on to the next (advance) instalment.
+    if (from && payable[0] && isoDate(payable[0].dueDate) !== from) {
+      return { error: `${policy.policyNumber}: the bill you ticked was just paid by someone else – reload and check before taking this payment` };
+    }
     if (count > payable.length) {
       return { error: `${policy.policyNumber}: only ${payable.length} ${opts.openOnly ? "open bill(s)" : `instalment(s) can be paid now (up to ${ADVANCE_MONTHS} months ahead)`}` };
     }
@@ -127,6 +137,11 @@ export async function addReceiptLine(
     });
   }
   await postReceipt(tx, receipt, { customerName: customer.name, policy });
+  // Change log (D-05): every receipt line, whichever screen made it.
+  await audit(tx, { id: common.createdById, tenantId: common.tenantId }, {
+    entity: "Receipt", entityId: receipt.id, action: "Create",
+    summary: `${receipt.receiptNo} · ${customer.name} · ${policy.policyNumber} · ${receipt.mode} ${amount.toFixed(2)}`,
+  });
   return receipt;
 }
 

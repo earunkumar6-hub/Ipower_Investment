@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DownloadMenu } from "@/components/download-menu";
+import { Pager } from "@/components/pager";
 import { exportLinks } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -20,7 +21,9 @@ import { MaturityRowActions, RenewalRowActions } from "./row-actions";
 import { ReminderHistory } from "./reminder-history";
 import { PolicyManageButton } from "../customers/[id]/policy-manage";
 
-type Search = { tab?: string; product?: string; company?: string; scheme?: string; paidto?: string; within?: string; range?: string; from?: string; to?: string };
+type Search = { tab?: string; product?: string; company?: string; scheme?: string; paidto?: string; within?: string; range?: string; from?: string; to?: string; page?: string };
+
+const PAGE_SIZE = 50;
 
 const dayShort = (d: Date) => fmtDate(istDate(d));
 
@@ -28,8 +31,10 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
   const user = await requirePermission("Renewal.View");
   const sp = await searchParams;
   const today = istToday();
-  const r = await loadRenewals(user, sp, today, 200);
-  const { tab, product, company, scheme, paidTo, range, rows, customers, total } = r;
+  // 50 per page (D-04): the count and total in the summary cover every matching bill.
+  const pageNo = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const r = await loadRenewals(user, sp, today, PAGE_SIZE, (pageNo - 1) * PAGE_SIZE);
+  const { tab, product, company, scheme, paidTo, range, rows, customers, total, count } = r;
   const [options, cards] = await Promise.all([renewalFilterOptions(user, product, company), renewalCards(user.tenantId, r.policyWhere, today)]);
   // Tabs keep the product filter; each tab has its own default date range.
   const filter = { ...(product !== "all" && { product }), ...(company && { company }), ...(scheme && { scheme }) };
@@ -46,8 +51,8 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
   const canDeletePolicy = hasPermission(user.role, "Policy.Delete");
   const pastMaturities = rows.filter((x) => x.kind === "maturity" && x.date < today).length;
   const summary = tab === "customers" ? `${customers.length} customers · ${fmtINR(total)} overdue`
-    : tab === "maturity" ? `${rows.length} maturit${rows.length === 1 ? "y" : "ies"} · ${range ? rangeLabel(range) : "next 30 days"}${pastMaturities ? ` · ${pastMaturities} matured, not yet marked` : ""}`
-    : `${rows.length} ${tab === "due" ? "due" : tab === "overdue" ? "overdue" : paidTo === "pending" ? "collected, not yet paid to Post office / insurer" : "paid"} · ${tab === "paid" && paidTo === "pending" ? "" : `${rangeLabel(range)} · `}${fmtINR(total)}`;
+    : tab === "maturity" ? `${count} maturit${count === 1 ? "y" : "ies"} · ${range ? rangeLabel(range) : "next 30 days"}${pastMaturities ? ` · ${pastMaturities} matured, not yet marked` : ""}`
+    : `${count} ${tab === "due" ? "due" : tab === "overdue" ? "overdue" : paidTo === "pending" ? "collected, not yet paid to Post office / insurer" : "paid"} · ${tab === "paid" && paidTo === "pending" ? "" : `${rangeLabel(range)} · `}${fmtINR(total)}`;
 
   return (
     <>
@@ -131,6 +136,10 @@ export default async function RenewalsPage({ searchParams }: { searchParams: Pro
           const items: TickItem[] = rows.map((i) => (i.kind === "maturity" ? { key: i.id, kind: "maturity", id: i.policy.id } : { key: i.id, kind: "bill", id: i.id }));
           return <PoSelection items={items} canReceipt={hasPermission(user.role, "Receipt.Create")}>{table}</PoSelection>;
         })()}
+        {tab !== "customers" && (
+          <Pager page={pageNo} pageSize={PAGE_SIZE} total={count} path="/renewals"
+            params={{ tab, ...filter, ...rangeParams, ...(paidTo !== "all" && { paidto: paidTo }) } as Record<string, string | undefined>} />
+        )}
 
         {tab === "customers" && (
           <Table>

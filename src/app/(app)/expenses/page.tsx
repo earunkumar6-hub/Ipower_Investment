@@ -57,7 +57,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
             </TableBody>
           </Table>
           <p className="mt-3 text-xs text-muted-foreground">
-            Bill number is required and unique per vendor. Expenses paid by an employee or the owner stay &quot;to be repaid&quot;; the repayment is what moves company money in the Day Book.
+            Bill number is optional; when entered it must be unique per vendor. Expenses paid by an employee or the owner stay &quot;to be repaid&quot;; the repayment is what moves company money in the Day Book.
           </p>
         </div>
       </div>

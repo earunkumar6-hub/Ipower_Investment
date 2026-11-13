@@ -46,8 +46,16 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  sessions     Session[]
-  authAccounts AuthAccount[]
+  sessions        Session[]
+  authAccounts    AuthAccount[]
+  // Records owned / created by this login (QA D-06: enforced as foreign keys; users are only soft-deleted)
+  customersOwned  Customer[]    @relation("CustomerOwner")
+  leadsOwned      Lead[]        @relation("LeadOwner")
+  policiesOwned   Policy[]      @relation("PolicyOwner")
+  receiptsCreated Receipt[]     @relation("ReceiptCreatedBy")
+  ticketsRaised   Ticket[]      @relation("TicketRaisedBy")
+  auditLogs       AuditLog[]    @relation("AuditUser")
+  expensesCreated Expense[]     @relation("ExpenseCreatedBy")
 }
 
 model Session {
@@ -145,6 +153,7 @@ model Lead {
   notes               String?
   notInterestedReason String?
   ownerId             String
+  owner               User       @relation("LeadOwner", fields: [ownerId], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
@@ -378,6 +387,7 @@ model Customer {
   consentAt    DateTime? // #1 "Customer consent taken" (needed before Aadhaar / PAN are saved)
   consentById  String?
   ownerId      String
+  owner        User      @relation("CustomerOwner", fields: [ownerId], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   createdAt    DateTime  @default(now())
 
   policies            Policy[]             @relation("PolicyCustomer")
@@ -469,6 +479,7 @@ model Policy {
   sumAssured              Decimal?     @db.Decimal(14, 2)
   status                  PolicyStatus @default(Active)
   ownerId                 String
+  owner                   User         @relation("PolicyOwner", fields: [ownerId], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   createdAt               DateTime     @default(now())
   productId               String? // Settings → Products and schemes (null for policies made before the catalogue)
   product                 Product?     @relation(fields: [productId], references: [id])
@@ -597,6 +608,7 @@ model AuditLog {
   id        String   @id @default(cuid())
   tenantId  String
   userId    String
+  user      User     @relation("AuditUser", fields: [userId], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   entity    String // "Product", "Scheme", "Policy", …
   entityId  String
   action    String // "Created", "Updated", "Rate changed", "Closed early", …
@@ -682,6 +694,7 @@ model Receipt {
   cancelledById    String?
   cancelledAt      DateTime?
   createdById      String
+  createdBy        User            @relation("ReceiptCreatedBy", fields: [createdById], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   createdAt        DateTime        @default(now())
   paymentId        String? // set when several dues were paid together
   payment          Payment?        @relation(fields: [paymentId], references: [id])
@@ -1049,6 +1062,7 @@ model Expense {
   rejectReason        String?
   cancelReason        String?
   createdById         String
+  createdBy           User            @relation("ExpenseCreatedBy", fields: [createdById], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   createdAt           DateTime        @default(now())
 
   @@unique([tenantId, expenseNo])
@@ -1406,6 +1420,7 @@ model Ticket {
   status     TicketStatus    @default(Open)
   targetDate DateTime        @db.Date // fix target from the priority (src/lib/tickets.ts)
   raisedById String
+  raisedBy   User            @relation("TicketRaisedBy", fields: [raisedById], references: [id]) // FK added 13 Nov 2026 (QA D-06)
   closedById String?
   closedAt   DateTime?
   createdAt  DateTime        @default(now())

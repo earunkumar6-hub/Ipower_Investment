@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
+import { Pager } from "@/components/pager";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CUSTOMER_IN_USE, inUseReason } from "@/lib/customer-delete";
@@ -15,15 +16,23 @@ import { hasPermission } from "@/lib/permissions";
 import { CustomerActions } from "./customer-actions";
 import { CustomerFilters } from "./customer-filters";
 
-type Search = { q?: string; product?: string; company?: string; scheme?: string; status?: string };
+type Search = { q?: string; product?: string; company?: string; scheme?: string; status?: string; page?: string };
+
+/** Customers per page (owner, 13 Nov 2026 – D-03: 2,000 customers on one page took ~18 s). */
+const PAGE_SIZE = 50;
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await requirePermission("Policy.View");
-  const f = customerFilter(user, await searchParams);
+  const sp = await searchParams;
+  const f = customerFilter(user, sp);
   await refreshOverdue(user.tenantId, istToday());
+  const total = await db.customer.count({ where: f.where });
+  const page = Math.min(Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1), Math.max(1, Math.ceil(total / PAGE_SIZE)));
   const [customers, options] = await Promise.all([
     db.customer.findMany({
       where: f.where,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: {
         _count: { select: { mobiles: true, ...CUSTOMER_IN_USE } },
         policies: {
@@ -58,7 +67,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       <div className="rounded-xl border bg-white p-4">
         <CustomerFilters q={f.q ?? ""} product={f.product} company={f.company} scheme={f.scheme} status={f.status}
           products={RENEWAL_PRODUCTS} statuses={HOLDING_STATUS} companies={options.companies} schemes={options.schemes} />
-        {f.filtered && <p className="mb-2 text-sm text-muted-foreground">{customers.length} customer{customers.length === 1 ? "" : "s"} holding {f.filterLabel}</p>}
+        {f.filtered && <p className="mb-2 text-sm text-muted-foreground">{total} customer{total === 1 ? "" : "s"} holding {f.filterLabel}</p>}
         <Table>
           <TableHeader>
             <TableRow>
@@ -91,6 +100,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             {customers.length === 0 && <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No customers found.</TableCell></TableRow>}
           </TableBody>
         </Table>
+        <Pager page={page} pageSize={PAGE_SIZE} total={total} path="/customers"
+          params={{ q: f.q, product: f.product === "all" ? undefined : f.product, company: f.company, scheme: f.scheme, status: f.status === "all" ? undefined : f.status }} />
       </div>
     </>
   );

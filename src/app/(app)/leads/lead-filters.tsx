@@ -20,19 +20,19 @@ export function LeadFilters({ status, source, q }: { status?: string; source?: s
   return (
     <form className="mb-4 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); apply(e.currentTarget); }}>
       <div className="space-y-1.5">
-        <Label htmlFor="q">Search</Label>
-        <Input id="q" name="q" defaultValue={q} className="w-56" />
+        <Label htmlFor="lf-q">Search</Label>
+        <Input id="lf-q" name="q" defaultValue={q} className="w-56" />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="status">Status</Label>
-        <NativeSelect id="status" name="status" defaultValue={status ?? ""} onChange={(e) => apply(e.currentTarget.form!)}>
+        <Label htmlFor="lf-status">Status</Label>
+        <NativeSelect id="lf-status" name="status" defaultValue={status ?? ""} onChange={(e) => apply(e.currentTarget.form!)}>
           <NativeSelectOption value="">All</NativeSelectOption>
           {Object.entries(LEAD_STATUS_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="source">Business type</Label>
-        <NativeSelect id="source" name="source" defaultValue={source ?? ""} onChange={(e) => apply(e.currentTarget.form!)}>
+        <Label htmlFor="lf-source">Business type</Label>
+        <NativeSelect id="lf-source" name="source" defaultValue={source ?? ""} onChange={(e) => apply(e.currentTarget.form!)}>
           <NativeSelectOption value="">All</NativeSelectOption>
           {Object.entries(LEAD_SOURCE_LABEL).map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
         </NativeSelect>

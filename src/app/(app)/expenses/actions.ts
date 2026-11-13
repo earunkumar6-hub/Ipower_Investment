@@ -1,5 +1,6 @@
 "use server";
 
+import { audit } from "@/lib/audit";
 import { Prisma, type Expense } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -111,6 +112,7 @@ async function createExpenseUnguarded(_: ActionResult, form: FormData): Promise<
           status: level === "None" ? "Saved" : "Waiting", approvalLevel: level, createdById: user.id,
         },
       });
+      await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Create", summary: `${e.expenseNo} · ${e.category} · ${vendor.name}${e.billNo ? ` bill ${e.billNo}` : ""} · ${v.amount}` });
       if (company && e.status === "Saved") {
         const err = await payNow(tx, e, user, e.fromAccountId!, vendor.name);
         if (err) throw new PaymentBlocked(err);
@@ -146,6 +148,7 @@ export async function approveExpense(expenseId: string): Promise<ActionResult> {
         return fail(e.createdById === user.id ? "You can't approve your own expense; it goes to the Super Admin" : "This expense needs a different approver");
       }
       const updated = await tx.expense.update({ where: { id: e.id }, data: { status: "Approved", approvedById: user.id, approvedAt: new Date() } });
+      await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Approve", summary: `${e.expenseNo} approved` });
       if (e.paidBy !== "Company") return { ok: true };
       // Approving is a decision; paying moves money. If today's Day Book is closed, approve now
       // and leave the payment for "Mark paid" on the next open day. The shared lock stops a
@@ -177,7 +180,10 @@ export async function rejectExpense(_: ActionResult, form: FormData): Promise<Ac
   const e = await db.expense.findFirst({ where: { id: expenseId, tenantId: user.tenantId } });
   if (!e) return fail("Expense not found");
   if (!canApprove(user, e)) return fail("This expense needs a different approver");
-  await db.expense.update({ where: { id: e.id }, data: { status: "Rejected", rejectReason: reason, approvedById: user.id, approvedAt: new Date() } });
+  await db.$transaction(async (tx) => {
+    await tx.expense.update({ where: { id: e.id }, data: { status: "Rejected", rejectReason: reason, approvedById: user.id, approvedAt: new Date() } });
+    await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Reject", summary: `${e.expenseNo} rejected`, reason });
+  });
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -193,6 +199,7 @@ async function cancelExpenseUnguarded(_: ActionResult, form: FormData): Promise<
     if (!e) return fail("Expense not found");
     if (!canCancel(user, e)) return fail("You can cancel only your own expenses");
     await tx.expense.update({ where: { id: e.id }, data: { status: "Cancelled", cancelReason: reason } });
+    await audit(tx, user, { entity: "Expense", entityId: e.id, action: "Cancel", summary: `${e.expenseNo} cancelled`, reason });
     await reverseSource(tx, { tenantId: user.tenantId, sourceType: "Expense", sourceId: e.id, entryDate: istToday(), createdById: user.id, reason });
     return { ok: true };
   });

@@ -61,9 +61,14 @@ export function RenewalFilters({ tab, product, company, scheme, paidTo, range, s
         <>
           <div className="space-y-1">
             <Label htmlFor="range" className="text-xs">View</Label>
-            <NativeSelect id="range" size="sm" value={custom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => go({ range: e.target.value || undefined })}>
+            <NativeSelect id="range" size="sm" value={custom ? "custom" : range?.pick && rangePicks.some(([k]) => k === range.pick) ? range.pick : ""} onChange={(e) => {
+              // "Custom dates" (spec #19): the From / To boxes set the range – go to From instead of reloading.
+              if (e.target.value === "custom") return document.querySelector<HTMLInputElement>('input[aria-label="From date"], #from')?.focus();
+              go({ range: e.target.value || undefined });
+            }}>
               <NativeSelectOption value="">{tab === "overdue" ? "Any date" : "Default"}</NativeSelectOption>
               {rangePicks.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}
+              <NativeSelectOption value="custom">Custom dates</NativeSelectOption>
               {custom && <NativeSelectOption value="custom">Custom dates</NativeSelectOption>}
             </NativeSelect>
           </div>

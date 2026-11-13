@@ -35,7 +35,7 @@ async function loadProposal(tx: Tx, user: SessionUser, proposalId: string) {
 const kycSchema = z.object({
   consent: z.string().default(""), // "on" = "Customer consent taken" ticked
   pan: z.string().trim().toUpperCase().pipe(z.union([z.literal(""), z.string().regex(PAN_RE, "PAN looks like ABCDE1234F")])),
-  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits")])),
+  aadhaar: z.string().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.union([z.literal(""), z.string().regex(AADHAAR_RE, "Aadhaar has 12 digits and does not start with 0 or 1")])),
 });
 
 /**
@@ -235,7 +235,7 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
 
       const product = p.productId ? await tx.product.findUnique({ where: { id: p.productId } }) : null;
       const scheme = p.schemeId ? await tx.scheme.findUnique({ where: { id: p.schemeId }, include: { rates: true } }) : null;
-      await createPolicyWithSchedule(tx, {
+      const policy = await createPolicyWithSchedule(tx, {
         tenantId: user.tenantId, customerId: customer.id, secondHolderId, ownerId: p.ownerId, proposalId: p.id, policyNumber,
         firstHolderCif: p.firstHolderCif, secondHolderCif: p.jointAccount ? p.secondHolderCif : null, folioNo: p.productType === "MutualFund" ? p.folioNo : null,
         productType: p.productType, partner: p.insurer, productName: p.productName, productId: p.productId, schemeId: p.schemeId,
@@ -244,6 +244,7 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
         bankDetailsEnc: p.bankDetailsEnc, rateAtOpen: p.rateAtOpen ?? (scheme ? rateOn(scheme.rates, p.startDate)?.rate : null), invoiceRule: product?.invoiceRule,
       });
       await tx.proposal.update({ where: { id: p.id }, data: { status: "Issued", policyNumber, customerId: customer.id, secondHolderId } });
+      await audit(tx, user, { entity: "Policy", entityId: policy.id, action: "Issue", summary: `${policyNumber} issued from proposal ${p.proposalNo} · ${customer.name} · ${p.insurer} ${p.productName}` });
       if (p.quotation?.leadId) await advanceStage(tx, p.quotation.leadId, "Customer");
       return { ok: true, id: customer.id };
     });

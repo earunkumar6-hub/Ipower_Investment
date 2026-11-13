@@ -100,13 +100,13 @@ describe("Customer 360", () => {
     as(users.arun);
     const r = await addProductDirect({ ok: false }, form({
       customerId: rajesh.id, productId: td.id, schemeId: td.schemes[0].id, policyNumber: `TD T${Date.now() % 100000}`, amount: "50000", startDate: isoDate(today), frequency: "OneTime",
-      [`cf_${td.customFields.find((f) => f.required)!.id}`]: "Mylapore", bank_holder: "Rajesh", bank_bank: "SBI", bank_branch: "Adyar", bank_ifsc: "SBIN0001234", bank_accountNo: "123456789012",
+      [`cf_${td.customFields.find((f) => f.required)!.id}`]: "Mylapore", bank_holder: "Rajesh", bank_bank: "SBI", bank_branch: "Adyar", bank_ifsc: "SBIN0001234", bank_accountNo: "223456789012",
     }));
     expect(r.ok).toBe(true);
     const d = (await loadCustomer360(users.arun as SessionUser, rajesh.id))!;
     const bank = d.holdings.find((h) => h.id === r.id)!.details.find(([k]) => k === "Bank")![1];
     expect(bank).toContain("A/c XXXXXXXX9012");
-    expect(JSON.stringify(d.holdings)).not.toContain("123456789012");
+    expect(JSON.stringify(d.holdings)).not.toContain("223456789012");
   });
 });
 

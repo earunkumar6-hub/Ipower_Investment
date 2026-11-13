@@ -45,33 +45,33 @@ export function TicketForm({ screens }: { screens: string[] }) {
   return (
     <form onSubmit={onSubmit} className="max-w-3xl space-y-3 rounded-xl border bg-white p-4">
       <h2 className="font-semibold">Raise ticket</h2>
-      <Field label="Title" error={err.title}>
+      <Field htmlFor="title" label="Title" error={err.title}>
         <Input id="title" name="title" maxLength={120} aria-invalid={!!err.title} />
       </Field>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Screen" error={err.screen}>
+        <Field htmlFor="screen" label="Screen" error={err.screen}>
           <NativeSelect id="screen" name="screen" defaultValue="" className="w-full" aria-invalid={!!err.screen}>
             <NativeSelectOption value=""></NativeSelectOption>
             {screens.map((s) => <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
-        <Field label="Type" error={err.type}>
+        <Field htmlFor="type" label="Type" error={err.type}>
           <NativeSelect id="type" name="type" defaultValue="" className="w-full" aria-invalid={!!err.type}>
             <NativeSelectOption value=""></NativeSelectOption>
             {TYPES.map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
-        <Field label="Priority" error={err.priority}>
+        <Field htmlFor="priority" label="Priority" error={err.priority}>
           <NativeSelect id="priority" name="priority" defaultValue="" className="w-full" aria-invalid={!!err.priority}>
             <NativeSelectOption value=""></NativeSelectOption>
             {PRIORITIES.map(([v, l]) => <NativeSelectOption key={v} value={v}>{l}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
       </div>
-      <Field label="Details" error={err.details}>
+      <Field htmlFor="details" label="Details" error={err.details}>
         <Textarea id="details" name="details" rows={6} maxLength={4000} aria-invalid={!!err.details} />
       </Field>
-      <Field label="Screenshot (optional)" error={clientError ?? err.screenshot}>
+      <Field htmlFor="screenshot" label="Screenshot (optional)" error={clientError ?? err.screenshot}>
         <Input id="screenshot" name="screenshot" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="text-xs" />
       </Field>
       {(clientError ?? state.error) && <p className="rounded-lg bg-orange-50 p-2 text-sm text-orange-900">{clientError ?? state.error}</p>}
@@ -80,10 +80,11 @@ export function TicketForm({ screens }: { screens: string[] }) {
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+/** `htmlFor` ties the label to its box, so screen readers and tests find the field by name (QA D-09). */
+function Field({ htmlFor, label, error, children }: { htmlFor?: string; label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {error && error.length < 60 && <p className="text-xs text-destructive">{error}</p>}
     </div>

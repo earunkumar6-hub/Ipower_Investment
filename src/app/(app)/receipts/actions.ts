@@ -12,6 +12,7 @@ import { financialYear, istToday } from "@/lib/dates";
 import { db, type Tx } from "@/lib/db";
 import { canWorkOn } from "@/lib/leads";
 import { seesAllRecords } from "@/lib/permissions";
+import { audit } from "@/lib/audit";
 import { D, fmtINR, sum } from "@/lib/money";
 import { nextNumber } from "@/lib/numbering";
 import { postOwnerReturn } from "@/lib/posting";
@@ -131,6 +132,7 @@ async function createReceiptUnguarded(_: ActionResult, form: FormData): Promise<
       // Cash denomination is kept once: on the payment when several dues are paid together.
       for (const line of lines) receipts.push(await payDueLine(tx, common, line, { paymentId: payment?.id ?? null, ...(!payment && { denominations: pay.ok.denominations }) }));
 
+      if (payment) await audit(tx, user, { entity: "Payment", entityId: payment.id, action: "Create", summary: `${payment.paymentNo} · ${customer.name} · ${lines.length} bill(s) · ${fmtINR(amount)}` });
       if (!payment) {
         await whatsApp(thanks(lines[0].policy, receipts[0].receiptNo), "Receipt", receipts[0].id);
         return { ok: true, id: receipts[0].id, href: `/receipts/${receipts[0].id}` };
@@ -165,6 +167,7 @@ async function reverseReceipt(tx: Tx, r: Receipt, ctx: { tenantId: string; userI
   }
   await tx.commission.updateMany({ where: { receiptId: r.id }, data: { status: "Cancelled" } });
   await tx.ownerPaidSlip.updateMany({ where: { closedByReceiptId: r.id }, data: { status: "CustomerOwes", closedByReceiptId: null } });
+  await audit(tx, { id: ctx.userId, tenantId: ctx.tenantId }, { entity: "Receipt", entityId: r.id, action: "Cancel", summary: `${r.receiptNo} cancelled`, reason: ctx.reason });
 }
 
 const depositedAtPo = (r: Receipt) => r.rdStatus === "Deposited" || r.rdStatus === "Verified";
@@ -217,6 +220,7 @@ async function cancelPaymentUnguarded(_: ActionResult, form: FormData): Promise<
       await reverseReceipt(tx, r, { tenantId: user.tenantId, userId: user.id, reason, today });
     }
     await tx.payment.update({ where: { id: p.id }, data: { status: "Cancelled", cancelReason: reason, cancelledById: user.id, cancelledAt: new Date() } });
+    await audit(tx, user, { entity: "Payment", entityId: p.id, action: "Cancel", summary: `${p.paymentNo} cancelled (${p.receipts.length} bill(s))`, reason });
     return { ok: true };
   });
   if (result.ok) revalidatePath("/", "layout");

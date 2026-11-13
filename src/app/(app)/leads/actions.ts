@@ -128,6 +128,7 @@ export async function createLead(_: ActionResult, form: FormData): Promise<Actio
         },
       });
       if (callAt) await tx.call.create({ data: { tenantId: user.tenantId, leadId: lead.id, ownerId, dueAt: callAt, note: p.details.notes || null } });
+      await audit(tx, user, { entity: "Lead", entityId: lead.id, action: "Create", summary: `Lead ${lead.leadNo} ${lead.name} added` });
       return lead;
     });
     revalidatePath("/", "layout");

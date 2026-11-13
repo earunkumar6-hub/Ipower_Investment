@@ -221,6 +221,7 @@ async function createGroupReceiptUnguarded(_: ActionResult, form: FormData): Pro
         },
       });
       for (const line of lines) await payDueLine(tx, common, line, { paymentId: payment.id });
+      await audit(tx, user, { entity: "Payment", entityId: payment.id, action: "Create", summary: `${payment.paymentNo} · ${v.kind} · paid by ${v.payerName} · ${lines.length} bill(s) · ${fmtINR(amount)}` });
       const customers = new Set(lines.map((l) => l.customerId)).size;
       await tx.messageLog.create({
         data: {

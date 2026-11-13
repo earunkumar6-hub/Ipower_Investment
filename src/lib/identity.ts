@@ -7,7 +7,8 @@ import { maskMobile } from "@/lib/lead-labels";
 // (unique per agency in the database); screens show only the masked forms. A duplicate is reported with the person it
 // already belongs to, for the "already exists" pop-up – there is no way to save over it.
 
-export const AADHAAR_RE = /^\d{12}$/;
+/** 12 digits; UIDAI numbers never start with 0 or 1 (QA D-07, 13 Nov 2026). */
+export const AADHAAR_RE = /^[2-9]\d{11}$/;
 export const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/;
 
 /** ABCDE1234M → ABCxxxxx4M */

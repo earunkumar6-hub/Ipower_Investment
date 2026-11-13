@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { MobileEntry } from "@/lib/mobiles";
 import { editCustomer } from "../actions";
+import { customerVersion } from "@/lib/customer-version";
 import { ClosePolicyButton } from "./close-policy-dialog";
 import { PolicyManageButton } from "./policy-manage";
 
@@ -53,6 +54,8 @@ export function EditCustomerButton({ customer, startOpen = false }: { customer: 
           <DialogTitle className="text-lg font-semibold">Edit customer</DialogTitle>
           <form onSubmit={confirm.onSubmit} className="space-y-3">
             <input type="hidden" name="customerId" value={customer.id} />
+            {/* The details this form was opened with: a save after someone else changed them is refused (D-02). */}
+            <input type="hidden" name="version" value={customerVersion(customer)} />
             {/* One Save, at the bottom (owner, 13 Nov 2026: the top one in this pop-up removed). */}
             <div className="space-y-1.5"><Label htmlFor="c-name">Name</Label><Input id="c-name" name="name" defaultValue={customer.name} aria-invalid={!!err.name} /></div>
             <MobilesField initial={customer.mobiles.length ? customer.mobiles : [{ number: "", isWhatsApp: true }]} error={err.mobile} />

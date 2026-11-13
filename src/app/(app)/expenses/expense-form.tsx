@@ -52,43 +52,43 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
     <form key={formKey} onSubmit={submitKeepingValues(action)} className="min-w-0 flex-1 space-y-3 rounded-xl border bg-white p-4">
       <h2 className="font-semibold">Add expense</h2>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Purpose" error={err.category}>
+        <Field htmlFor="category" label="Purpose" error={err.category}>
           <OtherOptionSelect name="category" id="category" options={categories} defaultValue={categories[0]} label="Purpose" error={err.category} />
         </Field>
-        <Field label="Description" error={err.description}>
+        <Field htmlFor="description" label="Description" error={err.description}>
           <Input id="description" name="description" aria-invalid={!!err.description} />
         </Field>
-        <Field label="Amount" error={err.amount}>
+        <Field htmlFor="amount" label="Amount" error={err.amount}>
           <Input id="amount" name="amount" value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" aria-invalid={!!err.amount} />
         </Field>
-        <Field label="Vendor" error={err.vendor}>
+        <Field htmlFor="vendor" label="Vendor" error={err.vendor}>
           <Input id="vendor" name="vendor" aria-invalid={!!err.vendor} />
         </Field>
-        <Field label="Bill number (optional)" error={err.billNo}>
+        <Field htmlFor="billNo" label="Bill number (optional)" error={err.billNo}>
           <Input id="billNo" name="billNo" className="not-placeholder-shown:uppercase" aria-invalid={!!err.billNo} />
         </Field>
-        <Field label="Date" error={err.expenseDate}>
+        <Field htmlFor="expenseDate" label="Date" error={err.expenseDate}>
           <DmyDateInput name="expenseDate" defaultValue={today} max={today} />
         </Field>
-        <Field label="Paid by">
+        <Field htmlFor="paidBy" label="Paid by">
           <NativeSelect id="paidBy" name="paidBy" value={paidBy} onChange={(e) => setPaidBy(e.target.value as typeof paidBy)} className="w-full">
             <NativeSelectOption value="Company">Company account</NativeSelectOption>
             <NativeSelectOption value="Employee">Employee (own money)</NativeSelectOption>
             <NativeSelectOption value="Owner">Owner (personal money)</NativeSelectOption>
           </NativeSelect>
         </Field>
-        <Field label="Mode">
+        <Field htmlFor="mode" label="Mode">
           <NativeSelect id="mode" name="mode" className="w-full" value={mode} onChange={(e) => setMode(e.target.value)}>
             {["Cash", "UPI", "Bank", "Card", "Cheque"].map((m) => <NativeSelectOption key={m} value={m}>{m === "Bank" ? "Net banking" : m}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
         {mode !== "Cash" && (
-          <Field label={mode === "Cheque" ? "Cheque number" : "Transaction ID"} error={err.reference}>
+          <Field htmlFor="reference" label={mode === "Cheque" ? "Cheque number" : "Transaction ID"} error={err.reference}>
             <Input id="reference" name="reference" aria-invalid={!!err.reference} />
           </Field>
         )}
         {paidBy === "Company" ? (
-          <Field label="From account" error={err.fromAccount}>
+          <Field htmlFor="fromAccount" label="From account" error={err.fromAccount}>
             <NativeSelect id="fromAccount" name="fromAccount" className="w-full" value={fromAccount} onChange={(e) => setFromAccount(e.target.value)}>
               {accounts.map((a) => <NativeSelectOption key={a.id} value={a.id}>{a.label}</NativeSelectOption>)}
             </NativeSelect>
@@ -96,12 +96,12 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
         ) : (
           <>
             <input type="hidden" name="fromAccount" value="" />
-            <Field label={paidBy === "Employee" ? "Employee name" : "Owner"} error={err.paidByName}>
+            <Field htmlFor="paidByName" label={paidBy === "Employee" ? "Employee name" : "Owner"} error={err.paidByName}>
               <Input id="paidByName" name="paidByName" defaultValue={paidBy === "Employee" ? userName : "Owner"} readOnly={paidBy === "Owner"} />
             </Field>
           </>
         )}
-        <Field label="Bill photo or PDF (optional)" error={err.bill}>
+        <Field htmlFor="bill" label="Bill photo or PDF (optional)" error={err.bill}>
           <Input id="bill" name="bill" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="text-xs" />
         </Field>
         {fromCash && (
@@ -110,7 +110,7 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
           </div>
         )}
         <div className="col-span-3">
-          <Field label="Notes (required)" error={err.notes}>
+          <Field htmlFor="notes" label="Notes (required)" error={err.notes}>
             <Input id="notes" name="notes" required aria-invalid={!!err.notes} />
           </Field>
         </div>
@@ -134,10 +134,11 @@ export function ExpenseForm({ categories, accounts, today, userName }: { categor
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+/** `htmlFor` ties the label to its box, so screen readers and tests find the field by name (QA D-09). */
+function Field({ htmlFor, label, error, children }: { htmlFor?: string; label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {error && error.length < 60 && <p className="text-xs text-destructive">{error}</p>}
     </div>

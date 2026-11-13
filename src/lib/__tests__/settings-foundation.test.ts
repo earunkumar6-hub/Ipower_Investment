@@ -32,7 +32,7 @@ const form = (o: Record<string, string | string[]>) => {
 };
 const users: Record<string, U> = {};
 const as = (u: string) => (session.user = users[u]);
-const bank = { type: "Bank", bankName: "IOB", branch: "Arcot Road", accountNo: "123456789012", ifsc: "IOBA0001234", micr: "632020002", accountKind: "Savings", openingBalance: "5000" };
+const bank = { type: "Bank", bankName: "IOB", branch: "Arcot Road", accountNo: "223456789012", ifsc: "IOBA0001234", micr: "632020002", accountKind: "Savings", openingBalance: "5000" };
 const created: { accounts: string[]; options: string[]; vendor: string } = { accounts: [], options: [], vendor: "Vitest Settings Vendor" };
 let graceBefore = 3;
 let defaultBankId = "";
@@ -85,8 +85,8 @@ describe("Bank accounts and wallets", () => {
     created.accounts.push(a.id);
     expect(a).toMatchObject({ name: "IOB savings ••9012", last4: "9012", ifsc: "IOBA0001234", micr: "632020002", accountKind: "Savings", isDefault: false, active: true });
     expect(a.openingBalance.toFixed(2)).toBe("5000.00");
-    expect(a.accountNoEnc).not.toContain("123456789012");
-    expect(decryptJson<string>(a.accountNoEnc!)).toBe("123456789012");
+    expect(a.accountNoEnc).not.toContain("223456789012");
+    expect(decryptJson<string>(a.accountNoEnc!)).toBe("223456789012");
     expect(await prisma.auditLog.count({ where: { entity: "Account", entityId: a.id } })).toBe(1);
     // Same name again is refused.
     expect((await m.saveAccount({ ok: false }, form(bank))).error).toMatch(/already exists/);

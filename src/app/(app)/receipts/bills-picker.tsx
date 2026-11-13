@@ -23,7 +23,8 @@ export const unpaidCounts = (policies: PolicyOption[]): Record<string, number> =
 export function ticked(policies: PolicyOption[], counts: Record<string, number>) {
   const picked = policies.filter((p) => (counts[p.id] ?? 0) > 0);
   return {
-    dues: picked.map((p) => ({ policyId: p.id, count: counts[p.id] })),
+    // `from` = the oldest bill the user saw: the server refuses if someone else has paid it meanwhile (D-01).
+    dues: picked.map((p) => ({ policyId: p.id, count: counts[p.id], from: p.dues[0]?.date })),
     total: picked.reduce((t, p) => t + p.dues.slice(0, counts[p.id]).reduce((s, d) => s + paise(d.amount), 0), 0),
     count: picked.reduce((t, p) => t + counts[p.id], 0),
   };
