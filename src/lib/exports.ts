@@ -464,7 +464,7 @@ export const REPORTS: Record<string, Report> = {
       const account = nameIn(accounts);
       return {
         file: `esevai-${fileDate(today)}.xlsx`,
-        title: `ESEVAI & CSC – ${fmtDate(today)}`,
+        title: `Esevai & CSC – ${fmtDate(today)}`,
         sheets: [
           {
             name: "Entries",

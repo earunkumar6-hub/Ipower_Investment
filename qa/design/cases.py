@@ -105,10 +105,10 @@ CASES = [
     ("EXP-03", "EXP", "CL-42", B, "P2", "Bill number optional", "Save without bill no.", "Saved", A, "expenses"),
     ("EXP-04", "EXP", "CL-42", N, "P1", "Same vendor bill no. twice", "Repeat vendor + bill no.", "Pop-up names the earlier expense; not saved", A, "expenses"),
     ("EXP-05", "EXP", "CL-42", H, "P3", "Help text matches the rule", "Open Expenses", "No 'Bill number is required' text (bill no. is optional)", A, "expenses"),
-    ("ESV-10", "ESV", "CL-15", H, "P3", "Module named ESEVAI & CSC", "Menu and page title", "'ESEVAI & CSC'", A, "esevai"),
-    ("ESV-11", "ESV", "CL-16", H, "P3", "Entry button is Save", "Open ESEVAI & CSC", "Button 'Save'; no 'Print receipt'", A, "esevai"),
+    ("ESV-10", "ESV", "CL-15", H, "P3", "Module named Esevai & CSC", "Menu and page title", "'Esevai & CSC'", A, "esevai"),
+    ("ESV-11", "ESV", "CL-16", H, "P3", "Entry button is Save", "Open Esevai & CSC", "Button 'Save'; no 'Print receipt'", A, "esevai"),
     ("ESV-12", "ESV", "NR-01, CL-01", H, "P3", "No UTR or Notes box", "Open the entry form", "No UTR / Notes fields", A, "esevai"),
-    ("ESV-20", "ESV", "CL-46", H, "P2", "Rates page lists EB slabs and PAN / certificate", "Settings → ESEVAI & CSC rates", "Rates with start dates", A, "esevai"),
+    ("ESV-20", "ESV", "CL-46", H, "P2", "Rates page lists EB slabs and PAN / certificate", "Settings → Esevai & CSC rates", "Rates with start dates", A, "esevai"),
     ("ESV-22", "ESV", "CL-46, CL-01", B, "P2", "EB bill outside slabs", "EB bill ₹1,500", "No charge pre-filled; saves with the typed charge (Q9: slab still undefined)", A, "esevai"),
     # ── FUP / MSG / TKT ─────────────────────────────────────────────────────────────────────────────────────
     ("LEAD-05", "LEAD", "CL-36", H, "P1", "New lead numbered RR-nn", "Add a lead", "leadNo matches RR-\d{2,}", A, "validation"),

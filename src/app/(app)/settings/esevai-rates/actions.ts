@@ -10,7 +10,7 @@ import { isSlabService, ratesInForce } from "@/lib/esevai";
 import { D, fmtINR } from "@/lib/money";
 import { authorize } from "@/lib/session";
 
-// Settings → ESEVAI & CSC rates (owner change list, #46). A rate is never edited: a new rate with a start date
+// Settings → Esevai & CSC rates (owner change list, #46). A rate is never edited: a new rate with a start date
 // takes over from that day, so older entries keep the rate they were made with. Every change is logged.
 
 const fail = (error: string, field?: string): ActionResult => ({ ok: false, error, fieldErrors: field ? { [field]: error } : undefined });

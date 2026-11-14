@@ -1037,9 +1037,9 @@
   "requirements": "CL-15",
   "type": "Happy",
   "priority": "P3",
-  "title": "Module named ESEVAI & CSC",
+  "title": "Module named Esevai & CSC",
   "steps": "Menu and page title",
-  "expected": "'ESEVAI & CSC'",
+  "expected": "'Esevai & CSC'",
   "automation": "Auto",
   "spec": "esevai"
  },
@@ -1050,7 +1050,7 @@
   "type": "Happy",
   "priority": "P3",
   "title": "Entry button is Save",
-  "steps": "Open ESEVAI & CSC",
+  "steps": "Open Esevai & CSC",
   "expected": "Button 'Save'; no 'Print receipt'",
   "automation": "Auto",
   "spec": "esevai"
@@ -1074,7 +1074,7 @@
   "type": "Happy",
   "priority": "P2",
   "title": "Rates page lists EB slabs and PAN / certificate",
-  "steps": "Settings → ESEVAI & CSC rates",
+  "steps": "Settings → Esevai & CSC rates",
   "expected": "Rates with start dates",
   "automation": "Auto",
   "spec": "esevai"

@@ -94,7 +94,7 @@ export const PERMISSION_GROUPS: { area: string; items: [Permission, string][] }[
     ["Records.SeeAll", "See and work on every staff member's customers, bills, receipts and expenses"],
     ["Data.SeeAll", "See every staff member's leads, follow-ups, quotations, proposals and messages, and bank balances"]] },
   { area: "Receipts", items: [["Receipt.View", "See receipts"], ["Receipt.Create", "Take receipts, direct bills"], ["Receipt.Cancel", "Cancel receipts"], ["BillGroup.Manage", "Create / change bill groups"]] },
-  { area: "ESEVAI & CSC", items: [["Service.Record", "Record ESEVAI & CSC entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
+  { area: "Esevai & CSC", items: [["Service.Record", "Record Esevai & CSC entries"], ["Wallet.View", "See wallets"], ["Wallet.Recharge", "Recharge wallets"]] },
   { area: "Expenses", items: [["Expense.View", "See expenses"], ["Expense.Create", "Add expenses"], ["Expense.Approve", "Approve expenses"]] },
   {
     area: "Day Book", items: [["DayBook.View", "See the Day Book"], ["DayBook.Create", "Post Day Book entries (ATM, deposits, owner money)"], ["DayBook.Verify", "Verify the cash count"],

@@ -1,7 +1,7 @@
 import { resetDb } from "../support/db";
 import { expect, stamp, test } from "../support/fixtures";
 
-// Expenses (#42), Day Book (#6 #22 #32 #43), ESEVAI & CSC (#15 #16 #46, UTR/notes removed).
+// Expenses (#42), Day Book (#6 #22 #32 #43), Esevai & CSC (#15 #16 #46, UTR/notes removed).
 // The expense form's boxes have no accessible names (A11Y-01): found by field name there.
 test.beforeAll(async () => resetDb());
 
@@ -139,13 +139,13 @@ test.describe("Day Book", () => {
   });
 });
 
-test.describe("ESEVAI & CSC", () => {
-  test("[ESV-10][ESV-11][ESV-12] named ESEVAI & CSC; entry button is Save; no UTR / Notes", async ({ page, loginAs }) => {
+test.describe("Esevai & CSC", () => {
+  test("[ESV-10][ESV-11][ESV-12] named Esevai & CSC; entry button is Save; no UTR / Notes", async ({ page, loginAs }) => {
     await loginAs("arun");
-    await expect(page.getByRole("complementary").getByRole("link", { name: "ESEVAI & CSC" })).toBeVisible();
+    await expect(page.getByRole("complementary").getByRole("link", { name: "Esevai & CSC" })).toBeVisible();
     await page.goto("/esevai");
-    await expect(page.getByRole("heading", { name: "New ESEVAI & CSC entry" })).toBeVisible();
-    const f = page.locator("form").filter({ has: page.getByRole("heading", { name: "New ESEVAI & CSC entry" }) }).first();
+    await expect(page.getByRole("heading", { name: "New Esevai & CSC entry" })).toBeVisible();
+    const f = page.locator("form").filter({ has: page.getByRole("heading", { name: "New Esevai & CSC entry" }) }).first();
     const scope = (await f.count()) ? f : page.locator("main");
     await expect(page.getByRole("button", { name: "Save", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /print/i })).toHaveCount(0);

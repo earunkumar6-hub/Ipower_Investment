@@ -8,7 +8,7 @@ const TABS = [
   ["products", "Products and schemes", "/settings"],
   ["accounts", "Bank accounts and wallets", "/settings/accounts"],
   ["payment-modes", "Payment modes", "/settings/payment-modes"],
-  ["esevai-rates", "ESEVAI & CSC rates", "/settings/esevai-rates"],
+  ["esevai-rates", "Esevai & CSC rates", "/settings/esevai-rates"],
   ["dropdowns", "Dropdown values", "/settings/dropdowns"],
   ["daybook", "Day Book", "/settings/daybook"],
   ["log", "Change log", "/settings/log"],

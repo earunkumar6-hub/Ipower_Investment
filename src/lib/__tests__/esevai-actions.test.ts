@@ -66,7 +66,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("Settings → ESEVAI & CSC rates (#46)", () => {
+describe("Settings → Esevai & CSC rates (#46)", () => {
   it("a new rate takes over from its start date; a rate not yet started can be removed", async () => {
     const t = users.admin.tenantId;
     const eb = await prisma.serviceType.findFirstOrThrow({ where: { tenantId: t, code: "EB" } });

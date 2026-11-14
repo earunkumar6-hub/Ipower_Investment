@@ -2,7 +2,7 @@
 
 **IPower Investments** is a small financial advisory agency. It helps families buy and look after
 **insurance, mutual funds and post office savings schemes** (RD, TD, PPF, SSA and others), and it also
-runs **e-seavi & CSC** counter services (electricity bill payments, PAN and certificate applications).
+runs **Esevai & CSC** counter services (electricity bill payments, PAN and certificate applications).
 
 This software is the agency's **office system**. It replaces notebooks and spreadsheets with one place
 where everything is written down once and every staff member sees the same, up-to-date picture.
@@ -15,7 +15,7 @@ where everything is written down once and every staff member sees the same, up-t
 - **Renewals** – which premium or instalment is due, which is overdue, which deposit is about to mature, and reminders to send.
 - **Receipts and bills** – money received from customers (cash, UPI, net banking, cheque), numbered receipts as PDFs.
 - **The Day Book** – a daily cash-and-bank ledger: every rupee in or out is one line that can never be edited, only reversed. At day's end the cash is counted, checked and the day is closed.
-- **Expenses, ESEVAI & CSC entries, wallets and commission** – office spending (with approvals), the counter services, and what the agency earns.
+- **Expenses, Esevai & CSC entries, wallets and commission** – office spending (with approvals), the counter services, and what the agency earns.
 - **Profit & Loss, reports and downloads** – month summaries and Excel / PDF downloads for the owner.
 - **Tickets** – staff can report a problem or ask for a change; the developer is alerted.
 

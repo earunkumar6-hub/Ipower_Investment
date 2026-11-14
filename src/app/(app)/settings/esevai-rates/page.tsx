@@ -13,7 +13,7 @@ const ORDER = ["EB", "PAN", "CERT"];
 const rank = (code: string) => (ORDER.includes(code) ? ORDER.indexOf(code) : ORDER.length);
 
 /**
- * Settings → ESEVAI & CSC rates (owner change list, #46): per service, what is paid / deducted, the service charge and
+ * Settings → Esevai & CSC rates (owner change list, #46): per service, what is paid / deducted, the service charge and
  * what is collected from the customer, each with a start date. The entry form fills these in and staff may change
  * them; Service charge = Collected − Paid. Other services have no rate (amounts are typed on each entry).
  */
