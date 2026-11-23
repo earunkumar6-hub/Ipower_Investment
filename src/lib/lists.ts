@@ -2,7 +2,7 @@ import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, 
 import type { Tone } from "@/components/status-badge";
 import { addDays, fmtDate } from "@/lib/dates";
 import { DEPOSIT_WHERE } from "@/lib/deposit-status";
-import type { Fuzzy } from "@/lib/fuzzy";
+import { longEnough, nameLike, numberLike, type Fuzzy } from "@/lib/fuzzy";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { ownerScope, recordScope } from "@/lib/leads";
@@ -50,9 +50,9 @@ export function leadFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) {
     ...(source && { source }),
     ...(q && {
       OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { mobiles: { some: { number: { contains: q } } } },
-        { leadNo: { contains: q, mode: "insensitive" } },
+        ...nameLike("name", q),
+        ...(longEnough(q) ? [{ mobiles: { some: { number: { contains: q } } } }] : []),
+        ...numberLike("leadNo", q),
         ...fuzzyIds(fuzzy.lead),
       ],
     }),
@@ -86,7 +86,11 @@ export function customerFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {})
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
     ...recordScope(user),
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }, ...fuzzyIds(fuzzy.customer)] }),
+    ...(q && { OR: [
+      ...nameLike("name", q),
+      ...(longEnough(q) ? [{ mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [...numberLike("policyNumber", q), ...numberLike("folioNo", q)] } } }] : []),
+      ...fuzzyIds(fuzzy.customer),
+    ] }),
     ...(filtered && { policies: { some: holdingWhere } }),
   };
   const filterLabel = [
@@ -260,7 +264,7 @@ export function receiptFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) 
   const rd = RD_STATUSES.find((s) => s === sp.rd);
 
   const customer: Prisma.CustomerWhereInput = {
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }, ...fuzzyIds(fuzzy.customer)] }),
+    ...(q && { OR: [...nameLike("name", q), ...numberLike("mobile", q, false), ...(longEnough(q) ? [{ mobiles: { some: { number: { contains: q } } } }] : []), ...fuzzyIds(fuzzy.customer)] }),
     ...(cif && { cifNo: { contains: cif, mode: "insensitive" } }),
   };
   const policy: Prisma.PolicyWhereInput = {
@@ -294,7 +298,7 @@ export function receiptFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) 
     ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: addDays(to, 1) }) } }),
   };
   const matchQ: Prisma.CustomerWhereInput | undefined = q
-    ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }, ...fuzzyIds(fuzzy.customer)] }
+    ? { OR: [...nameLike("name", q), ...numberLike("mobile", q, false), ...(longEnough(q) ? [{ mobiles: { some: { number: { contains: q } } } }] : []), ...fuzzyIds(fuzzy.customer)] }
     : undefined;
   const line: Prisma.ReceiptWhereInput = {
     ...(cif && { customer: { cifNo: { contains: cif, mode: "insensitive" } } }),
@@ -309,7 +313,7 @@ export function receiptFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) 
     ...(status && { status }),
     ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
     AND: [
-      ...(matchQ ? [{ OR: [{ payerName: { contains: q, mode: "insensitive" as const } }, { payerMobile: { contains: q } }, ...fuzzyIds(fuzzy.payment), { receipts: { some: { customer: matchQ } } }] }] : []),
+      ...(matchQ && q ? [{ OR: [...nameLike("payerName", q), ...numberLike("payerMobile", q, false), ...fuzzyIds(fuzzy.payment), { receipts: { some: { customer: matchQ } } }] }] : []),
       ...(Object.keys(line).length ? [{ receipts: { some: line } }] : []),
     ],
   });

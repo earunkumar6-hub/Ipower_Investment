@@ -1,7 +1,7 @@
-import { fuzzyMatches } from "@/lib/fuzzy";
+import { nameLike, numberLike, fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
-import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/live-search-input";
 import { Button } from "@/components/ui/button";
 import { addDays, isoDate, istToday } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -48,7 +48,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
   const q = sp.q?.trim();
   const fuzzy = await fuzzyMatches(user.tenantId, q, ["customer", "lead"]);
   const matchFor = (ids?: string[]) => q
-    ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { mobile: { contains: q } }, ...(ids?.length ? [{ id: { in: ids } }] : [])] }
+    ? { OR: [...nameLike("name", q), ...numberLike("mobile", q, false), ...(ids?.length ? [{ id: { in: ids } }] : [])] }
     : {};
   const [customers, leads] = await Promise.all([
     db.customer.findMany({ where: { tenantId: user.tenantId, ...ownerScope(user), ...matchFor(fuzzy.customer) }, orderBy: { name: "asc" }, take: 20 }),
@@ -65,7 +65,7 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
       <div className="max-w-2xl rounded-xl border bg-white p-4">
         <h2 className="mb-3 font-semibold">Who is this quotation for?</h2>
         <form className="mb-4 flex gap-2">
-          <Input name="q" defaultValue={q} autoFocus />
+          <LiveSearchInput name="q" defaultValue={q} autoFocus />
           <Button type="submit" variant="outline">Search</Button>
         </form>
         <div className="grid grid-cols-2 gap-6 text-sm">

@@ -1,8 +1,8 @@
-import { fuzzyMatches } from "@/lib/fuzzy";
+import { nameLike, numberLike, fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/live-search-input";
 import { notFound } from "next/navigation";
 import { istToday } from "@/lib/dates";
 import { bankAccountOptions } from "@/lib/accounts";
@@ -80,7 +80,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
     where: {
       tenantId: user.tenantId,
       ...recordScope(user),
-      ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, ...(fuzzy.customer?.length ? [{ id: { in: fuzzy.customer } }] : [])] }),
+      ...(q && { OR: [...nameLike("name", q), ...numberLike("mobile", q, false), ...(fuzzy.customer?.length ? [{ id: { in: fuzzy.customer } }] : [])] }),
     },
     orderBy: { name: "asc" },
     take: 30,
@@ -92,7 +92,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
       <div className="max-w-xl rounded-xl border bg-white p-4">
         <h2 className="mb-3 font-semibold">Who is paying?</h2>
         <form className="mb-4 flex gap-2">
-          <Input name="q" defaultValue={q} autoFocus />
+          <LiveSearchInput name="q" defaultValue={q} autoFocus />
           <Button type="submit" variant="outline">Search</Button>
         </form>
         <ul className="space-y-1 text-sm">

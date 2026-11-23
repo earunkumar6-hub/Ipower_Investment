@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DmyDateInput } from "@/components/dmy-date-input";
 import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/live-search-input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { PO_SCHEMES, PRODUCT_SHORT, RD_STATUSES, RENEWAL_PRODUCTS, type receiptFilter } from "@/lib/lists";
 import { MODE_LABEL } from "@/lib/payment-modes";
@@ -15,7 +16,7 @@ export function ReceiptFilters({ f, tab, accounts, groups }: { f: Filter; tab: s
     <form className="mb-4 grid grid-cols-2 gap-2 rounded-xl border bg-white p-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
       <input type="hidden" name="tab" value={tab} />
       {f.deposit !== "all" && <input type="hidden" name="deposit" value={f.deposit} />}
-      <Input id="rf-q" name="q" defaultValue={f.q} aria-label="Name or mobile" className={cls} />
+      <LiveSearchInput id="rf-q" name="q" defaultValue={f.q} aria-label="Name or mobile" className={cls} />
       <NativeSelect name="group" defaultValue={f.group ?? ""} aria-label="Bill group" className={cls}>
         <NativeSelectOption value="">Any bill group</NativeSelectOption>
         {groups.map((g) => <NativeSelectOption key={g.id} value={g.id}>{g.name}</NativeSelectOption>)}

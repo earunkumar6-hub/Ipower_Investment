@@ -1,4 +1,4 @@
-import { fuzzyMatches } from "@/lib/fuzzy";
+import { nameLike, numberLike, fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { ListSearch } from "@/components/list-search";
@@ -28,9 +28,9 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     ...(q && {
       AND: [{
         OR: [
-          { mobile: { contains: q } },
-          { customerName: { contains: q, mode: "insensitive" as const } },
-          { quoteNo: { contains: q, mode: "insensitive" as const } },
+          ...numberLike("mobile", q, false),
+          ...nameLike("customerName", q),
+          ...numberLike("quoteNo", q),
           ...(fuzzy.quotation?.length ? [{ id: { in: fuzzy.quotation } }] : []),
         ],
       }],

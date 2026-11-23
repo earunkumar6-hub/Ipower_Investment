@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/live-search-input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
@@ -17,10 +17,11 @@ export function CustomerFilters({ q, product, company, scheme, status, products,
   const router = useRouter();
   const pathname = usePathname();
 
-  function go(next: { q?: string; product?: string; company?: string; scheme?: string; status?: string }) {
+  function go(next: { q?: string; product?: string; company?: string; scheme?: string; status?: string }, replace = false) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries({ q, status, ...next })) if (v && v !== "all") params.set(k, v);
-    router.push(params.size ? `${pathname}?${params}` : pathname);
+    const url = params.size ? `${pathname}?${params}` : pathname;
+    if (replace) router.replace(url); else router.push(url);
   }
 
   const byCompany = product === "insurance" || product === "mf";
@@ -30,7 +31,7 @@ export function CustomerFilters({ q, product, company, scheme, status, products,
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); go({ q: String(new FormData(e.currentTarget).get("q") ?? ""), product, company, scheme }); }}>
         <div className="space-y-1">
           <Label htmlFor="q" className="text-xs">Search</Label>
-          <Input id="q" name="q" defaultValue={q} className="h-7 w-64" />
+          <LiveSearchInput id="q" name="q" defaultValue={q} className="h-7 w-64" onSearch={(v) => go({ q: v, product, company, scheme }, true)} />
         </div>
         <Button type="submit" size="sm" variant="outline" className="self-end">Search</Button>
       </form>

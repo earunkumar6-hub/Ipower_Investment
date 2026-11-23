@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/live-search-input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
@@ -11,17 +11,18 @@ export function LeadFilters({ status, source, q }: { status?: string; source?: s
   const router = useRouter();
   const pathname = usePathname();
 
-  function apply(form: HTMLFormElement) {
+  function apply(form: HTMLFormElement, replace = false) {
     const params = new URLSearchParams();
     for (const [k, v] of new FormData(form)) if (v) params.set(k, String(v));
-    router.push(`${pathname}?${params}`);
+    const url = `${pathname}?${params}`;
+    if (replace) router.replace(url); else router.push(url);
   }
 
   return (
     <form className="mb-4 flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); apply(e.currentTarget); }}>
       <div className="space-y-1.5">
         <Label htmlFor="lf-q">Search</Label>
-        <Input id="lf-q" name="q" defaultValue={q} className="w-56" />
+        <LiveSearchInput id="lf-q" name="q" defaultValue={q} className="w-56" onSearch={(_, input) => apply(input.form!, true)} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="lf-status">Status</Label>

@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fuzzyMatches } from "@/lib/fuzzy";
+import { customerFilter } from "@/lib/lists";
+import type { SessionUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 
 // Writes to DATABASE_URL – run on a scratch database (see CLAUDE.md).
@@ -44,5 +46,22 @@ describe("fuzzyMatches", () => {
     expect(await fuzzyMatches(tenantId, "mu", ["customer"])).toEqual({});
     expect(await fuzzyMatches(tenantId, "  ", ["customer"])).toEqual({});
     expect(await fuzzyMatches(tenantId, undefined, ["customer"])).toEqual({});
+  });
+});
+
+describe("one or two letters", () => {
+  it("matches names and words that start with the letter, not any name containing it", async () => {
+    const t = (await prisma.tenant.findFirstOrThrow()).id;
+    const mk = async (name: string, n: number) => (await prisma.customer.create({ data: { tenantId: t, name, mobile: `97000000${n}`, ownerId: (await prisma.user.findFirstOrThrow({ where: { tenantId: t } })).id } })).id;
+    const made = [await mk("Qzx Arun", 1), await mk("Qzy Kumar", 2), await mk("Aqz Divya", 3)];
+    try {
+      const user = { id: "x", tenantId: t, role: "SuperAdmin" } as unknown as SessionUser;
+      const names = async (q: string) => (await prisma.customer.findMany({ where: { ...customerFilter(user, { q }).where, id: { in: made } } })).map((c) => c.name).sort();
+      expect(await names("a")).toEqual(["Aqz Divya", "Qzx Arun"]); // Qzy Kumar has an "a" inside only
+      expect(await names("k")).toEqual(["Qzy Kumar"]);
+      expect(await names("kum")).toEqual(["Qzy Kumar"]);
+    } finally {
+      await prisma.customer.deleteMany({ where: { id: { in: made } } });
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { fuzzyMatches } from "@/lib/fuzzy";
+import { nameLike, numberLike, fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
@@ -28,9 +28,9 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
       ...(q && {
         AND: [{
           OR: [
-            { mobile: { contains: q } },
-            { customerName: { contains: q, mode: "insensitive" as const } },
-            { proposalNo: { contains: q, mode: "insensitive" as const } },
+            ...numberLike("mobile", q, false),
+            ...nameLike("customerName", q),
+            ...numberLike("proposalNo", q),
             ...(fuzzy.proposal?.length ? [{ id: { in: fuzzy.proposal } }] : []),
           ],
         }],
