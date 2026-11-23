@@ -2,6 +2,7 @@ import type { LeadSource, LeadStatus, OwnerPaidSlipStatus, PaymentMode, Prisma, 
 import type { Tone } from "@/components/status-badge";
 import { addDays, fmtDate } from "@/lib/dates";
 import { DEPOSIT_WHERE } from "@/lib/deposit-status";
+import type { Fuzzy } from "@/lib/fuzzy";
 import { LEAD_SOURCE_LABEL, LEAD_STATUS_LABEL } from "@/lib/lead-labels";
 import { MODE_LABEL } from "@/lib/payment-modes";
 import { ownerScope, recordScope } from "@/lib/leads";
@@ -35,7 +36,10 @@ export const SLIP_STATUS: Record<OwnerPaidSlipStatus, [string, Tone]> = {
 
 export const monthLabel = (d: Date) => d.toLocaleDateString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
 
-export function leadFilter(user: SessionUser, sp: Params) {
+/** Rows the typo-tolerant name search (`fuzzyMatches`) found, as an extra OR branch next to the exact matches. */
+const fuzzyIds = (ids?: string[]) => (ids?.length ? [{ id: { in: ids } }] : []);
+
+export function leadFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) {
   const status = sp.status && sp.status in LEAD_STATUS_LABEL ? (sp.status as LeadStatus) : undefined;
   const source = sp.source && sp.source in LEAD_SOURCE_LABEL ? (sp.source as LeadSource) : undefined;
   const q = sp.q?.trim();
@@ -49,6 +53,7 @@ export function leadFilter(user: SessionUser, sp: Params) {
         { name: { contains: q, mode: "insensitive" } },
         { mobiles: { some: { number: { contains: q } } } },
         { leadNo: { contains: q, mode: "insensitive" } },
+        ...fuzzyIds(fuzzy.lead),
       ],
     }),
   };
@@ -61,7 +66,7 @@ export const HOLDING_STATUS = [["all", "All"], ["Active", "Active"], ["Matured",
  * Customers list: search (name, any mobile, policy no.) and a holdings filter – product → company → scheme
  * (same choices as Renewals) and the holding's status. `holdingWhere` marks which holdings matched.
  */
-export function customerFilter(user: SessionUser, sp: Params) {
+export function customerFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) {
   const q = sp.q?.trim();
   const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
   const byCompany = product === "insurance" || product === "mf";
@@ -81,7 +86,7 @@ export function customerFilter(user: SessionUser, sp: Params) {
   const where: Prisma.CustomerWhereInput = {
     tenantId: user.tenantId,
     ...recordScope(user),
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }] }),
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobiles: { some: { number: { contains: q } } } }, { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" } }, { folioNo: { contains: q, mode: "insensitive" } }] } } }, ...fuzzyIds(fuzzy.customer)] }),
     ...(filtered && { policies: { some: holdingWhere } }),
   };
   const filterLabel = [
@@ -241,7 +246,7 @@ export const RD_STATUSES: RdStatus[] = ["Collected", "Deposited", "Verified"];
  * Customer receipts are the ones not inside a combined / bill-group receipt (those have their own tabs, matched
  * when any of their lines matches; name or mobile also matches the payer).
  */
-export function receiptFilter(user: SessionUser, sp: Params) {
+export function receiptFilter(user: SessionUser, sp: Params, fuzzy: Fuzzy = {}) {
   const text = (v?: string) => v?.trim() || undefined;
   const q = text(sp.q), cif = text(sp.cif), policyNo = text(sp.policy), group = text(sp.group);
   const product = RENEWAL_PRODUCTS.find(([k]) => k === sp.product)?.[0] ?? "all";
@@ -255,7 +260,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
   const rd = RD_STATUSES.find((s) => s === sp.rd);
 
   const customer: Prisma.CustomerWhereInput = {
-    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }] }),
+    ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }, ...fuzzyIds(fuzzy.customer)] }),
     ...(cif && { cifNo: { contains: cif, mode: "insensitive" } }),
   };
   const policy: Prisma.PolicyWhereInput = {
@@ -289,7 +294,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...((from || to) && { createdAt: { ...(from && { gte: from }), ...(to && { lt: addDays(to, 1) }) } }),
   };
   const matchQ: Prisma.CustomerWhereInput | undefined = q
-    ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }] }
+    ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, { mobiles: { some: { number: { contains: q } } } }, ...fuzzyIds(fuzzy.customer)] }
     : undefined;
   const line: Prisma.ReceiptWhereInput = {
     ...(cif && { customer: { cifNo: { contains: cif, mode: "insensitive" } } }),
@@ -304,7 +309,7 @@ export function receiptFilter(user: SessionUser, sp: Params) {
     ...(status && { status }),
     ...((from || to) && { receiptDate: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
     AND: [
-      ...(matchQ ? [{ OR: [{ payerName: { contains: q, mode: "insensitive" as const } }, { payerMobile: { contains: q } }, { receipts: { some: { customer: matchQ } } }] }] : []),
+      ...(matchQ ? [{ OR: [{ payerName: { contains: q, mode: "insensitive" as const } }, { payerMobile: { contains: q } }, ...fuzzyIds(fuzzy.payment), { receipts: { some: { customer: matchQ } } }] }] : []),
       ...(Object.keys(line).length ? [{ receipts: { some: line } }] : []),
     ],
   });

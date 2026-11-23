@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
@@ -16,6 +17,7 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
   const q = sp.q?.trim() || undefined;
   // Once the policy number is entered the proposal leaves this list and lives under Partners / Customers (#23);
   // "Show issued" brings them back for looking up.
+  const fuzzy = await fuzzyMatches(user.tenantId, q, ["proposal"]);
   const showIssued = sp.issued === "1";
   const issuedCount = showIssued ? 0 : await db.proposal.count({ where: { tenantId: user.tenantId, ...ownerScope(user), status: "Issued" } });
   const proposals = await db.proposal.findMany({
@@ -29,6 +31,7 @@ export default async function ProposalsPage({ searchParams }: { searchParams: Pr
             { mobile: { contains: q } },
             { customerName: { contains: q, mode: "insensitive" as const } },
             { proposalNo: { contains: q, mode: "insensitive" as const } },
+            ...(fuzzy.proposal?.length ? [{ id: { in: fuzzy.proposal } }] : []),
           ],
         }],
       }),

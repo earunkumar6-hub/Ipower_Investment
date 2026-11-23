@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import type { Prisma } from "@prisma/client";
 import { holdersLabel, proposalNext, proposalStatusLabel } from "@/app/(app)/proposals/labels";
 import { accountLabel } from "@/lib/accounts";
@@ -98,7 +99,7 @@ export const REPORTS: Record<string, Report> = {
   leads: {
     permission: "Lead.View",
     async build(user, sp) {
-      const { where, status, source, q } = leadFilter(user, sp);
+      const { where, status, source, q } = leadFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["lead"]));
       const [leads, users] = await Promise.all([
         db.lead.findMany({ where, orderBy: { createdAt: "desc" }, include: { calls: { where: { outcome: null }, orderBy: { dueAt: "asc" }, take: 1 }, mobiles: { orderBy: { sort: "asc" } } } }),
         userNames(user.tenantId),
@@ -195,7 +196,7 @@ export const REPORTS: Record<string, Report> = {
   customers: {
     permission: "Policy.View",
     async build(user, sp) {
-      const { where, q, filtered, holdingWhere, filterLabel } = customerFilter(user, sp);
+      const { where, q, filtered, holdingWhere, filterLabel } = customerFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["customer"]));
       await refreshOverdue(user.tenantId, istToday());
       const customers = await db.customer.findMany({
         where,
@@ -383,7 +384,7 @@ export const REPORTS: Record<string, Report> = {
     permission: "Receipt.View",
     // Every tab in one file, with the screen's filters: customer receipts, owner-paid slips, combined and bill-group receipts.
     async build(user, sp) {
-      const f = receiptFilter(user, sp);
+      const f = receiptFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["customer", "payment"]));
       const deposit = f.deposit;
       const grouped = (kind: "Combined" | "BillGroup") => db.payment.findMany({
         where: f.paymentWhere(kind),

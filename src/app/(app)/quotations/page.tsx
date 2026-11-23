@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { ListSearch } from "@/components/list-search";
@@ -18,6 +19,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const q = sp.q?.trim() || undefined;
   const tab = quoteTab(sp.tab);
+  const fuzzy = await fuzzyMatches(user.tenantId, q, ["quotation"]);
   // The search applies to every tab; each tab shows its count for it (#35).
   const base = {
     tenantId: user.tenantId,
@@ -29,6 +31,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           { mobile: { contains: q } },
           { customerName: { contains: q, mode: "insensitive" as const } },
           { quoteNo: { contains: q, mode: "insensitive" as const } },
+          ...(fuzzy.quotation?.length ? [{ id: { in: fuzzy.quotation } }] : []),
         ],
       }],
     }),

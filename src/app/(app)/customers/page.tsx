@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
@@ -24,7 +25,7 @@ const PAGE_SIZE = 50;
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await requirePermission("Policy.View");
   const sp = await searchParams;
-  const f = customerFilter(user, sp);
+  const f = customerFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["customer"]));
   await refreshOverdue(user.tenantId, istToday());
   const total = await db.customer.count({ where: f.where });
   const page = Math.min(Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1), Math.max(1, Math.ceil(total / PAGE_SIZE)));

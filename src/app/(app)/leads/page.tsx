@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
 import { fmtDmy, isoDate } from "@/lib/dates";
@@ -16,7 +17,7 @@ type Search = { status?: string; source?: string; q?: string; id?: string };
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await requirePermission("Lead.View");
   const sp = await searchParams;
-  const { status, source, q, where } = leadFilter(user, sp);
+  const { status, source, q, where } = leadFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["lead"]));
 
   const [leads, users, products] = await Promise.all([
     db.lead.findMany({

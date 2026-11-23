@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -74,11 +75,12 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
   }
 
   const q = sp.q?.trim();
+  const fuzzy = await fuzzyMatches(user.tenantId, q, ["customer"]);
   const customers = await db.customer.findMany({
     where: {
       tenantId: user.tenantId,
       ...recordScope(user),
-      ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }] }),
+      ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { mobile: { contains: q } }, ...(fuzzy.customer?.length ? [{ id: { in: fuzzy.customer } }] : [])] }),
     },
     orderBy: { name: "asc" },
     take: 30,

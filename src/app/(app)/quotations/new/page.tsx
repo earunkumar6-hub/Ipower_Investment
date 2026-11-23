@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
@@ -45,13 +46,14 @@ export default async function NewQuotationPage({ searchParams }: { searchParams:
 
   // Step 1: pick who the quotation is for.
   const q = sp.q?.trim();
-  const match = q
-    ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { mobile: { contains: q } }] }
+  const fuzzy = await fuzzyMatches(user.tenantId, q, ["customer", "lead"]);
+  const matchFor = (ids?: string[]) => q
+    ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { mobile: { contains: q } }, ...(ids?.length ? [{ id: { in: ids } }] : [])] }
     : {};
   const [customers, leads] = await Promise.all([
-    db.customer.findMany({ where: { tenantId: user.tenantId, ...ownerScope(user), ...match }, orderBy: { name: "asc" }, take: 20 }),
+    db.customer.findMany({ where: { tenantId: user.tenantId, ...ownerScope(user), ...matchFor(fuzzy.customer) }, orderBy: { name: "asc" }, take: 20 }),
     db.lead.findMany({
-      where: { tenantId: user.tenantId, ...ownerScope(user), ...match, status: { not: "NotInterested" }, stage: { not: "Customer" } },
+      where: { tenantId: user.tenantId, ...ownerScope(user), ...matchFor(fuzzy.lead), status: { not: "NotInterested" }, stage: { not: "Customer" } },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),

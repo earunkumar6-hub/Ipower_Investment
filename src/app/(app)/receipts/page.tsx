@@ -1,3 +1,4 @@
+import { fuzzyMatches } from "@/lib/fuzzy";
 import type { OwnerPaidSlipStatus } from "@prisma/client";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
@@ -32,7 +33,7 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
   const user = await requirePermission("Receipt.View");
   const sp = await searchParams;
   const tab = receiptTab(sp);
-  const f = receiptFilter(user, sp);
+  const f = receiptFilter(user, sp, await fuzzyMatches(user.tenantId, sp.q, ["customer", "payment"]));
   const [counts, accounts, groups] = await Promise.all([
     Promise.all([
       db.receipt.count({ where: f.receiptWhere }),
