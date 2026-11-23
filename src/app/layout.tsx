@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { ZOOM_SCRIPT } from "@/lib/zoom";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,7 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} /></head>
       <body className="antialiased">
         {children}
         <Toaster richColors />

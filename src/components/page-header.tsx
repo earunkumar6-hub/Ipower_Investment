@@ -1,4 +1,5 @@
 import { CallsBadge } from "@/components/call-reminder";
+import { ZoomControl } from "@/components/zoom-control";
 import { db } from "@/lib/db";
 import { fmtDate, istToday } from "@/lib/dates";
 import { ownerScope } from "@/lib/leads";
@@ -19,6 +20,7 @@ export async function PageHeader({ title, user, actions }: { title: string; user
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <ZoomControl />
         <CallsBadge count={openCalls} />
         {actions}
       </div>
