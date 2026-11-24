@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { attachmentRows } from "@/lib/attachments";
 import { HOLDING_KIND as KIND, loadCustomer360, PER_LABEL } from "@/lib/customer-360";
 import { fmtDate, fmtDateTime, isoDate, istDate, istToday } from "@/lib/dates";
+import { aadhaarText, panText } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { daysBetween, overdueText } from "@/lib/overdue";
 import { modeLabel } from "@/lib/payment-modes";
@@ -72,8 +73,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             {mobiles.map((m) => `${m.number}${m.isWhatsApp ? " (WhatsApp)" : ""}`).join(" · ")}{c.email && ` · ${c.email}`}{c.address && ` · ${c.address}`} · Owner: {owner?.name}
           </p>
           <p className="mt-1 text-sm">
-            PAN {c.panMasked ?? <span className="text-muted-foreground">not collected</span>} · Aadhaar {c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : <span className="text-muted-foreground">not collected</span>}
-            {" "}<IdentityButton customerId={c.id} panMasked={c.panMasked} aadhaarLast4={c.aadhaarLast4}
+            PAN {panText(c.panNo, c.panMasked) ?? <span className="text-muted-foreground">not collected</span>} · Aadhaar {aadhaarText(c.aadhaarNo, c.aadhaarLast4) ?? <span className="text-muted-foreground">not collected</span>}
+            {" "}<IdentityButton customerId={c.id} pan={c.panNo ?? ""} aadhaar={c.aadhaarNo ?? ""} hasIdentity={!!(c.panMasked || c.aadhaarLast4)}
               consent={c.consentAt ? `By ${(await db.user.findUnique({ where: { id: c.consentById ?? "" }, select: { name: true } }))?.name ?? "—"}, ${fmtDate(c.consentAt)}` : null} />
           </p>
         </div>

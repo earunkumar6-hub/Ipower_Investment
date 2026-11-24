@@ -14,6 +14,7 @@ import { AMOUNT_WORD, amountKindOfType, fmtTenure, isHealthCover, isPostal, MF_P
 import { hasPermission } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { policyNumberLabel, proposalStatusLabel } from "../labels";
+import { aadhaarText, panText } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { JointAccountPanel } from "./joint-account";
 import { KycForm, ProposalForm } from "./proposal-forms";
@@ -28,7 +29,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
     include: {
       quotation: true, quotationItem: { select: { category: true } }, policy: { include: { renewals: { orderBy: { dueDate: "asc" } } } },
       product: { include: { schemes: { where: { active: true }, orderBy: [{ tenureMonths: "asc" }, { name: "asc" }] } } }, scheme: true, customer: { select: { id: true, name: true, cifNo: true } },
-      secondHolder: { select: { id: true, name: true, cifNo: true, mobile: true, address: true, panMasked: true, aadhaarLast4: true } },
+      secondHolder: { select: { id: true, name: true, cifNo: true, mobile: true, address: true, panMasked: true, panNo: true, aadhaarLast4: true, aadhaarNo: true } },
     },
   });
   if (!p || !canActOn(user, p.ownerId)) notFound();
@@ -52,7 +53,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const holders = (
     <JointAccountPanel issued={issued} joint={p.jointAccount}
       first={{ name: p.customerName, cifNo: firstCustomer?.cifNo ?? null, note: !p.customer && firstCustomer ? `Same mobile as existing customer ${firstCustomer.name}: linked on issue` : null }}
-      second={p.secondHolder && { id: p.secondHolder.id, name: p.secondHolder.name, cifNo: p.secondHolder.cifNo, mobile: maskMobile(p.secondHolder.mobile), address: p.secondHolder.address, pan: p.secondHolder.panMasked, aadhaarLast4: p.secondHolder.aadhaarLast4 }}
+      second={p.secondHolder && { id: p.secondHolder.id, name: p.secondHolder.name, cifNo: p.secondHolder.cifNo, mobile: maskMobile(p.secondHolder.mobile), address: p.secondHolder.address, pan: panText(p.secondHolder.panNo, p.secondHolder.panMasked), aadhaar: aadhaarText(p.secondHolder.aadhaarNo, p.secondHolder.aadhaarLast4) }}
       newSecond={!p.secondHolder && p.secondHolderName && p.secondHolderMobile ? { name: p.secondHolderName, mobile: p.secondHolderMobile } : null}
       cifs={{ first: p.firstHolderCif, second: p.secondHolderCif }} kind={holderKind} folio={p.folioNo} />
   );
@@ -143,8 +144,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
               </TableRow>
               <TableRow>
                 <TableCell>Aadhaar and PAN <span className="text-xs text-muted-foreground">(optional)</span></TableCell>
-                <TableCell>{p.panMasked || p.aadhaarLast4 ? <StatusBadge tone="green">Entered – masked</StatusBadge> : <StatusBadge tone="slate">Not entered</StatusBadge>}</TableCell>
-                <TableCell>{[p.aadhaarLast4 && `XXXX-XXXX-${p.aadhaarLast4}`, p.panMasked].filter(Boolean).join(" · ")}</TableCell>
+                <TableCell>{p.panMasked || p.aadhaarLast4 ? <StatusBadge tone="green">Entered</StatusBadge> : <StatusBadge tone="slate">Not entered</StatusBadge>}</TableCell>
+                <TableCell>{[aadhaarText(p.aadhaarNo, p.aadhaarLast4), panText(p.panNo, p.panMasked)].filter(Boolean).join(" · ")}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>KYC documents <span className="text-xs text-muted-foreground">(optional)</span></TableCell>
@@ -179,7 +180,7 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </div>
         <aside className="w-80 shrink-0 rounded-xl border bg-white p-4">
           <h2 className="mb-3 font-semibold">Aadhaar and PAN <span className="text-xs font-normal text-muted-foreground">(optional)</span></h2>
-          <KycForm key={`${issued}-${p.panMasked}-${p.aadhaarLast4}-${!!p.consentAt}`} allowed={hasPermission(user.role, "PII.Edit")} unlocked={!issued} panMasked={p.panMasked} aadhaarLast4={p.aadhaarLast4}
+          <KycForm key={`${issued}-${p.panNo ?? p.panMasked}-${p.aadhaarNo ?? p.aadhaarLast4}-${!!p.consentAt}`} allowed={hasPermission(user.role, "PII.Edit")} unlocked={!issued} pan={p.panNo ?? ""} aadhaar={p.aadhaarNo ?? ""}
             consent={p.consentAt ? `By ${consentBy ?? "—"}, ${fmtDate(p.consentAt)}` : null} />
         </aside>
       </div>

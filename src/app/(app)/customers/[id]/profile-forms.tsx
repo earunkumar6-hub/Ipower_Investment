@@ -67,8 +67,8 @@ export function AddFollowUpForm({ customerId, today, onDone }: { customerId: str
   );
 }
 
-/** Aadhaar / PAN on the customer (#1, #13): consent tick first; full numbers encrypted; a duplicate opens the pop-up. */
-export function IdentityButton({ customerId, consent, panMasked, aadhaarLast4 }: { customerId: string; consent: string | null; panMasked: string | null; aadhaarLast4: string | null }) {
+/** Aadhaar / PAN on the customer (#1): consent tick first; stored and shown in full. */
+export function IdentityButton({ customerId, consent, pan, aadhaar, hasIdentity }: { customerId: string; consent: string | null; pan: string; aadhaar: string; hasIdentity: boolean }) {
   const [open, setOpen] = useState(false);
   const [ticked, setTicked] = useState(!!consent);
   const [dup, setDup] = useState<ActionResult["duplicate"]>();
@@ -76,18 +76,18 @@ export function IdentityButton({ customerId, consent, panMasked, aadhaarLast4 }:
     const r = await saveCustomerIdentity(prev, form);
     setDup(r.duplicate);
     if (r.ok) {
-      toast.success(r.message ?? "Aadhaar / PAN saved (encrypted, shown masked)");
+      toast.success(r.message ?? "Aadhaar / PAN saved");
       setOpen(false);
     }
     return r;
   }, { ok: false });
   return (
     <>
-      <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(true)}>{panMasked || aadhaarLast4 ? "Change Aadhaar / PAN" : "Add Aadhaar / PAN"}</Button>
+      <Button type="button" size="xs" variant="ghost" onClick={() => setOpen(true)}>{hasIdentity ? "Change Aadhaar / PAN" : "Add Aadhaar / PAN"}</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="text-lg font-semibold">Aadhaar and PAN</DialogTitle>
-          <DialogDescription>Optional. Stored encrypted and shown masked. A number that already belongs to another customer is refused.</DialogDescription>
+          <DialogDescription>Optional. Needs the consent tick. Saved and shown in full.</DialogDescription>
           <form onSubmit={submitKeepingValues(action)} className="space-y-3">
             <input type="hidden" name="customerId" value={customerId} />
             <label className="flex items-start gap-2 text-sm font-medium">
@@ -96,11 +96,11 @@ export function IdentityButton({ customerId, consent, panMasked, aadhaarLast4 }:
             </label>
             <div className="space-y-1.5">
               <Label htmlFor="ci-aadhaar">Aadhaar</Label>
-              <Input id="ci-aadhaar" name="aadhaar" disabled={!ticked} inputMode="numeric" maxLength={14} placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : undefined} aria-invalid={!!state.fieldErrors?.aadhaar} />
+              <Input id="ci-aadhaar" name="aadhaar" defaultValue={aadhaar} disabled={!ticked} inputMode="numeric" maxLength={14} aria-invalid={!!state.fieldErrors?.aadhaar} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ci-pan">PAN</Label>
-              <Input id="ci-pan" name="pan" disabled={!ticked} maxLength={10} className="not-placeholder-shown:uppercase" placeholder={panMasked ?? undefined} aria-invalid={!!state.fieldErrors?.pan} />
+              <Input id="ci-pan" name="pan" defaultValue={pan} disabled={!ticked} maxLength={10} className="not-placeholder-shown:uppercase" aria-invalid={!!state.fieldErrors?.pan} />
             </div>
             {state.error && <p className="text-sm text-destructive">{state.error}</p>}
             <Button type="submit" disabled={pending || !ticked} className="w-full bg-brand-600 hover:bg-brand-700">{pending ? "Saving…" : "Save"}</Button>

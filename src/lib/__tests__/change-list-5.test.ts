@@ -97,14 +97,13 @@ describe("Proposals download leaves out issued ones (#23)", () => {
 });
 
 describe("Customer list download has every customer column (#34)", () => {
-  it("contact details, masked identity numbers, consent, staff and date added", async () => {
+  it("contact details, identity numbers, consent, staff and date added", async () => {
     const built = await REPORTS.customers.build(admin as SessionUser, {});
     const headers = built!.sheets[0].columns.map((c) => c.header);
     expect(headers.slice(0, 11)).toEqual(["Customer", "Mobile", "Other mobiles", "WhatsApp", "Email", "Address", "PAN", "Aadhaar", "Consent taken", "Staff", "Added on"]);
     const rajesh = await prisma.customer.findFirstOrThrow({ where: { name: "Rajesh Kumar" } });
     const row = built!.sheets[0].rows.find((r) => r[0] === "Rajesh Kumar")!;
-    expect(row[1]).toMatch(/^\d{2}x+\d{2}$/); // masked like every export
-    expect(row[1]).not.toBe(rajesh.mobile);
+    expect(row[1]).toBe(rajesh.mobile); // in full (owner, 24 Nov 2026)
     const owner = await prisma.user.findUniqueOrThrow({ where: { id: rajesh.ownerId } });
     expect(row[9]).toBe(owner.name); // the staff member's name, not an id
   });

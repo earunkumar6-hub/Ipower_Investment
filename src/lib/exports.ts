@@ -12,6 +12,7 @@ import { esevaiEntries, serviceTime, walletSummary } from "@/lib/esevai-day";
 import type { Cell, Sheet } from "@/lib/excel";
 import { canApprove, expenseStatusLabel } from "@/lib/expenses";
 import { FOLLOWUP_TABS, loadFollowUps } from "@/lib/followups";
+import { aadhaarText, panText } from "@/lib/identity";
 import { GENDER_LABEL, LEAD_SOURCE_LABEL, LEAD_STAGE_LABEL, LEAD_STATUS_LABEL, maskMobile, OUTCOME_LABEL } from "@/lib/lead-labels";
 import { ownerScope, recordScope, userNames } from "@/lib/leads";
 import {
@@ -217,7 +218,7 @@ export const REPORTS: Record<string, Report> = {
         title: `Partners / Customers${[filterLabel, q && `"${q}"`].filter(Boolean).map((x) => ` – ${x}`).join("")}`,
         sheets: [{
           name: "Customers",
-          // Every customer detail entered (owner change list, #34); mobiles, PAN and Aadhaar stay masked like every export.
+          // Every customer detail entered (owner change list, #34); mobiles, PAN and Aadhaar are shown in full (owner, 24 Nov 2026).
           columns: [{ header: "Customer", width: 24 }, { header: "Mobile" }, { header: "Other mobiles", width: 22 }, { header: "WhatsApp", width: 18 },
             { header: "Email", width: 24 }, { header: "Address", width: 36 }, { header: "PAN" }, { header: "Aadhaar" }, { header: "Consent taken", type: "datetime" as const, width: 20 },
             { header: "Staff", width: 16 }, { header: "Added on", type: "date" as const }, { header: "Holdings", width: 24 },
@@ -230,7 +231,7 @@ export const REPORTS: Record<string, Report> = {
               .map((p) => `${p.policyNumber} · ${p.productType === "Insurance" || p.productType === "MutualFund" ? `${p.partner} ${p.productName}` : p.productName}`).join(", ");
             const others = c.mobiles.filter((m) => m.number !== c.mobile).map((m) => maskMobile(m.number)).join(", ");
             const whatsApp = c.mobiles.filter((m) => m.isWhatsApp).map((m) => maskMobile(m.number)).join(", ");
-            return [c.name, maskMobile(c.mobile), others, whatsApp, c.email, c.address, c.panMasked, c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : null, c.consentAt,
+            return [c.name, maskMobile(c.mobile), others, whatsApp, c.email, c.address, panText(c.panNo, c.panMasked), aadhaarText(c.aadhaarNo, c.aadhaarLast4), c.consentAt,
               staff(c.ownerId), c.createdAt, counts.map(([k, n]) => `${n} ${k}`).join(" · "), ...(filtered ? [mine] : []), next?.dueDate, next?.premiumAmount, next?.status === "Overdue" ? "Overdue" : ""];
           }),
         }],
@@ -259,8 +260,8 @@ export const REPORTS: Record<string, Report> = {
               ["Email", c.email, null],
               ["Address", c.address, null],
               ["Owner", owner?.name, null],
-              ["PAN", c.panMasked ?? "not collected", null],
-              ["Aadhaar", c.aadhaarLast4 ? `XXXX-XXXX-${c.aadhaarLast4}` : "not collected", null],
+              ["PAN", panText(c.panNo, c.panMasked) ?? "not collected", null],
+              ["Aadhaar", aadhaarText(c.aadhaarNo, c.aadhaarLast4) ?? "not collected", null],
               ["Active holdings", `${cards.holdings} · ${cards.sources} source(s)`, null],
               ["Total yearly premium (insurance)", null, cards.yearlyPremium],
               ["Investments (post office + MF)", null, cards.investments],
@@ -319,7 +320,7 @@ export const REPORTS: Record<string, Report> = {
         sheets: [{
           name,
           totals: true,
-          // Columns as in the owner's "Renewal Excel format" sheet (#18): Phone (masked, like every export) after Customer.
+          // Columns as in the owner's "Renewal Excel format" sheet (#18): Phone after Customer.
           // Dates and amounts as in that sheet, "25 Oct 2026" and ₹11,500 (owner, 13 Nov 2026); Last reminder is the IST date only.
           columns: [{ header: "Customer", width: 24 }, { header: "Phone", width: 14 }, { header: "Product", width: 30 }, { header: "Policy / account" }, { header: "Due", type: "day" },
             { header: "Amount", type: "money", fmt: '"₹"#,##0' }, { header: "Status", width: 22 },

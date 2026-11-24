@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { searchCustomers } from "../actions";
 import { PROPOSAL_FORM } from "./proposal-forms";
 
-type Holder = { id: string; name: string; cifNo: string; mobile: string; address: string | null; pan: string | null; aadhaarLast4: string | null };
+type Holder = { id: string; name: string; cifNo: string; mobile: string; address: string | null; pan: string | null; aadhaar: string | null };
 type Picked = { id: string; name: string; cifNo: string; mobile: string };
 
 /**
@@ -142,7 +142,7 @@ export function JointAccountPanel({ issued, first, joint, second, newSecond, cif
           {second && joint && (
             <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-900">
               Existing customer selected: <Link href={`/customers/${second.id}`} className="font-medium underline">{second.name}</Link> – details filled in automatically:
-              {" "}mobile {second.mobile}{second.address && ` · ${second.address}`}{second.aadhaarLast4 && ` · Aadhaar XXXX-XXXX-${second.aadhaarLast4}`}{second.pan && ` · PAN ${second.pan}`}
+              {" "}mobile {second.mobile}{second.address && ` · ${second.address}`}{second.aadhaar && ` · Aadhaar ${second.aadhaar}`}{second.pan && ` · PAN ${second.pan}`}
             </div>
           )}
           {newSecond && joint && mode === "new" && <p className="text-xs text-saffron-900">Second holder {newSecond.name} becomes a customer when the policy is issued.</p>}

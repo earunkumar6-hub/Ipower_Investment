@@ -39,5 +39,5 @@ export const OUTCOME_LABEL: Record<CallOutcome, string> = {
   Done: "Done",
 };
 
-/** "98xxxxxx21" — list views never show the full mobile. */
-export const maskMobile = (m: string) => (m.length >= 6 ? `${m.slice(0, 2)}${"x".repeat(m.length - 4)}${m.slice(-2)}` : m);
+/** Mobiles are shown in full everywhere (owner, 24 Nov 2026). Kept as a function so the many places that show a number need no change; it used to mask all but 4 digits. */
+export const maskMobile = (m: string) => m;

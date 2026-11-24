@@ -18,8 +18,8 @@ import { saveProposal } from "../actions";
 export const PROPOSAL_FORM = "proposal-form";
 
 /** Aadhaar / PAN with the consent tick – saved by "Save proposal" (owner, 3 Nov 2026). */
-export function KycForm({ unlocked, panMasked, aadhaarLast4, consent, allowed }: {
-  unlocked: boolean; panMasked: string | null; aadhaarLast4: string | null;
+export function KycForm({ unlocked, pan, aadhaar, consent, allowed }: {
+  unlocked: boolean; pan: string; aadhaar: string;
   /** "Customer consent taken" already recorded: "By R. Murali, 22 Oct 2026". */
   consent: string | null;
   /** May enter Aadhaar / PAN (PII.Edit). */
@@ -37,14 +37,14 @@ export function KycForm({ unlocked, panMasked, aadhaarLast4, consent, allowed }:
       </label>
       <div className="space-y-1.5">
         <Label htmlFor="aadhaar">Aadhaar</Label>
-        <Input id="aadhaar" form={PROPOSAL_FORM} name="aadhaar" readOnly={!open} disabled={!open} inputMode="numeric" maxLength={14} placeholder={aadhaarLast4 ? `XXXX-XXXX-${aadhaarLast4}` : undefined} />
+        <Input id="aadhaar" form={PROPOSAL_FORM} name="aadhaar" defaultValue={aadhaar} readOnly={!open} disabled={!open} inputMode="numeric" maxLength={14} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="pan">PAN</Label>
-        <Input id="pan" form={PROPOSAL_FORM} name="pan" readOnly={!open} disabled={!open} maxLength={10} className="not-placeholder-shown:uppercase" placeholder={panMasked ?? undefined} />
+        <Input id="pan" form={PROPOSAL_FORM} name="pan" defaultValue={pan} readOnly={!open} disabled={!open} maxLength={10} className="not-placeholder-shown:uppercase" />
       </div>
       <p className="rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
-        Optional; needs the consent tick. Stored encrypted, shown masked (PAN ABCxxxxx4M, Aadhaar last 4). A number that already belongs to another customer is refused.
+        Optional; needs the consent tick. Saved and shown in full.
         {unlocked ? (allowed ? " Saved with “Save proposal”." : " Your role can't enter Aadhaar / PAN.") : " The policy is issued; they can't be changed here."}
       </p>
     </div>
@@ -55,9 +55,9 @@ type Option = { id: string; name: string; tenureMonths: number | null };
 
 const inr = (v: FormDataEntryValue | null) => `₹${Number(v).toLocaleString("en-IN")}`;
 
-// "Check before saving" rows for the parts outside the details box (numbers masked, as everywhere else).
-const aadhaarText = (v: FormDataEntryValue | null) => { const d = String(v ?? "").replace(/\D/g, ""); return d ? `Aadhaar XXXX-XXXX-${d.slice(-4)}` : ""; };
-const panText = (v: FormDataEntryValue | null) => { const t = String(v ?? "").trim().toUpperCase(); return t ? `PAN ${t.slice(0, 3)}xxxxx${t.slice(-2)}` : ""; };
+// "Check before saving" rows for the parts outside the details box.
+const aadhaarText = (v: FormDataEntryValue | null) => { const d = String(v ?? "").replace(/\D/g, ""); return d ? `Aadhaar ${d}` : ""; };
+const panText = (v: FormDataEntryValue | null) => { const t = String(v ?? "").trim().toUpperCase(); return t ? `PAN ${t}` : ""; };
 function holderRows(form: FormData): SummaryRow[] {
   if (!form.has("jointAccount")) return [];
   const get = (k: string) => String(form.get(k) ?? "").trim().toUpperCase();

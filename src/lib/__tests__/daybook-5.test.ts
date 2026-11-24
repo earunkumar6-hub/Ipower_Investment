@@ -120,8 +120,7 @@ describe("Cash / UPI exchange (#22)", () => {
     const lines = await prisma.dayBookEntry.findMany({ where: { sourceNo: "VT5-UPI1", createdAt: { gte: started } } });
     expect(lines.find((l) => l.accountId === cash)).toMatchObject({ direction: "Out", entryType: "CashUpiExchange", mode: "Cash", denominations: { "500": 1 } });
     expect(lines.find((l) => l.accountId === bank)).toMatchObject({ direction: "In", entryType: "CashUpiExchange", mode: "UPI" });
-    expect(lines[0].particulars).toContain("98xxxxxx10"); // the mobile is masked
-    expect(lines[0].particulars).not.toContain("9876543210");
+    expect(lines[0].particulars).toContain("9876543210"); // the mobile is shown in full (owner, 24 Nov 2026)
 
     expect(await recordCashUpiExchange({ ok: false }, ex({ direction: "UpiForCash", reference: "VT5-UPI2" }))).toEqual({ ok: true });
     const back = await prisma.dayBookEntry.findMany({ where: { sourceNo: "VT5-UPI2", createdAt: { gte: started } } });

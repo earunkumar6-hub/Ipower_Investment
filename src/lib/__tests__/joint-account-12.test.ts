@@ -66,10 +66,10 @@ afterAll(async () => {
 const save = (o: Record<string, string>) => saveJointAccount({ ok: false }, form({ proposalId, jointAccount: "on", secondHolderId: "", secondHolderName: "", secondHolderMobile: "", ...o }));
 
 describe("Joint account on a proposal (#12)", () => {
-  it("search finds customers by name or mobile, mobiles masked; not by the internal CIF", async () => {
+  it("search finds customers by name or mobile, mobiles in full; not by the internal CIF", async () => {
     const byMobile = await searchCustomers(other.mobile);
     expect(byMobile.map((c) => c.id)).toContain(other.id);
-    expect(byMobile.every((c) => c.mobile.includes("x"))).toBe(true);
+    expect(byMobile.find((c) => c.id === other.id)?.mobile).toBe(other.mobile);
     expect((await searchCustomers(other.cifNo)).map((c) => c.id)).not.toContain(other.id);
     expect(await searchCustomers("a")).toEqual([]);
   });

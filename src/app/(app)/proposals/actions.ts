@@ -9,8 +9,7 @@ import { advanceStage, canActOn } from "@/lib/leads";
 import { createPolicyWithSchedule } from "@/lib/policies";
 import { BILLED_FROM_AMOUNT, isHealthCover, isPostal, isPostalInvestmentType, missingInsuranceDetails, needsSipDay, rateOn } from "@/lib/products";
 import { audit } from "@/lib/audit";
-import { EncryptionKeyMissing } from "@/lib/crypto";
-import { AADHAAR_MESSAGE, isValidAadhaar, type Duplicate, duplicateCompanyCif, duplicateIdentity, duplicateMessage, identityData, maskPan, PAN_RE } from "@/lib/identity";
+import { AADHAAR_MESSAGE, isValidAadhaar, type Duplicate, duplicateCompanyCif, duplicateMessage, aadhaarText, fmtAadhaar, identityData, PAN_RE, panText } from "@/lib/identity";
 import { maskMobile } from "@/lib/lead-labels";
 import { authorize, type SessionUser } from "@/lib/session";
 import { policyNumberLabel } from "./labels";
@@ -39,9 +38,8 @@ const kycSchema = z.object({
 });
 
 /**
- * #1 + #13 / #28: Aadhaar / PAN can be saved only once "Customer consent taken" is ticked (who / when recorded).
- * Both stay optional. The full numbers are stored encrypted; one that already belongs to someone else is refused with
- * their details for the pop-up. Editable until the policy is issued.
+ * #1: Aadhaar / PAN can be saved only once "Customer consent taken" is ticked (who / when recorded). Both stay optional.
+ * Stored and shown in full, and a number may repeat across customers (owner, 24 Nov 2026). Editable until the policy is issued.
  */
 export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionResult> {
   const user = await authorize("PII.Edit");
@@ -66,21 +64,11 @@ export async function saveKyc(_: ActionResult, form: FormData): Promise<ActionRe
       await audit(tx, user, { entity: "Proposal", entityId: p.id, action: "Consent", summary: `${p.proposalNo}: customer consent taken` });
       return { ok: true, message: "Consent recorded" };
     }
-    let data: ReturnType<typeof identityData>;
-    try {
-      data = identityData(aadhaar, pan);
-    } catch (e) {
-      // No encryption key on the server: a message, as on the customer page, instead of an error screen.
-      if (e instanceof EncryptionKeyMissing) return { ok: false, error: e.message.replace("Bank details", "Aadhaar / PAN") };
-      throw e;
-    }
-    const person = p.customerId ? { customerId: p.customerId, mobile: p.mobile } : { customerId: (await customerByMobile(tx, user.tenantId, p.mobile))?.id, mobile: p.mobile };
-    const duplicate = await duplicateIdentity(tx, user.tenantId, { aadhaarHash: data.aadhaarHash, panHash: data.panHash }, person, p.id);
-    if (duplicate) return { ok: false, error: duplicateMessage(duplicate), duplicate };
+    const data = identityData(aadhaar, pan);
     await tx.proposal.update({ where: { id: p.id }, data: { ...data, ...consent } });
     await audit(tx, user, {
       entity: "Proposal", entityId: p.id, action: "Updated",
-      summary: `${p.proposalNo}: ${[aadhaar && `Aadhaar XXXX-XXXX-${aadhaar.slice(-4)}`, pan && `PAN ${maskPan(pan)}`].filter(Boolean).join(" · ")}${consentNow ? " · consent taken" : ""}`,
+      summary: `${p.proposalNo}: ${[aadhaar && `Aadhaar ${fmtAadhaar(aadhaar)}`, pan && `PAN ${pan}`].filter(Boolean).join(" · ")}${consentNow ? " · consent taken" : ""}`,
     });
     return { ok: true };
   });
@@ -213,22 +201,20 @@ export async function issuePolicy(_: ActionResult, form: FormData): Promise<Acti
         if (second.id === customer.id) throw new IssueRefused("The second holder can't be the first holder");
         secondHolderId = second.id;
       }
-      // Aadhaar / PAN are optional; copy whichever was entered (full values encrypted), never over a different one.
-      if (p.aadhaarHash && customer.aadhaarHash && customer.aadhaarHash !== p.aadhaarHash) {
-        throw new IssueRefused(`The Aadhaar on this proposal doesn't match ${customer.name}'s (XXXX-XXXX-${customer.aadhaarLast4}); correct it first`);
+      // Aadhaar / PAN are optional; copy whichever was entered, never over a different one. Records saved before 24 Nov 2026
+      // may only have the fingerprint, so those are compared by it.
+      const differs = (a: string | null, b: string | null, ha: string | null, hb: string | null) => (a && b ? a !== b : !!ha && !!hb && ha !== hb);
+      if (differs(p.aadhaarNo, customer.aadhaarNo, p.aadhaarHash, customer.aadhaarHash)) {
+        throw new IssueRefused(`The Aadhaar on this proposal doesn't match ${customer.name}'s (${aadhaarText(customer.aadhaarNo, customer.aadhaarLast4)}); correct it first`);
       }
-      if (p.panHash && customer.panHash && customer.panHash !== p.panHash) throw new IssueRefused(`The PAN on this proposal doesn't match ${customer.name}'s (${customer.panMasked}); correct it first`);
-      if (p.aadhaarHash || p.panHash) {
-        const duplicate = await duplicateIdentity(tx, user.tenantId, { aadhaarHash: p.aadhaarHash ?? undefined, panHash: p.panHash ?? undefined }, { customerId: customer.id, mobile: customer.mobile }, p.id);
-        if (duplicate && duplicate.customerId) throw new IssueRefused(duplicateMessage(duplicate), duplicate);
-      }
+      if (differs(p.panNo, customer.panNo, p.panHash, customer.panHash)) throw new IssueRefused(`The PAN on this proposal doesn't match ${customer.name}'s (${panText(customer.panNo, customer.panMasked)}); correct it first`);
       if (p.panMasked || p.aadhaarLast4 || p.consentAt) {
         await tx.customer.update({
           where: { id: customer.id },
           data: {
             panMasked: p.panMasked ?? customer.panMasked, aadhaarLast4: p.aadhaarLast4 ?? customer.aadhaarLast4,
-            ...(p.aadhaarHash && { aadhaarEnc: p.aadhaarEnc, aadhaarHash: p.aadhaarHash }),
-            ...(p.panHash && { panEnc: p.panEnc, panHash: p.panHash }),
+            ...(p.aadhaarNo && { aadhaarNo: p.aadhaarNo }),
+            ...(p.panNo && { panNo: p.panNo }),
             ...(p.consentAt && !customer.consentAt && { consentAt: p.consentAt, consentById: p.consentById }),
           },
         });
@@ -438,7 +424,7 @@ export async function saveJointAccount(_: ActionResult, form: FormData): Promise
   return res;
 }
 
-/** Second-holder picker: customers matching a name or mobile (mobile shown masked). */
+/** Second-holder picker: customers matching a name or mobile (mobile shown in full). */
 export async function searchCustomers(q: string): Promise<{ id: string; name: string; cifNo: string; mobile: string }[]> {
   const user = await authorize("Proposal.Create");
   const text = q.trim();

@@ -349,9 +349,11 @@ model Proposal {
   premium                 Decimal        @db.Decimal(12, 2) // what the customer pays (no GST)
   panMasked               String?
   aadhaarLast4            String?
-  aadhaarEnc              String? // full values, encrypted; copied to the customer on issue
+  aadhaarNo               String? // full numbers, plain (owner, 24 Nov 2026); copied to the customer on issue
+  panNo                   String?
+  aadhaarEnc              String? // unused since 24 Nov 2026 (was encrypted); read once by prisma/decrypt-identity.ts
   panEnc                  String?
-  aadhaarHash             String?
+  aadhaarHash             String? // unused since 24 Nov 2026
   panHash                 String?
   consentAt               DateTime? // #1 "Customer consent taken"
   consentById             String?
@@ -422,7 +424,10 @@ model Customer {
   address      String?
   panMasked    String?
   aadhaarLast4 String?
-  // Full Aadhaar / PAN (#13): AES-256-GCM encrypted; the keyed fingerprint (HMAC) makes each unique per agency.
+  // Full Aadhaar / PAN, plain and not unique (owner, 24 Nov 2026). Until then #13: AES-256-GCM encrypted + keyed fingerprint
+  // (HMAC) unique per agency – those three columns are now unused; `prisma/decrypt-identity.ts` copies old values over.
+  aadhaarNo    String?
+  panNo        String?
   aadhaarEnc   String?
   panEnc       String?
   aadhaarHash  String?
@@ -449,8 +454,6 @@ model Customer {
   editLock            CustomerEditLock?
 
   @@unique([tenantId, cifNo])
-  @@unique([tenantId, aadhaarHash])
-  @@unique([tenantId, panHash])
   @@index([tenantId, mobile])
 }
 

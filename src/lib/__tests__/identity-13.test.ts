@@ -1,7 +1,7 @@
-// Change set #1, #13, #28 – consent tick, Aadhaar / PAN / company CIF unique, duplicate details for the pop-up.
+// Change set #1, #28 – consent tick, Aadhaar / PAN stored and shown in full and allowed to repeat (owner, 24 Nov 2026),
+// company CIF unique with the duplicate details for the pop-up.
 // Rows it creates are removed and the customers it touches are put back afterwards.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { decryptJson, fingerprint } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
 
 type U = { id: string; name: string; username: string; role: "Admin" | "User" | "SuperAdmin"; tenantId: string };
@@ -32,7 +32,7 @@ const AADHAAR_B = "987654321012", PAN_B = "BBBBB1234B", AADHAAR_A = "55556666777
 let a: { id: string; name: string; mobile: string }, b: { id: string; name: string; mobile: string; cifNo: string };
 let proposalId = "";
 let bPolicy: { id: string; partner: string; firstHolderCif: string | null };
-const blank = { aadhaarEnc: null, aadhaarHash: null, aadhaarLast4: null, panEnc: null, panHash: null, panMasked: null, consentAt: null, consentById: null };
+const blank = { aadhaarNo: null, panNo: null, aadhaarEnc: null, aadhaarHash: null, aadhaarLast4: null, panEnc: null, panHash: null, panMasked: null, consentAt: null, consentById: null };
 
 beforeAll(async () => {
   for (const username of ["arun", "admin"]) {
@@ -74,40 +74,37 @@ describe("Consent tick (#1)", () => {
     const saved = await prisma.customer.findUniqueOrThrow({ where: { id: b.id } });
     expect(saved).toMatchObject({ aadhaarLast4: "1012", panMasked: "BBBxxxxx4B", consentById: users.admin.id });
     expect(saved.consentAt).not.toBeNull();
-    // Stored encrypted (full value recoverable only with the key), fingerprint for matching, never in the log in clear.
-    expect(decryptJson(saved.aadhaarEnc!)).toBe(AADHAAR_B);
-    expect(saved.aadhaarHash).toBe(fingerprint("aadhaar", AADHAAR_B));
+    // Stored in full – no encryption, no fingerprint – and written in full to the change log.
+    expect(saved).toMatchObject({ aadhaarNo: AADHAAR_B, panNo: PAN_B, aadhaarEnc: null, aadhaarHash: null, panEnc: null, panHash: null });
     const log = await prisma.auditLog.findMany({ where: { entityId: b.id, createdAt: { gte: started } } });
-    expect(log.some((l) => l.summary.includes(AADHAAR_B) || l.summary.includes(PAN_B))).toBe(false);
+    expect(log.some((l) => l.summary.includes("9876 5432 1012") && l.summary.includes(PAN_B))).toBe(true);
   });
 });
 
-describe("Aadhaar / PAN unique (#13) with the existing customer's details (#28)", () => {
-  it("a proposal for someone else can't take another customer's Aadhaar or PAN", async () => {
+describe("Aadhaar / PAN may repeat across customers (owner, 24 Nov 2026)", () => {
+  it("a proposal can take the number another customer already has", async () => {
     const tick = await saveKyc({ ok: false }, form({ proposalId, consent: "", aadhaar: "", pan: "" }));
     expect(tick.fieldErrors).toHaveProperty("consent");
-    const r = await saveKyc({ ok: false }, form({ proposalId, consent: "on", aadhaar: AADHAAR_B, pan: PAN_B }));
-    expect(r.ok).toBe(false);
-    expect(r.duplicate).toMatchObject({ customerId: b.id, cifNo: b.cifNo, name: b.name, matchedOn: ["Aadhaar", "PAN"] });
-    expect(r.duplicate!.mobile).toMatch(/x/);
-    expect(r.duplicate!.products.length).toBeGreaterThan(0);
-    expect((await saveKyc({ ok: false }, form({ proposalId, consent: "on", aadhaar: "", pan: PAN_B }))).duplicate?.matchedOn).toEqual(["PAN"]);
+    expect(await saveKyc({ ok: false }, form({ proposalId, consent: "on", aadhaar: AADHAAR_B, pan: PAN_B }))).toEqual({ ok: true });
+    expect(await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } })).toMatchObject({ aadhaarNo: AADHAAR_B, panNo: PAN_B });
     expect(await saveKyc({ ok: false }, form({ proposalId, consent: "on", aadhaar: AADHAAR_A, pan: "" }))).toEqual({ ok: true });
+    expect(await prisma.proposal.findUniqueOrThrow({ where: { id: proposalId } })).toMatchObject({ aadhaarNo: AADHAAR_A, aadhaarLast4: "7771" });
   });
 
-  it("the customer page refuses it too; a customer's own number is not a duplicate", async () => {
-    expect((await saveCustomerIdentity({ ok: false }, form({ customerId: a.id, consent: "on", aadhaar: AADHAAR_B, pan: "" }))).duplicate?.customerId).toBe(b.id);
-    expect(await saveCustomerIdentity({ ok: false }, form({ customerId: b.id, consent: "", aadhaar: AADHAAR_B, pan: "" }))).toEqual({ ok: true });
+  it("the customer page takes it too, and the database has no unique rule on it", async () => {
+    expect(await saveCustomerIdentity({ ok: false }, form({ customerId: a.id, consent: "on", aadhaar: AADHAAR_B, pan: PAN_B }))).toEqual({ ok: true });
+    expect(await prisma.customer.count({ where: { id: { in: [a.id, b.id] }, aadhaarNo: AADHAAR_B, panNo: PAN_B } })).toBe(2);
   });
 
-  it("the database itself refuses a second customer with the same fingerprint", async () => {
-    await expect(prisma.customer.update({ where: { id: a.id }, data: { aadhaarHash: fingerprint("aadhaar", AADHAAR_B) } })).rejects.toThrow(/Unique constraint/);
-  });
-
-  it("issuing copies the encrypted numbers and the consent to the customer", async () => {
+  it("issuing refuses a different number already on the customer, else copies the numbers and the consent", async () => {
+    // Customer a still holds B's numbers from the test above; the proposal has A's.
+    const refused = await issuePolicy({ ok: false }, form({ proposalId, policyNumber: `VT13-${started.getTime()}` }));
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toMatch(/Aadhaar on this proposal doesn't match .*9876 5432 1012/);
+    await prisma.customer.update({ where: { id: a.id }, data: blank });
     expect((await issuePolicy({ ok: false }, form({ proposalId, policyNumber: `VT13-${started.getTime()}` }))).ok).toBe(true);
     const c = await prisma.customer.findUniqueOrThrow({ where: { id: a.id } });
-    expect(c).toMatchObject({ aadhaarLast4: "7771", aadhaarHash: fingerprint("aadhaar", AADHAAR_A) });
+    expect(c).toMatchObject({ aadhaarNo: AADHAAR_A, aadhaarLast4: "7771", panNo: PAN_B });
     expect(c.consentAt).not.toBeNull();
   });
 });
