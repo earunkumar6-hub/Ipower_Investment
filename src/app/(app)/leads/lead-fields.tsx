@@ -72,9 +72,10 @@ export function LeadDetailFields({ initial, err, products }: { initial: LeadDeta
         <Input id="interest" name="interest" list="lead-products" defaultValue={initial.interest} />
         <datalist id="lead-products">{products.map((p) => <option key={p} value={p} />)}</datalist>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Email" name="email" type="email" defaultValue={initial.email} error={err.email} />
-        <Field label="Address" name="address" defaultValue={initial.address} maxLength={300} />
+      <Field label="Email" name="email" type="email" defaultValue={initial.email} error={err.email} />
+      <div className="space-y-1.5">
+        <Label htmlFor="address">Address</Label>
+        <Textarea id="address" name="address" rows={3} defaultValue={initial.address} maxLength={300} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="notes">Notes</Label>

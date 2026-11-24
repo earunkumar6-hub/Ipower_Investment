@@ -69,7 +69,7 @@ export function LeadPanel({ lead, products }: { lead: PanelLead; products: strin
           {d.source && <><dt className="text-muted-foreground">Business type</dt><dd>{LEAD_SOURCE_LABEL[d.source]}{d.referrerName && ` – ${d.referrerName}`}</dd></>}
           {d.interest && <><dt className="text-muted-foreground">Interested in</dt><dd>{d.interest}</dd></>}
           {d.email && <><dt className="text-muted-foreground">Email</dt><dd>{d.email}</dd></>}
-          {d.address && <><dt className="text-muted-foreground">Address</dt><dd>{d.address}</dd></>}
+          {d.address && <><dt className="text-muted-foreground">Address</dt><dd className="whitespace-pre-line">{d.address}</dd></>}
           {d.notes && <><dt className="text-muted-foreground">Notes</dt><dd className="whitespace-pre-line">{d.notes}</dd></>}
           <dt className="text-muted-foreground">Owner</dt><dd>{lead.ownerName}</dd>
         </dl>
