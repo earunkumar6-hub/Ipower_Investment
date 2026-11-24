@@ -112,15 +112,15 @@ export const REPORTS: Record<string, Report> = {
         title: `Leads${filter ? ` – ${filter}` : ""}`,
         sheets: [{
           name: "Leads",
-          columns: [{ header: "No." }, { header: "Name", width: 24 }, { header: "Mobile", width: 22 }, { header: "WhatsApp", width: 14 }, { header: "Date of birth", type: "dmy" },
+          columns: [{ header: "No." }, { header: "Created on", type: "datetime", width: 20 }, { header: "Name", width: 24 }, { header: "Mobile", width: 22 }, { header: "WhatsApp", width: 14 }, { header: "Date of birth", type: "dmy" },
             { header: "Gender" }, { header: "Email", width: 24 }, { header: "Address", width: 30 }, { header: "Business type" }, { header: "Referred by", width: 18 },
             { header: "Interested product", width: 24 }, { header: "Status" }, { header: "Stage" }, { header: "Next call", type: "datetime", width: 20 },
-            { header: "Owner" }, { header: "Notes", width: 30 }, { header: "Created", type: "datetime", width: 20 }],
+            { header: "Owner" }, { header: "Notes", width: 30 }],
           rows: leads.map((l) => {
             const nums = l.mobiles.length ? l.mobiles : [{ number: l.mobile, isWhatsApp: l.onWhatsApp }];
-            return [l.leadNo, l.name, nums.map((m) => maskMobile(m.number)).join(", "), nums.filter((m) => m.isWhatsApp).map((m) => maskMobile(m.number)).join(", ") || "No", l.dob,
+            return [l.leadNo, l.createdAt, l.name, nums.map((m) => maskMobile(m.number)).join(", "), nums.filter((m) => m.isWhatsApp).map((m) => maskMobile(m.number)).join(", ") || "No", l.dob,
               l.gender && GENDER_LABEL[l.gender], l.email, l.address, LEAD_SOURCE_LABEL[l.source], l.referrerName, l.interest, LEAD_STATUS_LABEL[l.status],
-              LEAD_STAGE_LABEL[l.stage], l.calls[0]?.dueAt, owner(l.ownerId), l.notes, l.createdAt];
+              LEAD_STAGE_LABEL[l.stage], l.calls[0]?.dueAt, owner(l.ownerId), l.notes];
           }),
         }],
       };

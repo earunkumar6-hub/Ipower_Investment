@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 export type LeadRow = {
   id: string;
   leadNo: string;
+  /** dd/mm/yyyy the lead was added (IST). */
+  createdOn: string;
   name: string;
   mobile: string;
   source: LeadSource;
@@ -35,9 +37,13 @@ function NextCall({ iso }: { iso: string | null }) {
   return <>{day(at).split("-").reverse().join("/")} {time}</>;
 }
 
+/** 25/11/2026 → 20261125, so dates sort in order. */
+const ymd = (dmy: string) => dmy.split("/").reverse().join("");
+
 const col = createColumnHelper<LeadRow>();
 const columns = [
   col.accessor("leadNo", { header: "Lead no." }),
+  col.accessor("createdOn", { header: "Date", cell: (c) => <span className="whitespace-nowrap">{c.getValue()}</span>, sortingFn: (a, b) => ymd(a.original.createdOn).localeCompare(ymd(b.original.createdOn)) }),
   col.accessor("name", { header: "Name" }),
   col.accessor("mobile", { header: "Mobile", cell: (c) => maskMobile(c.getValue()), enableSorting: false }),
   col.accessor("source", {

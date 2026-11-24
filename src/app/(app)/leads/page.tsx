@@ -1,7 +1,7 @@
 import { fuzzyMatches } from "@/lib/fuzzy";
 import { ExportButton } from "@/components/export-button";
 import { PageHeader } from "@/components/page-header";
-import { fmtDmy, isoDate } from "@/lib/dates";
+import { fmtDate, fmtDmy, isoDate, istDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { canActOn, interestOptions, userNames } from "@/lib/leads";
 import { leadFilter } from "@/lib/lists";
@@ -33,6 +33,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const rows: LeadRow[] = leads.map((l) => ({
     id: l.id,
     leadNo: l.leadNo,
+    createdOn: fmtDate(istDate(l.createdAt)),
     name: l.name,
     mobile: l.mobile,
     source: l.source,
