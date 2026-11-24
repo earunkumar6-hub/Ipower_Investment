@@ -22,12 +22,22 @@ const fmtCall = (form: FormData) => {
   return t ? `${day}, ${new Date(`1970-01-01T${t}:00Z`).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" })}` : day;
 };
 
+/** Today's date (yyyy-mm-dd) and time (HH:MM) in IST. */
+const istNow = () => {
+  const d = new Date();
+  return {
+    date: d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    time: d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }),
+  };
+};
+
 /** `owners` is non-empty only for Admin / Super Admin, who may assign the lead. */
 export function AddLeadDialog({ owners, products }: { owners: { id: string; name: string }[]; products: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<LeadStatus | "">("");
+  const [now, setNow] = useState(istNow);
   const [state, action, pending] = useActionState<ActionResult, FormData>(async (prev, form) => {
     const result = await createLead(prev, form);
     if (result.ok) {
@@ -49,7 +59,7 @@ export function AddLeadDialog({ owners, products }: { owners: { id: string; name
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="bg-brand-600 hover:bg-brand-700">Add lead</Button>
+      <Button onClick={() => { setNow(istNow()); setOpen(true); }} className="bg-brand-600 hover:bg-brand-700">Add lead</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogTitle className="text-lg font-semibold">New lead</DialogTitle>
@@ -81,14 +91,15 @@ export function AddLeadDialog({ owners, products }: { owners: { id: string; name
                 <input type="hidden" name="callDate" value="" /><input type="hidden" name="callTime" value="" />
               </>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              // Re-keyed when switching to / from Call back so the current date and time are filled only for a first call.
+              <div key={status === "CallBack" ? "callback" : "first"} className="grid grid-cols-2 gap-3">
                 <input type="hidden" name="reason" value="" />
                 <div className="space-y-1.5">
                   <Label htmlFor="callDate">{status === "CallBack" ? <>Call back on<span className="text-destructive"> *</span></> : "First call (optional)"}</Label>
-                  <DmyDateInput name="callDate" error={err.callDate} required={status === "CallBack"} />
+                  <DmyDateInput name="callDate" error={err.callDate} required={status === "CallBack"} defaultValue={status === "CallBack" ? "" : now.date} />
                   {err.callDate && <p className="text-xs text-destructive">{err.callDate}</p>}
                 </div>
-                <Field label="Time" name="callTime" type="time" />
+                <Field label="Time" name="callTime" type="time" defaultValue={status === "CallBack" ? "" : now.time} />
               </div>
             )}
             {status === "CallBack" && <p className="text-xs text-muted-foreground">Call back opens a call reminder that stays open until the status is updated or the call is rescheduled.</p>}
